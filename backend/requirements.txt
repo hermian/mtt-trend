@@ -1,0 +1,8 @@
+# Core dependencies
+# Pinned to versions validated on Python 3.12+
+fastapi>=0.109.2
+uvicorn[standard]>=0.27.1
+sqlalchemy>=2.0.28
+pydantic>=2.6.1
+beautifulsoup4>=4.12.3
+python-dotenv>=1.0.1

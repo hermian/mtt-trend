@@ -1,0 +1,64 @@
+"use client";
+
+import { useQuery } from "@tanstack/react-query";
+import { api, ThemeDaily, ThemeHistory, SurgingTheme, DataSource } from "@/lib/api";
+
+// Hook for fetching available dates
+export function useDates(source: DataSource = "52w_high") {
+  return useQuery<string[]>({
+    queryKey: ["dates", source],
+    queryFn: () => api.getDates(source),
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Hook for fetching daily themes for a specific date
+export function useThemesDaily(date: string | null, source: DataSource = "52w_high") {
+  return useQuery<ThemeDaily[]>({
+    queryKey: ["themes", "daily", date, source],
+    queryFn: () => api.getThemesDaily(date!, source),
+    enabled: !!date,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Hook for fetching surging themes
+export function useThemesSurging(date: string | null, threshold = 10, source: DataSource = "52w_high") {
+  return useQuery<SurgingTheme[]>({
+    queryKey: ["themes", "surging", date, threshold, source],
+    queryFn: () => api.getThemesSurging(date!, threshold, source),
+    enabled: !!date,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Hook for fetching theme history (single theme)
+export function useThemeHistory(themeName: string, days = 30, source: DataSource = "52w_high") {
+  return useQuery<ThemeHistory[]>({
+    queryKey: ["themes", "history", themeName, days, source],
+    queryFn: () => api.getThemeHistory(themeName, days, source),
+    enabled: !!themeName,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Hook for fetching multiple theme histories simultaneously
+export function useMultipleThemeHistories(themeNames: string[], days = 30, source: DataSource = "52w_high") {
+  return useQuery<{ [key: string]: ThemeHistory[] }>({
+    queryKey: ["themes", "histories", themeNames, days, source],
+    queryFn: async () => {
+      const results = await Promise.all(
+        themeNames.map((name) => api.getThemeHistory(name, days, source))
+      );
+      return themeNames.reduce(
+        (acc, name, index) => {
+          acc[name] = results[index];
+          return acc;
+        },
+        {} as { [key: string]: ThemeHistory[] }
+      );
+    },
+    enabled: themeNames.length > 0,
+    staleTime: 5 * 60 * 1000,
+  });
+}

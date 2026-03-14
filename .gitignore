@@ -205,15 +205,8 @@ dist-ssr/
 .netlify/
 .firebase/
 
-# ===========================================
-# mtt-trend Project
-# ===========================================
-# Keep .gitkeep files
+# User Custom Patterns (preserved by moai update)
 !backend/data/.gitkeep
 !backend/db/.gitkeep
-
-# Input HTML data files
 backend/data/*.html
-
-# Allow env example
 !frontend/.env.local.example

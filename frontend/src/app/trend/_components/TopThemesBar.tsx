@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   BarChart,
   Bar,
@@ -13,6 +14,14 @@ import {
 } from "recharts";
 import { useThemesDaily } from "@/hooks/useThemes";
 import { ThemeDaily, DataSource } from "@/lib/api";
+
+// @MX:ANCHOR: 테마별 RS 점수 시각화 컴포넌트 (fan_in: trend/page.tsx)
+// @MX:REASON: 이 컴포넌트는 상위 테마 데이터를 시각화하는 주요 UI 진입점입니다.
+
+// SPEC-MTT-004 F-01: 테마 개수 설정 상수
+const MIN_THEME_COUNT = 5;
+const MAX_THEME_COUNT = 30;
+const DEFAULT_THEME_COUNT = 10;
 
 interface TopThemesBarProps {
   date: string;
@@ -69,6 +78,10 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
 export function TopThemesBar({ date, source = "52w_high" }: TopThemesBarProps) {
   const { data: themes, isLoading, error } = useThemesDaily(date, source);
 
+  // SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 설정
+  // 범위: 5-30, 기본값: 10
+  const [themeCount, setThemeCount] = useState(DEFAULT_THEME_COUNT);
+
   if (isLoading) {
     return (
       <div className="bg-gray-800 rounded-xl p-6">
@@ -103,19 +116,36 @@ export function TopThemesBar({ date, source = "52w_high" }: TopThemesBarProps) {
     );
   }
 
-  // Take top 15 themes, sorted by avg_rs desc
-  const top15 = [...themes]
+  // Take top N themes (F-01: 동적 설정, 범위 5-30, 기본값 10)
+  const topThemes = [...themes]
     .sort((a, b) => b.avg_rs - a.avg_rs)
-    .slice(0, 15)
+    .slice(0, themeCount)
     .reverse(); // Reverse so highest is at top of horizontal bar chart
 
-  const chartHeight = Math.max(top15.length * 40, 300);
+  const chartHeight = Math.max(topThemes.length * 40, 300);
 
   return (
     <div className="bg-gray-800 rounded-xl p-6">
+      {/* SPEC-MTT-004 F-01: 테마 개수 설정 슬라이더 */}
+      <div className="mb-4 flex items-center gap-4">
+        <label htmlFor="theme-count-slider" className="text-sm text-gray-400 whitespace-nowrap">
+          표시: {themeCount}개
+        </label>
+        <input
+          id="theme-count-slider"
+          type="range"
+          min={MIN_THEME_COUNT}
+          max={MAX_THEME_COUNT}
+          value={themeCount}
+          onChange={(e) => setThemeCount(Number(e.target.value))}
+          className="flex-1 h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-600"
+          aria-label="테마 개수 설정"
+        />
+      </div>
+
       <ResponsiveContainer width="100%" height={chartHeight}>
         <BarChart
-          data={top15}
+          data={topThemes}
           layout="vertical"
           margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
         >
@@ -151,7 +181,7 @@ export function TopThemesBar({ date, source = "52w_high" }: TopThemesBarProps) {
             cursor={{ fill: "rgba(255,255,255,0.05)" }}
           />
           <Bar dataKey="avg_rs" radius={[0, 4, 4, 0]}>
-            {top15.map((entry, index) => (
+            {topThemes.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={getBarColor(entry.avg_rs)}

@@ -200,7 +200,8 @@ describe("TrendPage Integration", () => {
     render(<TrendPage />, { wrapper: TestWrapper });
 
     // Assert
-    expect(screen.queryByText("테마별 RS 점수 (상위 15)")).not.toBeInTheDocument();
+    // SPEC-MTT-004: Changed text from "테마별 RS 점수 (상위 15)" to "테마별 RS 점수 — 52주 신고가"
+    expect(screen.queryByText(/테마별 RS 점수/)).not.toBeInTheDocument();
     expect(screen.getByText("날짜를 선택하세요")).toBeInTheDocument();
   });
 
@@ -226,9 +227,9 @@ describe("TrendPage Integration", () => {
       expect(screen.getByDisplayValue("2024-01-01")).toBeInTheDocument();
     });
 
-    // Assert - all sections should be visible (SPEC-MTT-003 F-02)
-    // Note: section headers include source label, e.g., "테마별 RS 점수 (상위 15) — 52주 신고가"
-    expect(screen.getByText(/테마별 RS 점수 \(상위 15\)/)).toBeInTheDocument();
+    // Assert - all sections should be visible (SPEC-MTT-003 F-02, SPEC-MTT-004 F-02)
+    // SPEC-MTT-004: Section header changed to "테마별 RS 점수 — {source_label}"
+    expect(screen.getByText(/테마별 RS 점수/)).toBeInTheDocument();
     expect(screen.getByText("신규 급등 테마 탐지")).toBeInTheDocument();
     expect(screen.getByText("테마 RS 추이")).toBeInTheDocument();
     expect(screen.getByText("종목 분석")).toBeInTheDocument();

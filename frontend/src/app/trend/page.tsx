@@ -92,20 +92,26 @@ export default function TrendPage() {
 
       {selectedDate ? (
         <>
-          {/* Section 2: Top Themes Bar Chart */}
-          <section>
-            <h2 className="text-lg font-semibold text-white mb-4">
-              테마별 RS 점수 (상위 15) — {SOURCE_LABELS[source]}
-            </h2>
-            <TopThemesBar date={selectedDate} source={source} />
-          </section>
+          {/* Section 2 & 2.5: Top Themes Bar Chart & Surging Themes Card (SPEC-MTT-004 F-02, F-03, F-04) */}
+          {/* SPEC-MTT-004 F-02: 2분할 가로 레이아웃 (데스크탑: 50/50, 모바일: 세로 스택) */}
+          {/* SPEC-MTT-004 F-03: 동일 높이 유지 (CSS Grid items-stretch) */}
+          {/* SPEC-MTT-004 F-04: 콘텐츠 기반 동적 높이 조정 (고정 높이 제거) */}
+          <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Top Themes Bar Chart */}
+            <div className="flex flex-col">
+              <h2 className="text-lg font-semibold text-white mb-4">
+                테마별 RS 점수 — {SOURCE_LABELS[source]}
+              </h2>
+              <TopThemesBar date={selectedDate} source={source} />
+            </div>
 
-          {/* Section 2.5: Surging Themes Card (SPEC-MTT-003 F-02) */}
-          <section>
-            <h2 className="text-lg font-semibold text-white mb-4">
-              신규 급등 테마 탐지
-            </h2>
-            <SurgingThemesCard date={selectedDate} source={source} />
+            {/* Surging Themes Card */}
+            <div className="flex flex-col">
+              <h2 className="text-lg font-semibold text-white mb-4">
+                신규 급등 테마 탐지
+              </h2>
+              <SurgingThemesCard date={selectedDate} source={source} />
+            </div>
           </section>
 
           {/* Section 3: Theme RS Trend Chart */}

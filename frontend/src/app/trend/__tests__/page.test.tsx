@@ -172,8 +172,9 @@ describe("TrendPage Integration", () => {
       expect(screen.getByDisplayValue("2024-01-01")).toBeInTheDocument();
     });
 
-    // Assert - all sections should be visible
+    // Assert - all sections should be visible (SPEC-MTT-003 F-02)
     expect(screen.getByText("테마별 RS 점수 (상위 15)")).toBeInTheDocument();
+    expect(screen.getByText("신규 급등 테마 탐지")).toBeInTheDocument();
     expect(screen.getByText("테마 RS 추이")).toBeInTheDocument();
     expect(screen.getByText("종목 분석")).toBeInTheDocument();
   });

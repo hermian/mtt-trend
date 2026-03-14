@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useDates } from "@/hooks/useThemes";
 import { TopThemesBar } from "./_components/TopThemesBar";
+import { SurgingThemesCard } from "./_components/SurgingThemesCard";
 import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import type { DataSource } from "@/lib/api";
@@ -97,6 +98,14 @@ export default function TrendPage() {
               테마별 RS 점수 (상위 15) — {SOURCE_LABELS[source]}
             </h2>
             <TopThemesBar date={selectedDate} source={source} />
+          </section>
+
+          {/* Section 2.5: Surging Themes Card (SPEC-MTT-003 F-02) */}
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-4">
+              신규 급등 테마 탐지
+            </h2>
+            <SurgingThemesCard date={selectedDate} source={source} />
           </section>
 
           {/* Section 3: Theme RS Trend Chart */}

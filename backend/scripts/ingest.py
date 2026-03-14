@@ -412,16 +412,19 @@ def parse_html(html_content: str, source: str = SOURCE_52W) -> dict[str, list[di
     """
     Parse HTML and return {theme_name: [stock_entries]}.
     For MTT source, uses MTT-specific parser first.
+    For 52w_high source, also tries MTT parser as fallback.
     """
     soup = BeautifulSoup(html_content, "html.parser")
 
     results: dict[str, list[dict]] = {}
 
-    # MTT files use a dedicated parser; try it first
+    # Try MTT parser first for both sources (current 52w files use MTT format)
+    # @MX:NOTE: 52w_high 파일도 실제로는 MTT 포맷(stock-tag)을 사용
     if source == SOURCE_MTT:
         strategies = (_try_mtt_layout, _try_flat_table_layout, _try_table_layout, _try_heading_layout)
     else:
-        strategies = (_try_flat_table_layout, _try_table_layout, _try_heading_layout)
+        # 52w_high도 MTT 파서를 먼저 시도
+        strategies = (_try_mtt_layout, _try_flat_table_layout, _try_table_layout, _try_heading_layout)
 
     for strategy_fn in strategies:
         parsed = strategy_fn(soup)
@@ -560,13 +563,19 @@ def main():
         nargs="*",
         help=(
             "HTML file(s) to ingest. "
-            "If omitted, all .html files in backend/data/ are processed."
+            "If omitted with --dir, all .html files in the directory are processed."
         ),
+    )
+    parser.add_argument(
+        "--dir",
+        default=None,
+        help="Directory to scan for HTML files (specifies path to data directory)",
     )
     parser.add_argument(
         "--data-dir",
         default=None,
-        help="Directory to scan when no files are specified (default: backend/data/)",
+        dest="dir",  # @MX:NOTE: --data-dir는 --dir의 별칭으로 동작 (하위 호환성)
+        help=argparse.SUPPRESS,  # help 메시지에서 숨김
     )
     args = parser.parse_args()
 
@@ -574,8 +583,18 @@ def main():
 
     if args.files:
         file_paths = [Path(f) for f in args.files]
+    elif args.dir:
+        data_dir = Path(args.dir)
+        if not data_dir.is_dir():
+            logger.error("Directory not found: %s", data_dir)
+            sys.exit(1)
+        file_paths = sorted(data_dir.glob("*.html"))
+        if not file_paths:
+            logger.warning("No HTML files found in %s", data_dir)
+            return
     else:
-        data_dir = Path(args.data_dir) if args.data_dir else Path(__file__).resolve().parent.parent / "data"
+        # 기본 동작: backend/data/ 디렉토리 사용
+        data_dir = Path(__file__).resolve().parent.parent / "data"
         file_paths = sorted(data_dir.glob("*.html"))
         if not file_paths:
             logger.warning("No HTML files found in %s", data_dir)

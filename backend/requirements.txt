@@ -6,3 +6,8 @@ sqlalchemy>=2.0.28
 pydantic>=2.6.1
 beautifulsoup4>=4.12.3
 python-dotenv>=1.0.1
+
+# Testing dependencies
+pytest>=7.4.0
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0

@@ -153,7 +153,7 @@ def get_themes_surging(
 # GET /api/themes/{name}/history
 # ---------------------------------------------------------------------------
 
-@router.get("/{name}/history", response_model=ThemeHistoryResponse)
+@router.get("/{name:path}/history", response_model=ThemeHistoryResponse)
 def get_theme_history(
     name: str,
     days: int = Query(30, ge=1, le=365, description="Number of recent days to return"),

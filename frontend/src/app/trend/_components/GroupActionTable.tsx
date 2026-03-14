@@ -66,6 +66,37 @@ function ChangePctCell({ value }: { value: number }) {
   );
 }
 
+// @MX:ANCHOR: 주식 상태 뱃지 렌더링 (fan_in: GroupActionTable)
+// @MX:REASON: 주식 상태에 따른 뱃지 스타일을 일관되게 적용하는 UI 컴포넌트입니다.
+function StockStatusBadge({ status }: { status: "new" | "returning" | "neutral" | "new_theme" }) {
+  const statusConfig = {
+    new_theme: {
+      text: "신규 테마",
+      className: "bg-purple-500/20 text-purple-300 border-purple-500/30"
+    },
+    new: {
+      text: "신규",
+      className: "bg-green-500/20 text-green-300 border-green-500/30"
+    },
+    returning: {
+      text: "재등장",
+      className: "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+    },
+    neutral: {
+      text: "유지",
+      className: "bg-gray-500/20 text-gray-300 border-gray-500/30"
+    }
+  };
+
+  const { text, className } = statusConfig[status];
+
+  return (
+    <span className={clsx("inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border", className)}>
+      {text}
+    </span>
+  );
+}
+
 export function GroupActionTable({ date, source = "52w_high" }: GroupActionTableProps) {
   const { data: stocks, isLoading, error } = useStocksGroupAction(date, source);
 
@@ -100,9 +131,15 @@ export function GroupActionTable({ date, source = "52w_high" }: GroupActionTable
 
   // Separate new vs returning stocks based on theme_rs_change
   // Positive = gaining momentum (new), negative = losing (returning to baseline)
+  // @MX:ANCHOR: 주식 상태 분류 로직 (fan_in: 렌더링 로직)
+  // @MX:REASON: 이 함수는 주식의 테마 RS 변화량에 따라 상태를 분류하는 핵심 비즈니스 로직입니다.
   const getStockStatus = (
     stock: GroupActionStock
-  ): "new" | "returning" | "neutral" => {
+  ): "new" | "returning" | "neutral" | "new_theme" => {
+    // 신규 등장 테마 (어제 데이터 없음)
+    if (stock.theme_rs_change === null) {
+      return "new_theme";
+    }
     if (stock.theme_rs_change > 5) return "new";
     if (stock.theme_rs_change < -5) return "returning";
     return "neutral";
@@ -172,19 +209,7 @@ export function GroupActionTable({ date, source = "52w_high" }: GroupActionTable
                     <RsChangeBadge value={stock.theme_rs_change} />
                   </td>
                   <td className="px-4 py-3">
-                    {status === "new" ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-300 border border-green-500/30">
-                        신규
-                      </span>
-                    ) : status === "returning" ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">
-                        재등장
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-500/20 text-gray-300 border border-gray-500/30">
-                        유지
-                      </span>
-                    )}
+                    <StockStatusBadge status={status} />
                   </td>
                 </tr>
               );

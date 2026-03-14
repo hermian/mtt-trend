@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import {
   LineChart,
   Line,
@@ -71,13 +71,84 @@ function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   return null;
 }
 
+/**
+ * Custom Legend 컴포넌트
+ * @MX:NOTE: F-03 Legend 더블클릭으로 테마 라인 비활성화/활성화 토글
+ */
+interface CustomLegendProps {
+  payload?: Array<{ value: string; color: string; dataKey?: string }>;
+  disabledThemes: Set<string>;
+  onToggleTheme: (theme: string) => void;
+}
+
+function CustomLegend({ payload, disabledThemes, onToggleTheme }: CustomLegendProps) {
+  if (!payload) return null;
+
+  return (
+    <ul className="flex flex-wrap gap-4 justify-center">
+      {payload.map((entry) => {
+        const isDisabled = disabledThemes.has(entry.value);
+        return (
+          <li
+            key={entry.value}
+            className={clsx(
+              "cursor-pointer flex items-center gap-1 transition-opacity",
+              isDisabled ? "opacity-30 line-through" : ""
+            )}
+            onDoubleClick={() => onToggleTheme(entry.value)}
+          >
+            <span className="w-3 h-3 rounded" style={{ backgroundColor: entry.color }} />
+            <span className="text-sm">{entry.value}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartProps) {
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  // @MX:NOTE: 소스별로 선택된 테마와 사용자 수정 플래그를 저장하여 상태 유지
+  const [selectedThemesBySource, setSelectedThemesBySource] = useState<Record<DataSource, string[]>>({
+    "52w_high": [],
+    mtt: [],
+  });
+  const [isUserModifiedBySource, setIsUserModifiedBySource] = useState<Record<DataSource, boolean>>({
+    "52w_high": false,
+    mtt: false,
+  });
+
+  // 현재 소스의 선택된 테마와 사용자 수정 플래그
+  const selectedThemes = selectedThemesBySource[source] || [];
+  const isUserModified = isUserModifiedBySource[source] || false;
+
+  // @MX:NOTE: 비활성화된 테마를 추적하는 상태 (더블클릭 토글용)
+  const [disabledThemesBySource, setDisabledThemesBySource] = useState<Record<DataSource, Set<string>>>({
+    "52w_high": new Set(),
+    mtt: new Set(),
+  });
+  const disabledThemes = disabledThemesBySource[source] || new Set();
+
   const [period, setPeriod] = useState<PeriodOption>(PERIOD_OPTIONS[1]); // Default 30일
   const [searchQuery, setSearchQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const { data: dailyThemes, isLoading: themesLoading } = useThemesDaily(date, source);
+
+  // @MX:NOTE: 소스 변경 시 상태 복원 및 초기 로드 시 자동 선택
+  useEffect(() => {
+    // 해당 소스의 현재 선택 상태를 가져옴�
+    const currentThemes = selectedThemesBySource[source] || [];
+    const currentIsUserModified = isUserModifiedBySource[source] || false;
+
+    // 자동 선택: 사용자가 수동으로 변경한 적이 없고, 데이터가 있고, 선택된 테마가 없는 경우
+    if (!currentIsUserModified && dailyThemes && dailyThemes.length > 0 && currentThemes.length === 0) {
+      const top5Themes = dailyThemes.slice(0, 5).map((t) => t.theme_name);
+      setSelectedThemesBySource((prev) => ({
+        ...prev,
+        [source]: top5Themes,
+      }));
+    }
+  }, [dailyThemes, source]); // source와 dailyThemes 변경 시 실행
 
   // Available themes for selection
   const availableThemes = useMemo(() => {
@@ -122,20 +193,78 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
   }, [historiesData, selectedThemes]);
 
   const toggleTheme = (theme: string) => {
-    setSelectedThemes((prev) => {
-      if (prev.includes(theme)) {
-        return prev.filter((t) => t !== theme);
+    // 사용자가 수동으로 변경했음을 표시 (현재 소스에 대해서만)
+    setIsUserModifiedBySource((prev) => ({
+      ...prev,
+      [source]: true,
+    }));
+
+    setSelectedThemesBySource((prev) => {
+      const current = prev[source] || [];
+      if (current.includes(theme)) {
+        return {
+          ...prev,
+          [source]: current.filter((t) => t !== theme),
+        };
       }
-      if (prev.length >= 10) {
+      if (current.length >= 10) {
         alert("최대 10개의 테마를 선택할 수 있습니다.");
         return prev;
       }
-      return [...prev, theme];
+      return {
+        ...prev,
+        [source]: [...current, theme],
+      };
     });
+    // 테마 선택이 변경되면 비활성화 상태 초기화
+    setDisabledThemesBySource((prev) => ({
+      ...prev,
+      [source]: new Set(),
+    }));
   };
 
   const removeTheme = (theme: string) => {
-    setSelectedThemes((prev) => prev.filter((t) => t !== theme));
+    // 사용자가 수동으로 변경했음을 표시
+    setIsUserModifiedBySource((prev) => ({
+      ...prev,
+      [source]: true,
+    }));
+
+    setSelectedThemesBySource((prev) => {
+      const current = prev[source] || [];
+      return {
+        ...prev,
+        [source]: current.filter((t) => t !== theme),
+      };
+    });
+    // 테마 선택이 변경되면 비활성화 상태 초기화
+    setDisabledThemesBySource((prev) => ({
+      ...prev,
+      [source]: new Set(),
+    }));
+  };
+
+  // @MX:NOTE: F-03 라인 더블클릭으로 비활성화/활성화 토글
+  const toggleThemeDisabled = (theme: string) => {
+    setDisabledThemesBySource((prev) => {
+      const current = prev[source] || new Set();
+      const newSet = new Set(current);
+      if (newSet.has(theme)) {
+        newSet.delete(theme);
+      } else {
+        newSet.add(theme);
+      }
+      return {
+        ...prev,
+        [source]: newSet,
+      };
+    });
+  };
+
+  // @MX:NOTE: F-04 단일 데이터 포인트 감지 (데이터가 1개만 있는 테마)
+  const isSinglePointTheme = (theme: string): boolean => {
+    if (!historiesData || !historiesData[theme]) return false;
+    return historiesData[theme].length === 1;
   };
 
   return (
@@ -270,7 +399,11 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
 
       {/* Chart Area - click outside to close dropdown */}
       <div onClick={() => setDropdownOpen(false)}>
-        {selectedThemes.length === 0 ? (
+        {selectedThemes.length === 0 && !dailyThemes || dailyThemes?.length === 0 ? (
+          <div className="flex items-center justify-center h-64 text-gray-400">
+            <p>데이터가 없습니다</p>
+          </div>
+        ) : selectedThemes.length === 0 ? (
           <div className="flex items-center justify-center h-64 text-gray-400">
             <p>위에서 테마를 선택하면 RS 추이 차트가 표시됩니다</p>
           </div>
@@ -319,24 +452,31 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
               />
               <Tooltip content={<CustomTooltip />} />
               <Legend
+                content={<CustomLegend disabledThemes={disabledThemes} onToggleTheme={toggleThemeDisabled} />}
                 wrapperStyle={{
                   paddingTop: "8px",
                   fontSize: "12px",
                   color: "#D1D5DB",
                 }}
               />
-              {selectedThemes.map((theme, index) => (
-                <Line
-                  key={theme}
-                  type="monotone"
-                  dataKey={theme}
-                  stroke={LINE_COLORS[index % LINE_COLORS.length]}
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4 }}
-                  connectNulls
-                />
-              ))}
+              {selectedThemes.map((theme, index) => {
+                const isDisabled = disabledThemes.has(theme);
+                const isSinglePoint = isSinglePointTheme(theme);
+                return (
+                  <Line
+                    key={theme}
+                    type="monotone"
+                    dataKey={theme}
+                    stroke={LINE_COLORS[index % LINE_COLORS.length]}
+                    strokeWidth={2}
+                    strokeOpacity={isDisabled ? 0.2 : 1}
+                    // @MX:NOTE: F-04 단일 데이터 포인트는 dot 표시, 다중 포인트는 dot=false
+                    dot={isSinglePoint ? { r: 8, strokeWidth: 2 } : false}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                  />
+                );
+              })}
             </LineChart>
           </ResponsiveContainer>
         )}

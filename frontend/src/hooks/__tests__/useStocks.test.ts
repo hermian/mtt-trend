@@ -133,7 +133,8 @@ describe("useStocks Hook", () => {
       // Assert
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(mockStocks);
-      expect(api.api.getStocksGroupAction).toHaveBeenCalledWith("2024-01-01", "52w_high");
+      // @MX:NOTE: SPEC-MTT-006 F-04: timeWindow와 rsThreshold 파라미터 기본값 전달
+      expect(api.api.getStocksGroupAction).toHaveBeenCalledWith("2024-01-01", "52w_high", 3, 0);
     });
 
     it("should not fetch when date is null", () => {

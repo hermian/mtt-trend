@@ -12,6 +12,15 @@ const config: Config = {
         background: "var(--background)",
         foreground: "var(--foreground)",
       },
+      keyframes: {
+        fadeIn: {
+          "0%": { opacity: "0", transform: "translate(-50%, -4px)" },
+          "100%": { opacity: "1", transform: "translate(-50%, 0)" },
+        },
+      },
+      animation: {
+        "fade-in": "fadeIn 150ms ease-in-out",
+      },
     },
   },
   plugins: [],

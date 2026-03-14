@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useStocksGroupAction } from "@/hooks/useStocks";
 import { GroupActionStock, DataSource } from "@/lib/api";
 import clsx from "clsx";
+import { Tooltip } from "./Tooltip";
 
 interface GroupActionTableProps {
   date: string;
@@ -14,6 +15,7 @@ interface GroupActionTableProps {
 }
 
 // @MX:NOTE: SPEC-MTT-006 F-04: 슬라이더 레이블 컴포넌트
+// @MX:NOTE: SPEC-MTT-007 F-01, F-02, F-03, F-04: 툴팁 지원 추가
 function SliderControl({
   label,
   value,
@@ -23,6 +25,7 @@ function SliderControl({
   rangeLabel,
   onChange,
   unit = "",
+  tooltip,
 }: {
   label: string;
   value: number;
@@ -32,15 +35,24 @@ function SliderControl({
   rangeLabel: string;
   onChange: (value: number) => void;
   unit?: string;
+  tooltip?: string;
 }) {
+  const tooltipId = tooltip ? `${label}-tooltip` : undefined;
+
   return (
     <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2">
-        <label htmlFor={`${label}-slider`} className="text-sm text-gray-400">
-          {label}: {value}{unit}
-        </label>
-        <span className="text-xs text-gray-500">[{rangeLabel}]</span>
-      </div>
+      <Tooltip content={tooltip} id={tooltipId}>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor={`${label}-slider`}
+            className="text-sm text-gray-400"
+            aria-describedby={tooltipId}
+          >
+            {label}: {value}{unit}
+          </label>
+          <span className="text-xs text-gray-500">[{rangeLabel}]</span>
+        </div>
+      </Tooltip>
       <input
         id={`${label}-slider`}
         type="range"
@@ -50,6 +62,7 @@ function SliderControl({
         value={value}
         onChange={(e) => onChange(Number(e.target.value))}
         aria-label={label}
+        aria-describedby={tooltipId}
         name={label}
         className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
       />
@@ -222,6 +235,7 @@ export function GroupActionTable({
             rangeLabel="1-7"
             onChange={setTimeWindow}
             unit="일"
+            tooltip="신규 등장 종목 판정 기간 (일)"
           />
           <SliderControl
             label="RS 임계값"
@@ -231,6 +245,7 @@ export function GroupActionTable({
             step={1}
             rangeLabel="-10~+20"
             onChange={setRsThreshold}
+            tooltip="테마 RS 상승 판정 기준 (-10~+20)"
           />
           <SliderControl
             label="상태 임계값"
@@ -240,6 +255,7 @@ export function GroupActionTable({
             step={1}
             rangeLabel="1-20"
             onChange={setStatusThreshold}
+            tooltip="주식 상태 분류 기준 (1~20). 테마 RS 변화량이 임계값을 초과하면 '신규', -임계값 미만이면 '재등장', 그 외는 '유지'로 분류"
           />
         </div>
       </div>

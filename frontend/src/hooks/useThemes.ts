@@ -1,14 +1,18 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, ThemeDaily, ThemeHistory, SurgingTheme, DataSource } from "@/lib/api";
+import { api, API_CONFIG, ThemeDaily, ThemeHistory, SurgingTheme, DataSource } from "@/lib/api";
+
+// @MX:NOTE: 모든 훅은 API_CONFIG.DEFAULT_STALE_TIME을 사용하여 불필요한 재요청을 방지합니다.
+// @MX:ANCHOR: 테마 관련 React Query 훅 (fan_in: TopThemesBar, ThemeTrendChart, page.tsx)
+// @MX:REASON: 이 훅들은 테마 데이터를 가져오는 주요 진입점입니다.
 
 // Hook for fetching available dates
 export function useDates(source: DataSource = "52w_high") {
   return useQuery<string[]>({
     queryKey: ["dates", source],
     queryFn: () => api.getDates(source),
-    staleTime: 5 * 60 * 1000,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }
 
@@ -18,7 +22,7 @@ export function useThemesDaily(date: string | null, source: DataSource = "52w_hi
     queryKey: ["themes", "daily", date, source],
     queryFn: () => api.getThemesDaily(date!, source),
     enabled: !!date,
-    staleTime: 5 * 60 * 1000,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }
 
@@ -28,7 +32,7 @@ export function useThemesSurging(date: string | null, threshold = 10, source: Da
     queryKey: ["themes", "surging", date, threshold, source],
     queryFn: () => api.getThemesSurging(date!, threshold, source),
     enabled: !!date,
-    staleTime: 5 * 60 * 1000,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }
 
@@ -38,7 +42,7 @@ export function useThemeHistory(themeName: string, days = 30, source: DataSource
     queryKey: ["themes", "history", themeName, days, source],
     queryFn: () => api.getThemeHistory(themeName, days, source),
     enabled: !!themeName,
-    staleTime: 5 * 60 * 1000,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }
 
@@ -59,6 +63,6 @@ export function useMultipleThemeHistories(themeNames: string[], days = 30, sourc
       );
     },
     enabled: themeNames.length > 0,
-    staleTime: 5 * 60 * 1000,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }

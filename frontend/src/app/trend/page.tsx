@@ -7,6 +7,10 @@ import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import type { DataSource } from "@/lib/api";
 
+// @MX:NOTE: 데이터 소스 전환 시 선택된 날짜를 자동으로 초기화하여 데이터 불일치를 방지합니다.
+// @MX:ANCHOR: 트렌드 페이지 기본 컴포넌트 (fan_in: Next.js 라우터)
+// @MX:REASON: 이 컴포넌트는 테마 트렌드 대시보드의 메인 진입점입니다.
+
 const SOURCE_LABELS: Record<DataSource, string> = {
   "52w_high": "52주 신고가",
   mtt: "MTT 종목",
@@ -17,17 +21,17 @@ export default function TrendPage() {
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
-  // Reset date when source changes
+  // @MX:NOTE: 데이터 소스 변경 시 날짜를 초기화하고, 데이터 로드 완료 시 최신 날짜를 자동 선택합니다.
+  // 데이터 소스 전환과 날짜 자동 선택을 하나의 useEffect로 통합하여 로직을 단순화했습니다.
   useEffect(() => {
+    // 데이터 소스 변경 시 날짜 초기화
     setSelectedDate(null);
-  }, [source]);
 
-  // Set default to latest date when dates are loaded
-  useEffect(() => {
-    if (dates && dates.length > 0 && !selectedDate) {
+    // 데이터 로드 완료 시 최신 날짜 자동 선택
+    if (dates && dates.length > 0) {
       setSelectedDate(dates[dates.length - 1]);
     }
-  }, [dates, selectedDate]);
+  }, [source, dates]);
 
   return (
     <div className="p-6 space-y-6">

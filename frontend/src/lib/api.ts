@@ -1,5 +1,9 @@
 import axios from "axios";
 
+// @MX:NOTE: API 기본 URL은 환경 변수 NEXT_PUBLIC_API_URL에서 로드되며, 기본값은 로컬호스트입니다.
+// @MX:ANCHOR: API 클라이언트 설정 (fan_in: 모든 API 함수)
+// @MX:REASON: 이 설정은 모든 API 호출의 기반이 되는 중앙 집중식 구성점입니다.
+
 // TypeScript interfaces matching backend Pydantic schemas
 export interface ThemeDaily {
   date: string;
@@ -45,10 +49,19 @@ export interface SurgingTheme {
 
 export type DataSource = "52w_high" | "mtt";
 
+// API 기본 설정 상수
+const API_CONFIG = {
+  BASE_URL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
+  TIMEOUT: 10000,
+  DEFAULT_STALE_TIME: 5 * 60 * 1000, // 5분
+} as const;
+
 // Axios instance with base URL from env
+// @MX:ANCHOR: API 객체 내보내기 (fan_in: useThemes, useStocks hooks + page.tsx)
+// @MX:REASON: 이 api 객체는 애플리케이션의 모든 API 호출 진입점입니다.
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000",
-  timeout: 10000,
+  baseURL: API_CONFIG.BASE_URL,
+  timeout: API_CONFIG.TIMEOUT,
   headers: {
     "Content-Type": "application/json",
   },
@@ -119,5 +132,8 @@ export const api = {
     return data.stocks;
   },
 };
+
+// 설정을 내보내어 훅에서 재사용 가능하게 함
+export { API_CONFIG };
 
 export default apiClient;

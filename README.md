@@ -47,6 +47,13 @@ source .venv/bin/activate
 # 의존성 설치
 pip install -r requirements.txt
 
+# 데이터 수집 (선택)
+# 단일 파일 처리
+python scripts/ingest.py ../data/★52Week_High_Stocks_By_Theme_With_RS_Scores_YYYY-MM-DD.html
+
+# 디렉토리 내 모든 파일 처리
+python scripts/ingest.py ../data/
+
 # 서버 시작 (http://localhost:8000)
 uvicorn app.main:app --reload --port 8000
 ```
@@ -61,6 +68,48 @@ npm install
 
 # 개발 서버 시작 (http://localhost:3000)
 npm run dev
+```
+
+## 데이터 수집
+
+HTML 파일로부터 테마 데이터를 수집하고 데이터베이스에 저장합니다.
+
+### 1. 단일 파일 처리
+
+```bash
+cd backend
+python scripts/ingest.py ../data/★52Week_High_Stocks_By_Theme_With_RS_Scores_2024-01-15.html
+```
+
+### 2. 배치 처리 (추천)
+
+```bash
+# backend/data/ 디렉토리 내 모든 HTML 파일 처리
+cd backend
+python scripts/ingest.py ../data/
+
+# MTT 데이터만 처리
+python scripts/ingest.py ../data/ --source mtt
+```
+
+### 3. 데이터 수집 가이드
+
+자세한 데이터 수집 방법은 [DATA-INGESTION.md](DATA-INGESTION.md)를 참조하세요.
+
+## 데이터 확인
+
+수집된 데이터는 API를 통해 확인할 수 있습니다:
+
+- **API 문서**: [API-DOCUMENTATION.md](API-DOCUMENTATION.md)
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+```bash
+# 처리된 날짜 목록 확인
+curl "http://localhost:8000/api/dates?source=52w_high"
+
+# 특정 날짜의 테마 데이터 확인
+curl "http://localhost:8000/api/themes/daily?date=2024-01-15&source=52w_high"
 ```
 
 ### Docker로 실행 (선택)
@@ -84,6 +133,13 @@ docker-compose ps
 ## SPEC 문서
 
 - [SPEC-MTT-001: MTT 데이터 소스 지원](.moai/specs/SPEC-MTT-001/spec.md)
+- [SPEC-MTT-002: 데이터 파이프라인 완성 및 트렌드 대시보드 MVP](.moai/specs/SPEC-MTT-002/spec.md)
+
+## API 문서
+
+- [API-DOCUMENTATION.md](API-DOCUMENTATION.md) - 완전한 API 참조 및 사용법
+- Swagger UI: http://localhost:8000/docs
+- ReDoc: http://localhost:8000/redoc
 
 ## API 문서
 

@@ -4,8 +4,9 @@
 |------|-----|
 | SPEC-ID | SPEC-MTT-002 |
 | 제목 | 데이터 파이프라인 완성 및 트렌드 대시보드 MVP |
-| 상태 | Planned |
+| 상태 | Completed |
 | 작성일 | 2026-03-14 |
+| 완료일 | 2026-03-14 |
 | 우선순위 | High |
 | 의존 SPEC | SPEC-MTT-001 (Multi Data Source Support) |
 

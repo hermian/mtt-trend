@@ -13,6 +13,9 @@ import * as useThemes from "@/hooks/useThemes";
 vi.mock("@/hooks/useStocks");
 vi.mock("@/hooks/useThemes");
 
+// Helper function to find skeleton element
+const findSkeleton = () => document.querySelector(".animate-pulse");
+
 describe("StockAnalysisTabs Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -36,7 +39,7 @@ describe("StockAnalysisTabs Component", () => {
 
     // Assert
     expect(screen.getByText("지속 강세 종목")).toBeInTheDocument();
-    expect(screen.getByText("그룹 액션")).toBeInTheDocument();
+    expect(screen.getByText("그룹 액션 탐지")).toBeInTheDocument();
   });
 
   it("should switch tabs when clicked", () => {
@@ -56,15 +59,16 @@ describe("StockAnalysisTabs Component", () => {
     render(<StockAnalysisTabs date="2024-01-01" source="52w_high" />);
 
     // Initial tab should be "지속 강세 종목"
-    const persistentTab = screen.getByText("지속 강세 종목");
-    expect(persistentTab).toHaveClass("bg-blue-600");
+    const persistentTab = screen.getByText("지속 강세 종목").closest("button");
+    expect(persistentTab).toHaveClass("bg-gray-700/30");
 
-    // Click on "그룹 액션" tab
-    const groupActionTab = screen.getByText("그룹 액션");
+    // Click on "그룹 액션 탐지" tab
+    const groupActionTab = screen.getByText("그룹 액션 탐지").closest("button");
+    if (!groupActionTab) throw new Error("Group action tab button not found");
     fireEvent.click(groupActionTab);
 
     // Assert - tab should be active
-    expect(groupActionTab).toHaveClass("bg-blue-600");
+    expect(groupActionTab).toHaveClass("bg-gray-700/30");
   });
 
   it("should render persistent stocks table", () => {
@@ -94,7 +98,7 @@ describe("StockAnalysisTabs Component", () => {
 
     // Assert
     expect(screen.getByText("Samsung Electronics")).toBeInTheDocument();
-    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("5회")).toBeInTheDocument();
     expect(screen.getByText(/90\.0/)).toBeInTheDocument();
   });
 
@@ -126,12 +130,12 @@ describe("StockAnalysisTabs Component", () => {
     render(<StockAnalysisTabs date="2024-01-01" source="52w_high" />);
 
     // Switch to group action tab
-    fireEvent.click(screen.getByText("그룹 액션"));
+    fireEvent.click(screen.getByText("그룹 액션 탐지"));
 
     // Assert
     expect(screen.getByText("SK Hynix")).toBeInTheDocument();
     expect(screen.getByText(/95\.0/)).toBeInTheDocument();
-    expect(screen.getByText(/3\.5/)).toBeInTheDocument();
+    expect(screen.getByText(/\+3\.50%/)).toBeInTheDocument();
   });
 
   it("should show loading state", () => {
@@ -150,8 +154,9 @@ describe("StockAnalysisTabs Component", () => {
     // Act
     render(<StockAnalysisTabs date="2024-01-01" source="52w_high" />);
 
-    // Assert
-    expect(screen.getByText(/로딩 중/i)).toBeInTheDocument();
+    // Assert - skeleton animation should be present
+    const skeleton = findSkeleton();
+    expect(skeleton).toBeInTheDocument();
   });
 
   it("should show error state", () => {
@@ -171,6 +176,6 @@ describe("StockAnalysisTabs Component", () => {
     render(<StockAnalysisTabs date="2024-01-01" source="52w_high" />);
 
     // Assert
-    expect(screen.getByText(/데이터 로드 실패/i)).toBeInTheDocument();
+    expect(screen.getByText(/데이터를 불러오는데 실패했습니다/i)).toBeInTheDocument();
   });
 });

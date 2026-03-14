@@ -8,6 +8,18 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
+    environmentOptions: {
+      jsdom: {
+        ResizeObserver: true,
+      },
+    },
+    exclude: [
+      "node_modules/**",
+      "dist/**",
+      "e2e/**",
+      "**/*.config.*",
+      "**/playwright.config.*",
+    ],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
@@ -15,7 +27,8 @@ export default defineConfig({
         "node_modules/",
         "vitest.setup.ts",
         "**/*.config.*",
-        "**/__tests__/**"
+        "**/__tests__/**",
+        "e2e/**",
       ]
     }
   },

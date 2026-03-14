@@ -79,9 +79,9 @@
 // 진입점: Next.js 서버 시작
 
 명령어:
-  npm run dev       # 개발 서버 (http://localhost:3000)
-  npm run build     # 프로덕션 빌드
-  npm run start     # 프로덕션 서버
+  pnpm dev       # 개발 서버 (http://localhost:3000)
+  pnpm build     # 프로덕션 빌드
+  pnpm start     # 프로덕션 서버
 
 시작 순서:
   1. Node.js 프로세스 시작
@@ -685,22 +685,22 @@ python -c "from app.database import create_tables; create_tables()"
 
 ```bash
 # 개발 서버 시작
-npm run dev
+pnpm dev
 
 # 프로덕션 빌드
-npm run build
+pnpm build
 
 # 프로덕션 서버 시작
-npm run start
+pnpm start
 
 # 타입 체크
-npm run type-check
+pnpm type-check
 
 # 린트 검사
-npm run lint
+pnpm lint
 
 # 포맷팅
-npm run format
+pnpm format
 ```
 
 ---

@@ -3,11 +3,13 @@
  * SPEC-MTT-002 F-05: 지속 강세 종목 화면
  */
 
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useStocksPersistent, useStocksGroupAction } from "../useStocks";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as api from "@/lib/api";
+import type { ReactNode } from "react";
 
 // Mock API module
 vi.mock("@/lib/api");
@@ -25,9 +27,9 @@ describe("useStocks Hook", () => {
     });
   });
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+  };
 
   describe("useStocksPersistent", () => {
     it("should fetch persistent strong stocks", async () => {
@@ -46,7 +48,7 @@ describe("useStocks Hook", () => {
           themes: ["Semiconductor"]
         }
       ];
-      vi.spyOn(api.api, "getStocksPersistent").mockResolvedValue(mockStocks);
+      vi.mocked(api.api.getStocksPersistent).mockResolvedValue(mockStocks);
 
       // Act
       const { result } = renderHook(() => useStocksPersistent(5, 3, "52w_high"), { wrapper });
@@ -67,7 +69,7 @@ describe("useStocks Hook", () => {
           themes: ["Platform", "AI"]
         }
       ];
-      vi.spyOn(api.api, "getStocksPersistent").mockResolvedValue(mockStocks);
+      vi.mocked(api.api.getStocksPersistent).mockResolvedValue(mockStocks);
 
       // Act
       const { result } = renderHook(() => useStocksPersistent(7, 5, "mtt"), { wrapper });
@@ -79,7 +81,7 @@ describe("useStocks Hook", () => {
 
     it("should handle empty results", async () => {
       // Arrange
-      vi.spyOn(api.api, "getStocksPersistent").mockResolvedValue([]);
+      vi.mocked(api.api.getStocksPersistent).mockResolvedValue([]);
 
       // Act
       const { result } = renderHook(() => useStocksPersistent(5, 3, "52w_high"), { wrapper });
@@ -91,7 +93,7 @@ describe("useStocks Hook", () => {
 
     it("should handle errors", async () => {
       // Arrange
-      vi.spyOn(api.api, "getStocksPersistent").mockRejectedValue(new Error("Failed to fetch"));
+      vi.mocked(api.api.getStocksPersistent).mockRejectedValue(new Error("Failed to fetch"));
 
       // Act
       const { result } = renderHook(() => useStocksPersistent(5, 3, "52w_high"), { wrapper });
@@ -123,7 +125,7 @@ describe("useStocks Hook", () => {
           first_seen_date: "2024-01-01"
         }
       ];
-      vi.spyOn(api.api, "getStocksGroupAction").mockResolvedValue(mockStocks);
+      vi.mocked(api.api.getStocksGroupAction).mockResolvedValue(mockStocks);
 
       // Act
       const { result } = renderHook(() => useStocksGroupAction("2024-01-01", "52w_high"), { wrapper });
@@ -144,7 +146,7 @@ describe("useStocks Hook", () => {
 
     it("should handle empty results", async () => {
       // Arrange
-      vi.spyOn(api.api, "getStocksGroupAction").mockResolvedValue([]);
+      vi.mocked(api.api.getStocksGroupAction).mockResolvedValue([]);
 
       // Act
       const { result } = renderHook(() => useStocksGroupAction("2024-01-01", "52w_high"), { wrapper });
@@ -156,7 +158,7 @@ describe("useStocks Hook", () => {
 
     it("should handle errors", async () => {
       // Arrange
-      vi.spyOn(api.api, "getStocksGroupAction").mockRejectedValue(new Error("Network error"));
+      vi.mocked(api.api.getStocksGroupAction).mockRejectedValue(new Error("Network error"));
 
       // Act
       const { result } = renderHook(() => useStocksGroupAction("2024-01-01", "52w_high"), { wrapper });
@@ -178,7 +180,7 @@ describe("useStocks Hook", () => {
           themes: ["AI", "Semiconductor"]
         }
       ];
-      vi.spyOn(api.api, "getStocksPersistent").mockResolvedValue(mockStocks);
+      vi.mocked(api.api.getStocksPersistent).mockResolvedValue(mockStocks);
 
       // Act
       const { result } = renderHook(() => useStocksPersistent(5, 3, "52w_high"), { wrapper });
@@ -200,7 +202,7 @@ describe("useStocks Hook", () => {
           first_seen_date: "2024-01-01"
         }
       ];
-      vi.spyOn(api.api, "getStocksGroupAction").mockResolvedValue(mockStocks);
+      vi.mocked(api.api.getStocksGroupAction).mockResolvedValue(mockStocks);
 
       // Act
       const { result } = renderHook(() => useStocksGroupAction("2024-01-01", "52w_high"), { wrapper });

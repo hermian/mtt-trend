@@ -3,11 +3,13 @@
  * SPEC-MTT-002 F-03: 테마 트렌드 화면
  */
 
+import React from "react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
 import { useDates, useThemesDaily, useThemesSurging, useThemeHistory, useMultipleThemeHistories } from "../useThemes";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import * as api from "@/lib/api";
+import type { ReactNode } from "react";
 
 // Mock API module
 vi.mock("@/lib/api");
@@ -25,15 +27,15 @@ describe("useThemes Hook", () => {
     });
   });
 
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  const wrapper = ({ children }: { children: ReactNode }) => {
+    return React.createElement(QueryClientProvider, { client: queryClient }, children);
+  };
 
   describe("useDates", () => {
     it("should fetch dates for 52w_high source", async () => {
       // Arrange
       const mockDates = ["2024-01-01", "2024-01-02", "2024-01-03"];
-      vi.spyOn(api, "api").mockResolvedValue(mockDates);
+      vi.mocked(api.api.getDates).mockResolvedValue(mockDates);
 
       // Act
       const { result } = renderHook(() => useDates("52w_high"), { wrapper });
@@ -46,7 +48,7 @@ describe("useThemes Hook", () => {
     it("should fetch dates for mtt source", async () => {
       // Arrange
       const mockDates = ["2024-01-01", "2024-01-02"];
-      vi.spyOn(api.api, "getDates").mockResolvedValue(mockDates);
+      vi.mocked(api.api.getDates).mockResolvedValue(mockDates);
 
       // Act
       const { result } = renderHook(() => useDates("mtt"), { wrapper });
@@ -66,7 +68,7 @@ describe("useThemes Hook", () => {
 
     it("should handle errors", async () => {
       // Arrange
-      vi.spyOn(api.api, "getDates").mockRejectedValue(new Error("Failed to fetch"));
+      vi.mocked(api.api.getDates).mockRejectedValue(new Error("Failed to fetch"));
 
       // Act
       const { result } = renderHook(() => useDates("52w_high"), { wrapper });
@@ -90,7 +92,7 @@ describe("useThemes Hook", () => {
           volume_sum: 1000000
         }
       ];
-      vi.spyOn(api.api, "getThemesDaily").mockResolvedValue(mockThemes);
+      vi.mocked(api.api.getThemesDaily).mockResolvedValue(mockThemes);
 
       // Act
       const { result } = renderHook(() => useThemesDaily("2024-01-01", "52w_high"), { wrapper });
@@ -122,7 +124,7 @@ describe("useThemes Hook", () => {
           stock_count: 15
         }
       ];
-      vi.spyOn(api.api, "getThemesSurging").mockResolvedValue(mockSurging);
+      vi.mocked(api.api.getThemesSurging).mockResolvedValue(mockSurging);
 
       // Act
       const { result } = renderHook(() => useThemesSurging("2024-01-01", 10, "52w_high"), { wrapper });
@@ -146,7 +148,7 @@ describe("useThemes Hook", () => {
           change_sum: 5.2
         }
       ];
-      vi.spyOn(api.api, "getThemeHistory").mockResolvedValue(mockHistory);
+      vi.mocked(api.api.getThemeHistory).mockResolvedValue(mockHistory);
 
       // Act
       const { result } = renderHook(() => useThemeHistory("AI", 30, "52w_high"), { wrapper });
@@ -164,7 +166,7 @@ describe("useThemes Hook", () => {
         "AI": [{ date: "2024-01-01", theme_name: "AI", avg_rs: 85.0, stock_count: 10, change_sum: 5.2 }],
         "Semiconductor": [{ date: "2024-01-01", theme_name: "Semiconductor", avg_rs: 90.0, stock_count: 15, change_sum: 7.5 }]
       };
-      vi.spyOn(api.api, "getThemeHistory")
+      vi.mocked(api.api.getThemeHistory)
         .mockResolvedValueOnce(mockHistories["AI"])
         .mockResolvedValueOnce(mockHistories["Semiconductor"]);
 

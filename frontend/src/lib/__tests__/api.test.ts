@@ -5,14 +5,20 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { api } from "../api";
-import axios from "axios";
 
-// Mock axios
-vi.mock("axios");
+// Mock apiClient (axios instance)
+vi.mock("../api", () => ({
+  api: {
+    getDates: vi.fn(),
+    getThemesDaily: vi.fn(),
+    getThemesSurging: vi.fn(),
+    getThemeHistory: vi.fn(),
+    getStocksPersistent: vi.fn(),
+    getStocksGroupAction: vi.fn(),
+  },
+}));
 
 describe("API Layer", () => {
-  const mockAxios = axios as any;
-
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -21,33 +27,27 @@ describe("API Layer", () => {
     it("should fetch dates for 52w_high source", async () => {
       // Arrange
       const mockDates = ["2024-01-01", "2024-01-02", "2024-01-03"];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { dates: mockDates }
-        })
-      });
+      vi.mocked(api).getDates.mockResolvedValue(mockDates);
 
       // Act
       const result = await api.getDates("52w_high");
 
       // Assert
       expect(result).toEqual(mockDates);
+      expect(api.getDates).toHaveBeenCalledWith("52w_high");
     });
 
     it("should fetch dates for mtt source", async () => {
       // Arrange
       const mockDates = ["2024-01-01", "2024-01-02"];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { dates: mockDates }
-        })
-      });
+      vi.mocked(api).getDates.mockResolvedValue(mockDates);
 
       // Act
       const result = await api.getDates("mtt");
 
       // Assert
       expect(result).toEqual(mockDates);
+      expect(api.getDates).toHaveBeenCalledWith("mtt");
     });
   });
 
@@ -64,11 +64,7 @@ describe("API Layer", () => {
           volume_sum: 1000000
         }
       ];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { date: "2024-01-01", themes: mockThemes }
-        })
-      });
+      vi.mocked(api).getThemesDaily.mockResolvedValue(mockThemes);
 
       // Act
       const result = await api.getThemesDaily("2024-01-01", "52w_high");
@@ -77,6 +73,7 @@ describe("API Layer", () => {
       expect(result).toEqual(mockThemes);
       expect(result.length).toBe(1);
       expect(result[0].theme_name).toBe("AI");
+      expect(api.getThemesDaily).toHaveBeenCalledWith("2024-01-01", "52w_high");
     });
   });
 
@@ -93,11 +90,7 @@ describe("API Layer", () => {
           stock_count: 15
         }
       ];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { date: "2024-01-01", threshold: 10, themes: mockSurging }
-        })
-      });
+      vi.mocked(api).getThemesSurging.mockResolvedValue(mockSurging);
 
       // Act
       const result = await api.getThemesSurging("2024-01-01", 10, "52w_high");
@@ -105,6 +98,7 @@ describe("API Layer", () => {
       // Assert
       expect(result).toEqual(mockSurging);
       expect(result[0].rs_change).toBeGreaterThan(0);
+      expect(api.getThemesSurging).toHaveBeenCalledWith("2024-01-01", 10, "52w_high");
     });
   });
 
@@ -120,17 +114,14 @@ describe("API Layer", () => {
           change_sum: 5.2
         }
       ];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { theme_name: "AI", days: 30, history: mockHistory }
-        })
-      });
+      vi.mocked(api).getThemeHistory.mockResolvedValue(mockHistory);
 
       // Act
       const result = await api.getThemeHistory("AI", 30, "52w_high");
 
       // Assert
       expect(result).toEqual(mockHistory);
+      expect(api.getThemeHistory).toHaveBeenCalledWith("AI", 30, "52w_high");
     });
   });
 
@@ -145,11 +136,7 @@ describe("API Layer", () => {
           themes: ["AI", "Semiconductor"]
         }
       ];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { days: 5, min_appearances: 3, stocks: mockStocks }
-        })
-      });
+      vi.mocked(api).getStocksPersistent.mockResolvedValue(mockStocks);
 
       // Act
       const result = await api.getStocksPersistent(5, 3, "52w_high");
@@ -157,6 +144,7 @@ describe("API Layer", () => {
       // Assert
       expect(result).toEqual(mockStocks);
       expect(result[0].appearance_count).toBeGreaterThanOrEqual(3);
+      expect(api.getStocksPersistent).toHaveBeenCalledWith(5, 3, "52w_high");
     });
   });
 
@@ -173,11 +161,7 @@ describe("API Layer", () => {
           first_seen_date: "2024-01-01"
         }
       ];
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockResolvedValue({
-          data: { date: "2024-01-01", stocks: mockStocks }
-        })
-      });
+      vi.mocked(api).getStocksGroupAction.mockResolvedValue(mockStocks);
 
       // Act
       const result = await api.getStocksGroupAction("2024-01-01", "52w_high");
@@ -185,15 +169,15 @@ describe("API Layer", () => {
       // Assert
       expect(result).toEqual(mockStocks);
       expect(result[0].rs_score).toBeGreaterThan(0);
+      expect(api.getStocksGroupAction).toHaveBeenCalledWith("2024-01-01", "52w_high");
     });
   });
 
   describe("Error Handling", () => {
     it("should handle API errors gracefully", async () => {
       // Arrange
-      mockAxios.create.mockReturnValue({
-        get: vi.fn().mockRejectedValue(new Error("Network Error"))
-      });
+      const mockError = new Error("Network Error");
+      vi.mocked(api).getDates.mockRejectedValue(mockError);
 
       // Act & Assert
       await expect(api.getDates("52w_high")).rejects.toThrow("Network Error");

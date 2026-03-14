@@ -31,21 +31,33 @@
 
 - Python 3.11 이상
 - Node.js 18.0 이상
+- uv (Python 패키지 매니저)
 - Git
+
+**uv 설치:**
+```bash
+# macOS/Linux (curl)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# macOS (Homebrew)
+brew install uv
+
+# 또는 pip
+pip install uv
+```
 
 ### 백엔드 설정
 
 ```bash
 cd backend
 
-# Python 가상환경 생성
-python3 -m venv .venv
+# uv 설치 (이미 설치되어 있다면 생략)
+# curl -LsSf https://astral.sh/uv/install.sh | sh
+# 또는 brew install uv
 
-# 가상환경 활성화 (macOS/Linux)
-source .venv/bin/activate
-
-# 의존성 설치
-pip install -r requirements.txt
+# 가상환경 생성 및 패키지 설치
+uv venv
+uv pip install -r requirements.txt
 
 # 데이터 수집 (선택)
 # 단일 파일 처리
@@ -55,7 +67,12 @@ python scripts/ingest.py ../data/★52Week_High_Stocks_By_Theme_With_RS_Scores_Y
 python scripts/ingest.py ../data/
 
 # 서버 시작 (http://localhost:8000)
-uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
+
+# 테스트 실행
+./test-run.sh           # 기본 실행
+./test-run.sh -v        # 상세 출력
+./test-run.sh --cov     # 커버리지 포함
 ```
 
 ### 프론트엔드 설정
@@ -63,12 +80,66 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 
+# Node.js 환경 설정
+source ~/.nvm/nvm.sh
+corepack enable
+
 # 의존성 설치
-npm install
+pnpm install
 
 # 개발 서버 시작 (http://localhost:3000)
-npm run dev
+pnpm dev
+
+# 테스트 실행
+./test-run.sh           # 스크립트 사용 (권장)
+# 또는
+pnpm test              # 직접 실행
 ```
+
+### 테스트 실행
+
+프론트엔드 테스트는 Vitest로 실행합니다:
+
+```bash
+cd frontend
+
+# 방법 1: 스크립트 사용 (권장)
+./test-run.sh           # watch 모드
+./test-run.sh --run     # 한 번만 실행
+
+# 방법 2: 직접 실행
+source ~/.nvm/nvm.sh
+corepack enable
+pnpm test              # watch 모드
+pnpm test --run        # 한 번만 실행
+pnpm test --ui         # UI 모드
+pnpm test --coverage   # 커버리지 포함
+```
+
+**테스트 환경 요구사항:**
+- Node.js 24.12.0 (nvm 통해 설치)
+- pnpm (corepack 통해 자동 활성화)
+
+### 백엔드 테스트
+
+백엔드 테스트는 pytest로 실행합니다:
+
+```bash
+cd backend
+
+# 방법 1: 스크립트 사용 (권장)
+./test-run.sh           # 기본 실행
+./test-run.sh -v        # 상세 출력
+./test-run.sh --cov     # 커버리지 포함
+
+# 방법 2: 직접 실행
+uv run pytest tests/ -v
+```
+
+**테스트 환경 요구사항:**
+- Python 3.11+
+- uv 패키지 매니저
+- 가상환경 (`.venv`)
 
 ## 데이터 수집
 
@@ -122,6 +193,14 @@ docker-compose up -d
 docker-compose ps
 ```
 
+## API 문서
+
+서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+- **API 문서**: [API-DOCUMENTATION.md](API-DOCUMENTATION.md) - 완전한 API 참조 및 사용법
+
 ## 프로젝트 문서
 
 자세한 프로젝트 문서는 [`.moai/project/`](.moai/project/) 디렉토리를 참조하세요:
@@ -134,19 +213,6 @@ docker-compose ps
 
 - [SPEC-MTT-001: MTT 데이터 소스 지원](.moai/specs/SPEC-MTT-001/spec.md)
 - [SPEC-MTT-002: 데이터 파이프라인 완성 및 트렌드 대시보드 MVP](.moai/specs/SPEC-MTT-002/spec.md)
-
-## API 문서
-
-- [API-DOCUMENTATION.md](API-DOCUMENTATION.md) - 완전한 API 참조 및 사용법
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
-
-## API 문서
-
-서버 실행 후 다음 URL에서 API 문서를 확인할 수 있습니다:
-
-- Swagger UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
 
 ## 라이선스
 

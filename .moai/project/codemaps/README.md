@@ -134,8 +134,8 @@
 
 #### 프론트엔드 진입점
 1. **Next.js 애플리케이션**
-   - npm run dev (localhost:3000)
-   - npm run build / start
+   - pnpm dev (localhost:3000)
+   - pnpm build / start
 
 2. **라우트 진입점**
    - / (루트, /trend로 리다이렉트)

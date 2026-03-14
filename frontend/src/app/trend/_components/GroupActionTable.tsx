@@ -9,7 +9,10 @@ interface GroupActionTableProps {
   source?: DataSource;
 }
 
-function RsChangeBadge({ value }: { value: number }) {
+function RsChangeBadge({ value }: { value: number | null }) {
+  if (value === null) {
+    return <span className="text-gray-400">-</span>;
+  }
   const isPositive = value > 0;
   const isNeutral = value === 0;
   return (

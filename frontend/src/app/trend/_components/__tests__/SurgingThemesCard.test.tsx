@@ -4,8 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { SurgingThemesCard } from "../SurgingThemesCard";
 import * as useThemes from "@/hooks/useThemes";
 
@@ -124,28 +123,35 @@ describe("SurgingThemesCard Component", () => {
 
   /**
    * Test 5: Threshold 변경 (R-01-3)
-   * 슬라이더 값 변경 시 훅이 새 threshold로 재호출되는지 확인
+   * 슬라이더 값 변경 시 threshold 상태가 업데이트되는지 확인
    */
-  it("should update threshold when slider changes", async () => {
-    // Arrange
-    const user = userEvent.setup();
-    const mockRefetch = vi.fn();
+  it("should update threshold when slider changes", () => {
+    // Arrange - 데이터가 있어야 슬라이더가 표시됨
+    const mockThemes = [
+      {
+        date: "2024-01-01",
+        theme_name: "반도체",
+        avg_rs: 85.2,
+        avg_rs_5d: 70.1,
+        rs_change: 15.1,
+        stock_count: 12
+      }
+    ];
 
     vi.spyOn(useThemes, "useThemesSurging").mockReturnValue({
-      data: [],
+      data: mockThemes,
       isLoading: false,
       error: null,
-      refetch: mockRefetch,
     } as any);
 
     // Act
     render(<SurgingThemesCard date="2024-01-01" source="52w_high" />);
 
-    // 기본값 확인
-    expect(screen.getByText(/기준:\s*\+10/)).toBeInTheDocument();
+    // 기본값 확인 - 정규식 대신 함수 사용 (텍스트가 여러 노드로 나뉨)
+    expect(screen.getByText((content) => content.includes("기준:") && content.includes("+10"))).toBeInTheDocument();
 
-    // 슬라이더 찾기
-    const slider = screen.getByRole("slider");
+    // 슬라이더 찾기 - label로 찾기
+    const slider = screen.getByLabelText(/기준:/);
 
     // Assert & Act
     expect(slider).toBeInTheDocument();
@@ -153,11 +159,10 @@ describe("SurgingThemesCard Component", () => {
     expect(slider).toHaveAttribute("max", "50");
     expect(slider).toHaveAttribute("value", "10");
 
-    // 슬라이더 값 변경 (20으로 설정)
-    await user.clear(slider);
-    await user.type(slider, "20");
+    // 슬라이더 값 변경 (fireEvent 사용)
+    fireEvent.change(slider, { target: { value: "20" } });
 
     // 변경된 값이 표시되어야 함
-    expect(screen.getByText(/기준:\s*\+20/)).toBeInTheDocument();
+    expect(screen.getByText((content) => content.includes("기준:") && content.includes("+20"))).toBeInTheDocument();
   });
 });

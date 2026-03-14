@@ -1,59 +1,55 @@
 /**
  * API 레이어 테스트
  * SPEC-MTT-002 F-03~F-05: API 연동 검증
+ * SPEC-MTT-006: 파라미터화 테스트
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { api } from "../api";
 
 // Mock apiClient (axios instance)
-vi.mock("../api", () => ({
-  api: {
-    getDates: vi.fn(),
-    getThemesDaily: vi.fn(),
-    getThemesSurging: vi.fn(),
-    getThemeHistory: vi.fn(),
-    getStocksPersistent: vi.fn(),
-    getStocksGroupAction: vi.fn(),
-  },
-}));
+vi.mock("../api", async () => {
+  const actual = await vi.importActual("../api");
+  return {
+    ...actual,
+    apiClient: {
+      get: vi.fn(),
+    },
+  };
+});
 
 describe("API Layer", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
+  // Get the mocked apiClient
+  const getApiClient = async () => (await import("../api")).apiClient;
+
   describe("getDates", () => {
     it("should fetch dates for 52w_high source", async () => {
-      // Arrange
       const mockDates = ["2024-01-01", "2024-01-02", "2024-01-03"];
-      vi.mocked(api).getDates.mockResolvedValue(mockDates);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { dates: mockDates } });
 
-      // Act
       const result = await api.getDates("52w_high");
 
-      // Assert
       expect(result).toEqual(mockDates);
-      expect(api.getDates).toHaveBeenCalledWith("52w_high");
     });
 
     it("should fetch dates for mtt source", async () => {
-      // Arrange
       const mockDates = ["2024-01-01", "2024-01-02"];
-      vi.mocked(api).getDates.mockResolvedValue(mockDates);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { dates: mockDates } });
 
-      // Act
       const result = await api.getDates("mtt");
 
-      // Assert
       expect(result).toEqual(mockDates);
-      expect(api.getDates).toHaveBeenCalledWith("mtt");
     });
   });
 
   describe("getThemesDaily", () => {
     it("should fetch daily themes for a specific date", async () => {
-      // Arrange
       const mockThemes = [
         {
           date: "2024-01-01",
@@ -61,25 +57,23 @@ describe("API Layer", () => {
           stock_count: 10,
           avg_rs: 85.5,
           change_sum: 5.2,
-          volume_sum: 1000000
-        }
+          volume_sum: 1000000,
+        },
       ];
-      vi.mocked(api).getThemesDaily.mockResolvedValue(mockThemes);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { date: "2024-01-01", themes: mockThemes },
+      });
 
-      // Act
       const result = await api.getThemesDaily("2024-01-01", "52w_high");
 
-      // Assert
       expect(result).toEqual(mockThemes);
-      expect(result.length).toBe(1);
       expect(result[0].theme_name).toBe("AI");
-      expect(api.getThemesDaily).toHaveBeenCalledWith("2024-01-01", "52w_high");
     });
   });
 
   describe("getThemesSurging", () => {
     it("should fetch surging themes with default threshold", async () => {
-      // Arrange
       const mockSurging = [
         {
           date: "2024-01-01",
@@ -87,70 +81,67 @@ describe("API Layer", () => {
           avg_rs: 90.0,
           avg_rs_5d: 80.0,
           rs_change: 10.0,
-          stock_count: 15
-        }
+          stock_count: 15,
+        },
       ];
-      vi.mocked(api).getThemesSurging.mockResolvedValue(mockSurging);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { date: "2024-01-01", threshold: 10, themes: mockSurging },
+      });
 
-      // Act
       const result = await api.getThemesSurging("2024-01-01", 10, "52w_high");
 
-      // Assert
       expect(result).toEqual(mockSurging);
       expect(result[0].rs_change).toBeGreaterThan(0);
-      expect(api.getThemesSurging).toHaveBeenCalledWith("2024-01-01", 10, "52w_high");
     });
   });
 
   describe("getThemeHistory", () => {
     it("should fetch theme history for 30 days", async () => {
-      // Arrange
       const mockHistory = [
         {
           date: "2024-01-01",
           theme_name: "AI",
           avg_rs: 85.0,
           stock_count: 10,
-          change_sum: 5.2
-        }
+          change_sum: 5.2,
+        },
       ];
-      vi.mocked(api).getThemeHistory.mockResolvedValue(mockHistory);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { theme_name: "AI", days: 30, history: mockHistory },
+      });
 
-      // Act
       const result = await api.getThemeHistory("AI", 30, "52w_high");
 
-      // Assert
       expect(result).toEqual(mockHistory);
-      expect(api.getThemeHistory).toHaveBeenCalledWith("AI", 30, "52w_high");
     });
   });
 
   describe("getStocksPersistent", () => {
     it("should fetch persistent strong stocks", async () => {
-      // Arrange
       const mockStocks = [
         {
           stock_name: "Samsung Electronics",
           appearance_count: 5,
           avg_rs: 90.0,
-          themes: ["AI", "Semiconductor"]
-        }
+          themes: ["AI", "Semiconductor"],
+        },
       ];
-      vi.mocked(api).getStocksPersistent.mockResolvedValue(mockStocks);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { days: 5, min_appearances: 3, stocks: mockStocks },
+      });
 
-      // Act
       const result = await api.getStocksPersistent(5, 3, "52w_high");
 
-      // Assert
       expect(result).toEqual(mockStocks);
       expect(result[0].appearance_count).toBeGreaterThanOrEqual(3);
-      expect(api.getStocksPersistent).toHaveBeenCalledWith(5, 3, "52w_high");
     });
   });
 
   describe("getStocksGroupAction", () => {
     it("should fetch group action stocks", async () => {
-      // Arrange
       const mockStocks = [
         {
           stock_name: "SK Hynix",
@@ -158,26 +149,174 @@ describe("API Layer", () => {
           change_pct: 3.5,
           theme_name: "Semiconductor",
           theme_rs_change: 5.0,
-          first_seen_date: "2024-01-01"
-        }
+          first_seen_date: "2024-01-01",
+          status_threshold: 5,
+        },
       ];
-      vi.mocked(api).getStocksGroupAction.mockResolvedValue(mockStocks);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockResolvedValue({
+        data: { date: "2024-01-01", stocks: mockStocks },
+      });
 
-      // Act
       const result = await api.getStocksGroupAction("2024-01-01", "52w_high");
 
-      // Assert
       expect(result).toEqual(mockStocks);
       expect(result[0].rs_score).toBeGreaterThan(0);
-      expect(api.getStocksGroupAction).toHaveBeenCalledWith("2024-01-01", "52w_high");
+    });
+  });
+
+  // SPEC-MTT-006: 파라미터화 테스트
+  describe("getStocksGroupAction - SPEC-MTT-006", () => {
+    describe("timeWindow 파라미터", () => {
+      it("기본값(3)으로 호출 시 timeWindow=3이 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high");
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            timeWindow: 3,
+            rsThreshold: 0,
+          }),
+        });
+      });
+
+      it("timeWindow=5로 호출 시 API에 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high", 5);
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            timeWindow: 5,
+          }),
+        });
+      });
+
+      it("timeWindow=7로 호출 시 API에 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high", 7);
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            timeWindow: 7,
+          }),
+        });
+      });
+    });
+
+    describe("rsThreshold 파라미터", () => {
+      it("기본값(0)으로 호출 시 rsThreshold=0이 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high");
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            rsThreshold: 0,
+          }),
+        });
+      });
+
+      it("rsThreshold=5로 호출 시 API에 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high", 3, 5);
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            rsThreshold: 5,
+          }),
+        });
+      });
+
+      it("rsThreshold=-5로 호출 시 API에 전달되어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high", 3, -5);
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            rsThreshold: -5,
+          }),
+        });
+      });
+    });
+
+    describe("파라미터 조합", () => {
+      it("모든 파라미터를 조합하여 호출할 수 있어야 함", async () => {
+        const mockStocks: any[] = [];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-15", stocks: mockStocks },
+        });
+
+        await api.getStocksGroupAction("2024-01-15", "52w_high", 5, 10);
+
+        expect(apiClient.get).toHaveBeenCalledWith("/api/stocks/group-action", {
+          params: expect.objectContaining({
+            timeWindow: 5,
+            rsThreshold: 10,
+          }),
+        });
+      });
+    });
+
+    describe("status_threshold 필드", () => {
+      it("응답에 status_threshold 필드가 포함되어야 함", async () => {
+        const mockStocks = [
+          {
+            stock_name: "SK Hynix",
+            rs_score: 95.0,
+            change_pct: 3.5,
+            theme_name: "Semiconductor",
+            theme_rs_change: 5.0,
+            first_seen_date: "2024-01-01",
+            status_threshold: 5,
+          },
+        ];
+        const apiClient = (await import("../api")).apiClient;
+        vi.mocked(apiClient.get).mockResolvedValue({
+          data: { date: "2024-01-01", stocks: mockStocks },
+        });
+
+        const result = await api.getStocksGroupAction("2024-01-15", "52w_high");
+
+        expect(result[0]).toHaveProperty("status_threshold", 5);
+      });
     });
   });
 
   describe("Error Handling", () => {
     it("should handle API errors gracefully", async () => {
-      // Arrange
       const mockError = new Error("Network Error");
-      vi.mocked(api).getDates.mockRejectedValue(mockError);
+      const apiClient = (await import("../api")).apiClient;
+      vi.mocked(apiClient.get).mockRejectedValue(mockError);
 
       // Act & Assert
       await expect(api.getDates("52w_high")).rejects.toThrow("Network Error");

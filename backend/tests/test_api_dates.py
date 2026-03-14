@@ -8,9 +8,12 @@ SPEC-MTT-002 F-02: 날짜 목록 API
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-
+from pathlib import Path
 import sys
-sys.path.insert(0, '.')
+
+# 프로젝트 루트를 경로에 추가
+backend_dir = Path(__file__).parent.parent
+sys.path.insert(0, str(backend_dir))
 
 from app.main import app
 from app.database import SessionLocal, create_tables

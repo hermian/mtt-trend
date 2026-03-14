@@ -45,6 +45,10 @@ def create_tables() -> None:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_tsd_theme_date ON theme_stock_daily(theme_name, date)"
         ))
+        # SPEC-MTT-006: 인덱스 추가 - first_seen_date 기반 조회 성능 최적화
+        conn.execute(text(
+            "CREATE INDEX IF NOT EXISTS idx_stock_first_seen ON theme_stock_daily(stock_name, date, data_source)"
+        ))
 
         # Migrate: add data_source column if it doesn't exist (for existing DBs)
         for table, col, default in [

@@ -1,16 +1,26 @@
 /**
  * GroupActionTable 컴포넌트 테스트
  * 신규 테마 주식 상태 버그 수정 (theme_rs_change === null인 경우 "신규 테마"로 표시)
+ * SPEC-MTT-006 F-04: UI 파라미터 컨트롤 슬라이더 테스트
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { GroupActionTable } from "../GroupActionTable";
 import * as useStocks from "@/hooks/useStocks";
 import { GroupActionStock } from "@/lib/api";
 
 // Mock useStocks hook
 vi.mock("@/hooks/useStocks");
+
+// Mock apiClient
+vi.mock("@/lib/api", () => ({
+  api: {
+    getStocksGroupAction: vi.fn(),
+  },
+  GroupActionStock: {},
+  DataSource: {},
+}));
 
 describe("GroupActionTable Component - Stock Status Logic", () => {
   beforeEach(() => {
@@ -293,5 +303,298 @@ describe("GroupActionTable Component - Stock Status Logic", () => {
     // 테마RS변화 열에 "-"가 표시되어야 함
     const dashElements = screen.getAllByText("-");
     expect(dashElements.length).toBeGreaterThan(0);
+  });
+});
+
+// SPEC-MTT-006 F-04: UI 파라미터 컨트롤 테스트
+describe("GroupActionTable Component - SPEC-MTT-006 F-04: UI Parameter Controls", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const mockStocks: GroupActionStock[] = [
+    {
+      stock_name: "삼성전자",
+      rs_score: 75.5,
+      change_pct: 3.2,
+      theme_name: "반도체",
+      theme_rs_change: 8.5,
+      first_seen_date: "2024-01-15",
+      status_threshold: 5,
+    },
+  ];
+
+  /**
+   * Test 1: 시간 윈도우 슬라이더 존재 확인
+   * 페이지 렌더링 시 시간 윈도우 슬라이더가 표시되어야 함
+   */
+  it("should render time window slider with correct attributes", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const timeWindowSlider = screen.getByLabelText("시간 윈도우");
+    expect(timeWindowSlider).toBeInTheDocument();
+    expect(timeWindowSlider).toHaveAttribute("type", "range");
+    expect(timeWindowSlider).toHaveAttribute("min", "1");
+    expect(timeWindowSlider).toHaveAttribute("max", "7");
+    expect(timeWindowSlider).toHaveAttribute("step", "1");
+  });
+
+  /**
+   * Test 2: 시간 윈도우 기본값 표시
+   * 슬라이더 기본값이 3이어야 함
+   */
+  it("should display time window default value as 3", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const timeWindowSlider = screen.getByLabelText("시간 윈도우");
+    expect(timeWindowSlider).toBeInTheDocument();
+    expect(timeWindowSlider).toHaveValue("3");
+    // 레이블 텍스트 확인
+    expect(screen.getByText("시간 윈도우: 3일")).toBeInTheDocument();
+  });
+
+  /**
+   * Test 3: RS 임계값 슬라이더 존재 확인
+   * 페이지 렌더링 시 RS 임계값 슬라이더가 표시되어야 함
+   */
+  it("should render RS threshold slider with correct attributes", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const rsThresholdSlider = screen.getByLabelText("RS 임계값");
+    expect(rsThresholdSlider).toBeInTheDocument();
+    expect(rsThresholdSlider).toHaveAttribute("type", "range");
+    expect(rsThresholdSlider).toHaveAttribute("min", "-10");
+    expect(rsThresholdSlider).toHaveAttribute("max", "20");
+    expect(rsThresholdSlider).toHaveAttribute("step", "1");
+  });
+
+  /**
+   * Test 4: RS 임계값 기본값 표시
+   * 슬라이더 기본값이 0이어야 함
+   */
+  it("should display RS threshold default value as 0", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const rsThresholdSlider = screen.getByLabelText("RS 임계값");
+    expect(rsThresholdSlider).toHaveValue("0");
+  });
+
+  /**
+   * Test 5: 상태 임계값 슬라이더 존재 확인
+   * 페이지 렌더링 시 상태 임계값 슬라이더가 표시되어야 함
+   */
+  it("should render status threshold slider with correct attributes", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const statusThresholdSlider = screen.getByLabelText("상태 임계값");
+    expect(statusThresholdSlider).toBeInTheDocument();
+    expect(statusThresholdSlider).toHaveAttribute("type", "range");
+    expect(statusThresholdSlider).toHaveAttribute("min", "1");
+    expect(statusThresholdSlider).toHaveAttribute("max", "20");
+    expect(statusThresholdSlider).toHaveAttribute("step", "1");
+  });
+
+  /**
+   * Test 6: 상태 임계값 기본값 표시
+   * 슬라이더 기본값이 5이어야 함
+   */
+  it("should display status threshold default value as 5", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    const statusThresholdSlider = screen.getByLabelText("상태 임계값");
+    expect(statusThresholdSlider).toHaveValue("5");
+  });
+
+  /**
+   * Test 7: 시간 윈도우 슬라이더 조작 시 API 재호출
+   * 시간 윈도우 슬라이더를 변경하면 새 값으로 API가 호출되어야 함
+   */
+  it("should call API with new time window value when slider changes", async () => {
+    // Arrange
+    const mockUseStocksGroupAction = vi.fn();
+    vi.spyOn(useStocks, "useStocksGroupAction").mockImplementation(mockUseStocksGroupAction);
+
+    mockUseStocksGroupAction.mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    });
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    const timeWindowSlider = screen.getByLabelText("시간 윈도우");
+    fireEvent.change(timeWindowSlider, { target: { value: "5" } });
+
+    // Assert
+    await waitFor(() => {
+      expect(mockUseStocksGroupAction).toHaveBeenCalledWith(
+        "2024-01-15",
+        "52w_high",
+        5,  // 새 timeWindow 값
+        0   // 기본 rsThreshold
+      );
+    });
+  });
+
+  /**
+   * Test 8: RS 임계값 슬라이더 조작 시 API 재호출
+   * RS 임계값 슬라이더를 변경하면 새 값으로 API가 호출되어야 함
+   */
+  it("should call API with new RS threshold value when slider changes", async () => {
+    // Arrange
+    const mockUseStocksGroupAction = vi.fn();
+    vi.spyOn(useStocks, "useStocksGroupAction").mockImplementation(mockUseStocksGroupAction);
+
+    mockUseStocksGroupAction.mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    });
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    const rsThresholdSlider = screen.getByLabelText("RS 임계값");
+    fireEvent.change(rsThresholdSlider, { target: { value: "10" } });
+
+    // Assert
+    await waitFor(() => {
+      expect(mockUseStocksGroupAction).toHaveBeenCalledWith(
+        "2024-01-15",
+        "52w_high",
+        3,   // 기본 timeWindow
+        10   // 새 rsThreshold 값
+      );
+    });
+  });
+
+  /**
+   * Test 9: 상태 임계값 슬라이더 조작 시 API 미호출
+   * 상태 임계값은 클라이언트에서만 사용되므로 API 인자에 포함되지 않아야 함
+   */
+  it("should NOT call API when status threshold slider changes (client-side only)", () => {
+    // Arrange
+    const mockUseStocksGroupAction = vi.fn(() => ({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    }));
+    vi.spyOn(useStocks, "useStocksGroupAction").mockImplementation(mockUseStocksGroupAction);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // 상태 임계값 슬라이더 변경
+    const statusThresholdSlider = screen.getByLabelText("상태 임계값");
+    fireEvent.change(statusThresholdSlider, { target: { value: "10" } });
+
+    // Assert - API 함수의 모든 호출을 확인하고, statusThreshold가 인자에 없는지 확인
+    const allCalls = mockUseStocksGroupAction.mock.calls;
+    allCalls.forEach(call => {
+      // call은 [date, source, timeWindow, rsThreshold] 형태
+      // statusThreshold는 포함되지 않아야 함 (4개 인자만 있어야 함)
+      expect(call.length).toBe(4); // date, source, timeWindow, rsThreshold
+
+      // statusThreshold가 인자에 포함되지 않는지 확인
+      const hasStatusThresholdParam = call.some(arg => arg === 10 || arg === "10");
+      expect(hasStatusThresholdParam).toBe(false);
+    });
+  });
+
+  /**
+   * Test 10: 현재 슬라이더 값 표시
+   * 각 슬라이더 옆에 현재 값이 텍스트로 표시되어야 함
+   */
+  it("should display current value next to each slider", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert - 레이블과 값이 함께 표시되는지 확인
+    expect(screen.getByText("시간 윈도우: 3일")).toBeInTheDocument();
+    expect(screen.getByText("RS 임계값: 0")).toBeInTheDocument();
+    expect(screen.getByText("상태 임계값: 5")).toBeInTheDocument();
+  });
+
+  /**
+   * Test 11: 슬라이더 범위 표시
+   * 각 슬라이더의 최소/최대 범위가 표시되어야 함
+   */
+  it("should display slider range labels", () => {
+    // Arrange
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: mockStocks,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    // Act
+    render(<GroupActionTable date="2024-01-15" source="52w_high" />);
+
+    // Assert
+    expect(screen.getByText(/\[1-7\]/)).toBeInTheDocument();    // 시간 윈도우 범위
+    expect(screen.getByText(/\[-10~\+20\]/)).toBeInTheDocument(); // RS 임계값 범위
+    expect(screen.getByText(/\[1-20\]/)).toBeInTheDocument();   // 상태 임계값 범위
   });
 });

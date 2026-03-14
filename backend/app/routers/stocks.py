@@ -110,18 +110,27 @@ def get_persistent_stocks(
 # GET /api/stocks/group-action
 # ---------------------------------------------------------------------------
 
+# @MX:ANCHOR: 그룹 액션 탐지 API 엔드포인트
+# @MX:REASON: 이 함수는 프론트엔드(useStocks 훅, 페이지)에서 호출되는 핵심 비즈니스 로직입니다.
+#            SPEC-MTT-006에 의해 파라미터화되었습니다 (timeWindow, rsThreshold).
 @router.get("/group-action", response_model=GroupActionResponse)
 def get_group_action(
     date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
     source: str = Query(SOURCE_52W, description="Data source: '52w_high' or 'mtt'"),
+    timeWindow: int = Query(3, ge=1, le=7, description="Time window for detecting new appearances (1-7 days)"),
+    rsThreshold: int = Query(0, ge=-10, le=20, description="RS change threshold (-10 to 20)"),
     db: Session = Depends(get_db),
 ):
     """
     Detect group-action stocks.
 
     Conditions:
-    - Stock first appeared today OR first appeared within the last 3 days
-    - Their theme's avg_rs increased vs yesterday
+    - Stock first appeared today OR first appeared within the last timeWindow days
+    - Their theme's avg_rs increased vs yesterday by more than rsThreshold
+
+    Parameters:
+    - timeWindow: Number of days to look back for new appearances (default: 3, range: 1-7)
+    - rsThreshold: Minimum RS change to consider as increasing (default: 0, range: -10 to 20)
     """
     if date is None:
         date = _latest_date(db, source)
@@ -139,8 +148,8 @@ def get_group_action(
             status_code=404, detail=f"No stock data found for date {date}"
         )
 
-    # Find the 3 most recent dates up to and including `date`
-    recent_3: List[str] = _recent_dates(db, date, 3, source)
+    # Find the timeWindow most recent dates up to and including `date`
+    recent_dates: List[str] = _recent_dates(db, date, timeWindow, source)
 
     # Determine first-seen date for each stock (across all history for this source)
     first_seen_subq = (
@@ -191,7 +200,7 @@ def get_group_action(
     result: List[GroupActionItem] = []
     for stock in today_stocks:
         first_seen = first_seen_map.get(stock.stock_name)
-        is_new = first_seen in recent_3 if first_seen else False
+        is_new = first_seen in recent_dates if first_seen else False
         if not is_new:
             continue
 
@@ -200,14 +209,19 @@ def get_group_action(
 
         if theme_rs_today is None:
             continue
-        if theme_rs_yesterday is not None and theme_rs_today <= theme_rs_yesterday:
-            continue
 
+        # @MX:NOTE: RS 변화량 임계값 필터링 로직 (rsThreshold 파라미터)
+        # theme_rs_change가 rsThreshold보다 커야 탐지
         theme_rs_change = (
             round(theme_rs_today - theme_rs_yesterday, 2)
             if theme_rs_yesterday is not None
             else None
         )
+
+        # RS 임계값 필터링: 어제 데이터가 있고, RS 변화량이 임계값 이하이면 제외
+        if theme_rs_yesterday is not None:
+            if theme_rs_change is not None and theme_rs_change <= rsThreshold:
+                continue
 
         result.append(
             GroupActionItem(
@@ -217,6 +231,7 @@ def get_group_action(
                 theme_name=stock.theme_name,
                 theme_rs_change=theme_rs_change,
                 first_seen_date=first_seen,
+                status_threshold=5,  # @MX:NOTE: 상태 분류 임계값 (현재 하드코딩, 향후 파라미터화 가능)
             )
         )
 

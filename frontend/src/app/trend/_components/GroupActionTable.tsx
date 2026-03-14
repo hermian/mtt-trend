@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useStocksGroupAction } from "@/hooks/useStocks";
 import { GroupActionStock, DataSource } from "@/lib/api";
 import clsx from "clsx";
@@ -7,6 +8,53 @@ import clsx from "clsx";
 interface GroupActionTableProps {
   date: string;
   source?: DataSource;
+  timeWindow?: number; // @MX:NOTE: 시간 윈도우 (1-7일)
+  rsThreshold?: number; // @MX:NOTE: RS 임계값 (-10~20)
+  statusThreshold?: number; // @MX:NOTE: 상태 분류 임계값 (기본값 5)
+}
+
+// @MX:NOTE: SPEC-MTT-006 F-04: 슬라이더 레이블 컴포넌트
+function SliderControl({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  rangeLabel,
+  onChange,
+  unit = "",
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  rangeLabel: string;
+  onChange: (value: number) => void;
+  unit?: string;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <label htmlFor={`${label}-slider`} className="text-sm text-gray-400">
+          {label}: {value}{unit}
+        </label>
+        <span className="text-xs text-gray-500">[{rangeLabel}]</span>
+      </div>
+      <input
+        id={`${label}-slider`}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={label}
+        name={label}
+        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+      />
+    </div>
+  );
 }
 
 function RsChangeBadge({ value }: { value: number | null }) {
@@ -97,8 +145,20 @@ function StockStatusBadge({ status }: { status: "new" | "returning" | "neutral" 
   );
 }
 
-export function GroupActionTable({ date, source = "52w_high" }: GroupActionTableProps) {
-  const { data: stocks, isLoading, error } = useStocksGroupAction(date, source);
+export function GroupActionTable({
+  date,
+  source = "52w_high",
+  timeWindow: initialTimeWindow = 3,
+  rsThreshold: initialRsThreshold = 0,
+  statusThreshold: initialStatusThreshold = 5
+}: GroupActionTableProps) {
+  // @MX:NOTE: SPEC-MTT-006 F-04: 슬라이더 상태 관리
+  const [timeWindow, setTimeWindow] = useState(initialTimeWindow);
+  const [rsThreshold, setRsThreshold] = useState(initialRsThreshold);
+  const [statusThreshold, setStatusThreshold] = useState(initialStatusThreshold);
+
+  // @MX:NOTE: SPEC-MTT-006 F-04: 시간 윈도우/RS 임계값 변경 시 API 재호출
+  const { data: stocks, isLoading, error } = useStocksGroupAction(date, source, timeWindow, rsThreshold);
 
   if (isLoading) {
     return (
@@ -133,20 +193,57 @@ export function GroupActionTable({ date, source = "52w_high" }: GroupActionTable
   // Positive = gaining momentum (new), negative = losing (returning to baseline)
   // @MX:ANCHOR: 주식 상태 분류 로직 (fan_in: 렌더링 로직)
   // @MX:REASON: 이 함수는 주식의 테마 RS 변화량에 따라 상태를 분류하는 핵심 비즈니스 로직입니다.
+  // @MX:NOTE: SPEC-MTT-006 파라미터화: statusThreshold로 분류 기준 조정
   const getStockStatus = (
-    stock: GroupActionStock
+    stock: GroupActionStock,
+    threshold: number
   ): "new" | "returning" | "neutral" | "new_theme" => {
     // 신규 등장 테마 (어제 데이터 없음)
     if (stock.theme_rs_change === null) {
       return "new_theme";
     }
-    if (stock.theme_rs_change > 5) return "new";
-    if (stock.theme_rs_change < -5) return "returning";
+    if (stock.theme_rs_change > threshold) return "new";
+    if (stock.theme_rs_change < -threshold) return "returning";
     return "neutral";
   };
 
   return (
     <div>
+      {/* @MX:NOTE: SPEC-MTT-006 F-04: UI 파라미터 컨트롤 슬라이더 */}
+      <div className="bg-gray-800/50 rounded-lg p-4 mb-4 border border-gray-700">
+        <h3 className="text-sm font-medium text-gray-300 mb-3">그룹 액션 탐지 파라미터</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <SliderControl
+            label="시간 윈도우"
+            value={timeWindow}
+            min={1}
+            max={7}
+            step={1}
+            rangeLabel="1-7"
+            onChange={setTimeWindow}
+            unit="일"
+          />
+          <SliderControl
+            label="RS 임계값"
+            value={rsThreshold}
+            min={-10}
+            max={20}
+            step={1}
+            rangeLabel="-10~+20"
+            onChange={setRsThreshold}
+          />
+          <SliderControl
+            label="상태 임계값"
+            value={statusThreshold}
+            min={1}
+            max={20}
+            step={1}
+            rangeLabel="1-20"
+            onChange={setStatusThreshold}
+          />
+        </div>
+      </div>
+
       <p className="text-sm text-gray-400 mb-3">
         {date} 기준 그룹 액션 탐지 ({stocks.length}개 종목)
       </p>
@@ -176,7 +273,7 @@ export function GroupActionTable({ date, source = "52w_high" }: GroupActionTable
           </thead>
           <tbody>
             {sorted.map((stock, index) => {
-              const status = getStockStatus(stock);
+              const status = getStockStatus(stock, statusThreshold);
               return (
                 <tr
                   key={`${stock.stock_name}-${index}`}

@@ -36,6 +36,7 @@ export interface GroupActionStock {
   theme_name: string;
   theme_rs_change: number | null;
   first_seen_date: string | null;
+  status_threshold: number; // @MX:NOTE: 상태 분류 임계값 (SPEC-MTT-006)
 }
 
 export interface SurgingTheme {
@@ -123,11 +124,24 @@ export const api = {
     return data.stocks;
   },
 
-  // GET /api/stocks/group-action?date= → { date, stocks: GroupActionStock[] }
-  getStocksGroupAction: async (date: string, source: DataSource = "52w_high"): Promise<GroupActionStock[]> => {
+  // @MX:NOTE: SPEC-MTT-006 파라미터화: timeWindow, rsThreshold 지원
+  // GET /api/stocks/group-action?date=&timeWindow=&rsThreshold= → { date, stocks: GroupActionStock[] }
+  getStocksGroupAction: async (
+    date: string,
+    source: DataSource = "52w_high",
+    timeWindow: number = 3,
+    rsThreshold: number = 0
+  ): Promise<GroupActionStock[]> => {
     const { data } = await apiClient.get<{ date: string; stocks: GroupActionStock[] }>(
       "/api/stocks/group-action",
-      { params: { date, source } }
+      {
+        params: {
+          date,
+          source,
+          timeWindow, // @MX:NOTE: 시간 윈도우 (1-7일, 기본값 3)
+          rsThreshold // @MX:NOTE: RS 임계값 (-10~20, 기본값 0)
+        }
+      }
     );
     return data.stocks;
   },

@@ -16,11 +16,17 @@ export function useStocksPersistent(days = 5, min = 3, source: DataSource = "52w
   });
 }
 
+// @MX:NOTE: SPEC-MTT-006 파라미터화: timeWindow, rsThreshold 지원
 // Hook for fetching group action detection stocks
-export function useStocksGroupAction(date: string | null, source: DataSource = "52w_high") {
+export function useStocksGroupAction(
+  date: string | null,
+  source: DataSource = "52w_high",
+  timeWindow: number = 3,
+  rsThreshold: number = 0
+) {
   return useQuery<GroupActionStock[]>({
-    queryKey: ["stocks", "group-action", date, source],
-    queryFn: () => api.getStocksGroupAction(date!, source),
+    queryKey: ["stocks", "group-action", date, source, timeWindow, rsThreshold],
+    queryFn: () => api.getStocksGroupAction(date!, source, timeWindow, rsThreshold),
     enabled: !!date,
     staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });

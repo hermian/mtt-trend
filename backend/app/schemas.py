@@ -109,6 +109,7 @@ class GroupActionItem(BaseModel):
     theme_name: str
     theme_rs_change: Optional[float] = None
     first_seen_date: Optional[str] = None
+    status_threshold: int = 5  # @MX:NOTE: 상태 분류 임계값 (기본값 5)
 
 
 class GroupActionResponse(BaseModel):

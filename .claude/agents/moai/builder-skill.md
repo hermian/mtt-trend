@@ -3,13 +3,13 @@ name: builder-skill
 description: |
   Skill creation specialist. Use PROACTIVELY for creating skills, YAML frontmatter design, and knowledge organization.
   MUST INVOKE when ANY of these keywords appear in user request:
-  --ultrathink flag: Activate Sequential Thinking MCP for deep analysis of skill design, knowledge organization, and YAML frontmatter structure.
+  --deepthink flag: Activate Sequential Thinking MCP for deep analysis of skill design, knowledge organization, and YAML frontmatter structure.
   EN: create skill, new skill, skill optimization, knowledge domain, YAML frontmatter
   KO: 스킬생성, 새스킬, 스킬최적화, 지식도메인, YAML프론트매터
   JA: スキル作成, 新スキル, スキル最適化, 知識ドメイン, YAMLフロントマター
   ZH: 创建技能, 新技能, 技能优化, 知识领域, YAML前置信息
 tools: Read, Write, Edit, Grep, Glob, WebFetch, WebSearch, Bash, TodoWrite, Agent, Skill, mcp__sequential-thinking__sequentialthinking, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
-model: haiku
+model: sonnet
 maxTurns: 50
 permissionMode: bypassPermissions
 memory: user

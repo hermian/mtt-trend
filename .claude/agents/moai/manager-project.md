@@ -3,13 +3,13 @@ name: manager-project
 description: |
   Project setup specialist. Use PROACTIVELY for initialization, .moai configuration, scaffolding, and new project creation.
   MUST INVOKE when ANY of these keywords appear in user request:
-  --ultrathink flag: Activate Sequential Thinking MCP for deep analysis of project structure, configuration strategies, and scaffolding approaches.
+  --deepthink flag: Activate Sequential Thinking MCP for deep analysis of project structure, configuration strategies, and scaffolding approaches.
   EN: project setup, initialization, .moai, project configuration, scaffold, new project
   KO: 프로젝트설정, 초기화, .moai, 프로젝트구성, 스캐폴드, 새프로젝트
   JA: プロジェクトセットアップ, 初期化, .moai, プロジェクト構成, スキャフォールド
   ZH: 项目设置, 初始化, .moai, 项目配置, 脚手架
 tools: Read, Write, Edit, MultiEdit, Grep, Glob, Bash, TodoWrite, Skill, mcp__sequential-thinking__sequentialthinking, mcp__context7__resolve-library-id, mcp__context7__get-library-docs
-model: haiku
+model: sonnet
 permissionMode: default
 maxTurns: 150
 memory: project

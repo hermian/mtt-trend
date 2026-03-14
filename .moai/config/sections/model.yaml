@@ -1,0 +1,7 @@
+# Model availability 설정
+model_policy:
+  availability: low
+
+  # high: Claude Opus/Sonnet 위주 (고비용, 고품질)
+  # medium: 혼합 모드 (권장, 균형)
+  # low: 비용 절감 모드

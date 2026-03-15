@@ -1,12 +1,16 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Providers } from "./providers";
-import { Sidebar } from "./_components/Sidebar";
+import { LayoutClient } from "./_components/LayoutClient";
 
 export const metadata: Metadata = {
   title: "52주 트렌드 대시보드",
   description: "52주 고점 기반 테마 트렌드 분석 대시보드",
-  viewport: "width=device-width, initial-scale=1",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({
@@ -18,12 +22,7 @@ export default function RootLayout({
     <html lang="ko">
       <body className="bg-gray-900 text-white min-h-screen">
         <Providers>
-          <div className="flex h-screen overflow-hidden">
-            <Sidebar />
-            <main className="flex-1 overflow-y-auto bg-gray-900">
-              {children}
-            </main>
-          </div>
+          <LayoutClient>{children}</LayoutClient>
         </Providers>
       </body>
     </html>

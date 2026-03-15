@@ -40,7 +40,7 @@ export function Sidebar() {
   return (
     <aside
       className={clsx(
-        "flex flex-col bg-gray-800 border-r border-gray-700 transition-all duration-300",
+        "hidden md:flex flex-col bg-gray-800 border-r border-gray-700 transition-all duration-300",
         collapsed ? "w-16" : "w-56"
       )}
     >

@@ -41,7 +41,7 @@ export function Sidebar() {
     <aside
       className={clsx(
         "flex flex-col bg-gray-800 border-r border-gray-700 transition-all duration-300",
-        collapsed ? "w-16" : "w-16 sm:w-20 md:w-24 lg:w-56"
+        collapsed ? "w-16" : "w-56"
       )}
     >
       {/* Header */}

@@ -2,6 +2,42 @@
 
 모든 중요한 변경 사항은 이 파일에 기록됩니다.
 
+## [1.2.1] - 2026-03-15
+
+### 추가된 기능
+
+#### 마지막 날짜 HTML 파일 덮어쓰기 처리 (SPEC-MTT-014)
+- **마지막 날짜 재적재 허용**: `sync_files()`가 마지막 날짜 파일을 재적재하도록 개선
+  - `get_last_date_by_source()` 헬퍼 메서드 추가 (소스별 DB 최대 날짜 조회)
+  - `is_file_already_loaded()` 메서드 수정 (last_db_date 파라미터 추가)
+  - 마지막 날짜 파일 로그: "Re-ingesting last date file"
+- **Watchdog 파일 수정 감지**: `on_modified()` 핸들러 추가로 파일 수정 이벤트 처리
+  - `file_watcher.py`에 `on_modified()` 메서드 구현
+  - 기존 `on_created()`와 동일한 유효성 검사 로직 적용
+  - 수정된 파일 로그: "Processing modified file"
+- **서버 시작 vs 파일 감시 동작 방식 명확화**:
+  - **Watchdog**: 파일 이벤트 발생 시 무조건 처리 (사용자 의도 추정)
+  - **sync_files()**: 과거 파일 건너뛰고 마지막 날짜만 재적재 (자동화 최적화)
+- **테스트 커버리지**: 8개 테스트 모두 통과 (백엔드 테스트 커버리지 85%+)
+- **파일 수정**:
+  - `backend/app/sync_service.py` - 재적재 로직 구현
+  - `backend/app/file_watcher.py` - `on_modified()` 핸들러 추가
+
+### 개선 사항
+
+#### 데이터 처리 동작 방식 문서화
+- README.md에 "Watchdog vs sync_files()" 차이 표 추가
+- 실제 사용 시나리오별 동작 설명 문서화
+- 두 처리 방식의 설계 이유 명확화
+
+### 버그 수정
+
+#### 동작 방식 간 차이 이해도 개선
+- Watchdog과 sync_files()의 차이점을 명확히 문서화하여 사용자 혼란 방지
+- 마지막 날짜 처리 로직을 테이블 형식으로 명확히 표현
+
+---
+
 ## [1.2.0] - 2026-03-15
 
 ### 추가된 기능

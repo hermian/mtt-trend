@@ -58,6 +58,29 @@ class FileWatcherHandler(FileSystemEventHandler):
         self._observer: Optional["Observer"] = None
         self._watched_directory: Optional[Path] = None
 
+    def _validate_html_file(self, file_path: Path, warn_on_invalid: bool = True) -> bool:
+        """
+        HTML 파일 유효성 검증
+
+        Args:
+            file_path: 확인할 파일 경로
+            warn_on_invalid: 유효하지 않을 경우 경고 로그 출력 여부
+
+        Returns:
+            유효한 HTML 파일이면 True
+        """
+        # HTML 파일 확인
+        if not file_path.suffix.lower() == ".html":
+            return False
+
+        # 패턴 확인
+        if not is_valid_html_pattern(file_path.name):
+            if warn_on_invalid:
+                logger.warning(f"Unrecognized HTML file pattern: {file_path.name}")
+            return False
+
+        return True
+
     def on_created(self, event: FileSystemEvent) -> None:
         """
         파일 생성 이벤트 처리
@@ -70,16 +93,29 @@ class FileWatcherHandler(FileSystemEventHandler):
 
         file_path = Path(event.src_path)
 
-        # HTML 파일 확인 (ACC-04 시나리오 4-1)
-        if not file_path.suffix.lower() == ".html":
-            return
-
-        # 패턴 확인 (ACC-04 시나리오 4-2)
-        if not is_valid_html_pattern(file_path.name):
-            logger.warning(f"Unrecognized HTML file pattern: {file_path.name}")
+        if not self._validate_html_file(file_path):
             return
 
         # 파일 적재
+        self._process_file(file_path)
+
+    def on_modified(self, event: FileSystemEvent) -> None:
+        """
+        파일 수정 이벤트 처리 (SPEC-MTT-014 REQ-014-04)
+
+        Args:
+            event: Watchdog 파일 시스템 이벤트
+        """
+        if event.is_directory:
+            return
+
+        file_path = Path(event.src_path)
+
+        if not self._validate_html_file(file_path, warn_on_invalid=False):
+            return
+
+        # 파일 재적재
+        logger.info(f"Processing modified file: {file_path.name}")
         self._process_file(file_path)
 
     def on_moved(self, event: FileSystemEvent) -> None:
@@ -98,13 +134,7 @@ class FileWatcherHandler(FileSystemEventHandler):
         else:
             file_path = Path(event.dest_path)
 
-        # HTML 파일 확인
-        if not file_path.suffix.lower() == ".html":
-            return
-
-        # 패턴 확인
-        if not is_valid_html_pattern(file_path.name):
-            logger.warning(f"Unrecognized HTML file pattern: {file_path.name}")
+        if not self._validate_html_file(file_path):
             return
 
         # 파일 적재

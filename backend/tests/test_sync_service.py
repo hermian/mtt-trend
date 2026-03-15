@@ -136,24 +136,30 @@ class TestSyncService:
                 assert result.records_created > 0
 
     def test_sync_files_skips_already_loaded_files(self):
-        """이미 적재된 파일 건너뛰기 테스트 (ACC-02 시나리오 2-2)"""
+        """
+        이미 적재된 파일 건너뛰기 테스트 (SPEC-MTT-014 이후 동작)
+
+        - 과거 날짜 파일은 건너뜀
+        - 마지막 날짜 파일은 재적됨
+        """
         # given
         service = SyncService()
 
-        # 먼저 파일을 적재
+        # 먼저 파일들을 적재
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
             html_content = """
             <html><body>
                 <h2>반도체</h2>
                 <table>
-                    <tr><th>종목명</th><th>RS</th><th>등락률</th></tr>
                     <tr><td>삼성전자</td><td>98</td><td>+2.5%</td></tr>
                 </table>
             </body></html>
             """
-            file_path = tmpdir_path / "★52Week_High_Stocks_By_Theme_With_RS_Scores_2026-03-15.html"
-            file_path.write_text(html_content)
+            # 2026-03-14 파일 (과거 날짜)
+            (tmpdir_path / "★52Week_High_Stocks_By_Theme_With_RS_Scores_2026-03-14.html").write_text(html_content)
+            # 2026-03-15 파일 (마지막 날짜)
+            (tmpdir_path / "★52Week_High_Stocks_By_Theme_With_RS_Scores_2026-03-15.html").write_text(html_content)
 
             with SessionLocal() as db:
                 # 첫 번째 동기화
@@ -162,10 +168,10 @@ class TestSyncService:
                 # when: 두 번째 동기화
                 result = service.sync_files(tmpdir_path, db)
 
-                # then
-                assert result.total_files_scanned == 1
-                assert result.files_processed == 0
-                assert result.files_skipped == 1
+                # then: 2026-03-14는 건너뜀, 2026-03-15는 재적됨
+                assert result.total_files_scanned == 2
+                assert result.files_processed == 1  # 마지막 날짜 파일만 재적재
+                assert result.files_skipped == 1  # 과거 날짜 파일은 건너뜀
                 assert len(result.errors) == 0
 
     def test_sync_files_handles_parse_errors_individually(self):

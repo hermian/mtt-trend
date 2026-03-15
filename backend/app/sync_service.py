@@ -24,7 +24,7 @@ from ingest import (
     detect_source_from_filename,
     ingest_file,
 )
-from app.models import ThemeDaily
+from app.models import ThemeDaily, SOURCE_52W, SOURCE_MTT
 
 logger = logging.getLogger(__name__)
 
@@ -73,22 +73,44 @@ class SyncService:
         logger.info(f"Scanned {len(html_files)} HTML files in {data_dir}")
         return html_files
 
-    def is_file_already_loaded(self, file_path: Path, db: Session) -> bool:
+    def get_last_date_by_source(self, source: str, db: Session) -> Optional[str]:
+        """
+        DB에서 해당 소스의 마지막 날짜 조회
+
+        Args:
+            source: 데이터 소스 ("52w_high" 또는 "mtt")
+            db: 데이터베이스 세션
+
+        Returns:
+            마지막 날짜 (YYYY-MM-DD) 또는 None (데이터 없음)
+        """
+        last_record = db.query(ThemeDaily).filter(
+            ThemeDaily.data_source == source,
+        ).order_by(ThemeDaily.date.desc()).first()
+
+        return last_record.date if last_record else None
+
+    def is_file_already_loaded(self, file_path: Path, db: Session, last_db_date: Optional[str] = None) -> bool:
         """
         파일이 이미 DB에 적재되었는지 확인
 
         Args:
             file_path: 확인할 파일 경로
             db: 데이터베이스 세션
+            last_db_date: 해당 소스의 DB 마지막 날짔 (마지막 날짜 파일 재적재용)
 
         Returns:
-            이미 적재된 경우 True
+            이미 적재된 경우 True, 재적재 필요한 경우 False
         """
         date = extract_date_from_filename(file_path)
         if not date:
             return False
 
         source = detect_source_from_filename(file_path)
+
+        # 마지막 날짜 파일은 재적재 허용 (SPEC-MTT-014 REQ-014-01)
+        if last_db_date is not None and date == last_db_date:
+            return False
 
         # 해당 날짜와 소스의 데이터가 존재하는지 확인
         existing = db.query(ThemeDaily).filter(
@@ -148,13 +170,28 @@ class SyncService:
                 started_at=started_at,
             )
 
+            # 소스별 마지막 날짜 조회 (SPEC-MTT-014 REQ-014-01)
+            last_dates = {
+                SOURCE_52W: self.get_last_date_by_source(SOURCE_52W, db),
+                SOURCE_MTT: self.get_last_date_by_source(SOURCE_MTT, db),
+            }
+
             for file_path in html_files:
                 try:
-                    # 이미 적재된 파일인지 확인
-                    if self.is_file_already_loaded(file_path, db):
+                    # 파일 소스 및 날짜 감지
+                    source = detect_source_from_filename(file_path)
+                    file_date = extract_date_from_filename(file_path)
+                    last_db_date = last_dates.get(source)
+
+                    # 이미 적재된 파일인지 확인 (마지막 날짜는 재적재 허용)
+                    if self.is_file_already_loaded(file_path, db, last_db_date):
                         result.files_skipped += 1
                         logger.info(f"Skipped already loaded file: {file_path.name}")
                         continue
+
+                    # 마지막 날짜 파일 재적재 로그 (SPEC-MTT-014 REQ-014-01)
+                    if last_db_date and file_date == last_db_date:
+                        logger.info(f"Re-ingesting last date file: {file_path.name}")
 
                     # 파일 적재
                     themes_count, stocks_count = self.ingest_single_file(file_path, db)

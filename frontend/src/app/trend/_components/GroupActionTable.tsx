@@ -199,8 +199,8 @@ export function GroupActionTable({
     );
   }
 
-  // Sort by rs_score desc
-  const sorted = [...stocks].sort((a, b) => b.rs_score - a.rs_score);
+  // Sort by rs_score desc (null values treated as 0)
+  const sorted = [...stocks].sort((a, b) => (b.rs_score ?? 0) - (a.rs_score ?? 0));
 
   // Separate new vs returning stocks based on theme_rs_change
   // Positive = gaining momentum (new), negative = losing (returning to baseline)

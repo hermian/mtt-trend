@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, API_CONFIG, PersistentStock, GroupActionStock, DataSource } from "@/lib/api";
+import { api, API_CONFIG, PersistentStock, GroupActionStock, IntersectionTheme, DataSource } from "@/lib/api";
 
 // @MX:NOTE: 모든 훅은 API_CONFIG.DEFAULT_STALE_TIME을 사용하여 불필요한 재요청을 방지합니다.
 // @MX:ANCHOR: 종목 관련 React Query 훅 (fan_in: StockAnalysisTabs, page.tsx)
@@ -28,6 +28,16 @@ export function useStocksGroupAction(
     queryKey: ["stocks", "group-action", date, source, timeWindow, rsThreshold],
     queryFn: () => api.getStocksGroupAction(date!, source, timeWindow, rsThreshold),
     enabled: !!date,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
+  });
+}
+
+// @MX:NOTE: SPEC-MTT-012 교집합 추천 훅
+// Hook for fetching intersection recommendations
+export function useIntersection(date: string | undefined = undefined, source: DataSource = "52w_high") {
+  return useQuery<IntersectionTheme[]>({
+    queryKey: ["stocks", "intersection", date, source],
+    queryFn: () => api.getIntersection(date, source),
     staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }

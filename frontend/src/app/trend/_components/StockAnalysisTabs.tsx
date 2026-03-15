@@ -4,6 +4,7 @@ import { useState } from "react";
 import clsx from "clsx";
 import { StrongStocksTable } from "./StrongStocksTable";
 import { GroupActionTable } from "./GroupActionTable";
+import { IntersectionTab } from "./IntersectionTab";
 import type { DataSource } from "@/lib/api";
 
 interface StockAnalysisTabsProps {
@@ -11,7 +12,7 @@ interface StockAnalysisTabsProps {
   source?: DataSource;
 }
 
-type TabId = "persistent" | "group-action";
+type TabId = "persistent" | "group-action" | "intersection";
 
 interface Tab {
   id: TabId;
@@ -29,6 +30,11 @@ const TABS: Tab[] = [
     id: "group-action",
     label: "그룹 액션 탐지",
     description: "동일 테마 집단 움직임",
+  },
+  {
+    id: "intersection",
+    label: "교집합 추천",
+    description: "52w + MTT 강세 종목",
   },
 ];
 
@@ -60,6 +66,7 @@ export function StockAnalysisTabs({ date, source = "52w_high" }: StockAnalysisTa
       <div className="p-6">
         {activeTab === "persistent" && <StrongStocksTable source={source} />}
         {activeTab === "group-action" && <GroupActionTable date={date} source={source} />}
+        {activeTab === "intersection" && <IntersectionTab source={source} />}
       </div>
     </div>
   );

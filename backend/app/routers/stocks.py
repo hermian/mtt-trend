@@ -14,10 +14,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 from app.database import get_db
-from app.models import ThemeDaily, ThemeStockDaily, SOURCE_52W
+from app.models import ThemeDaily, ThemeStockDaily, SOURCE_52W, SOURCE_MTT
 from app.schemas import (
     GroupActionItem,
     GroupActionResponse,
+    IntersectionResponse,
+    IntersectionThemeItem,
+    IntersectionStockItem,
     PersistentStockItem,
     PersistentStocksResponse,
 )
@@ -41,6 +44,28 @@ def _recent_dates(db: Session, before_date: Optional[str], n: int, source: str =
         q = q.filter(ThemeStockDaily.date <= before_date)
     results = q.order_by(ThemeStockDaily.date.desc()).limit(n).all()
     return [r[0] for r in results]
+
+
+def _find_latest_common_date(db: Session) -> Optional[str]:
+    """
+    Find the latest date where both 52w_high and MTT sources have data.
+
+    Returns:
+        The earlier of the two latest dates (ensures both sources have data)
+        None if either source has no data
+    """
+    latest_52w = db.query(func.max(ThemeDaily.date)).filter(
+        ThemeDaily.data_source == SOURCE_52W
+    ).scalar()
+    latest_mtt = db.query(func.max(ThemeDaily.date)).filter(
+        ThemeDaily.data_source == SOURCE_MTT
+    ).scalar()
+
+    if latest_52w is None or latest_mtt is None:
+        return None
+
+    # Use the earlier date to ensure both sources have data
+    return min(latest_52w, latest_mtt)
 
 
 # ---------------------------------------------------------------------------
@@ -239,3 +264,143 @@ def get_group_action(
     result.sort(key=lambda x: x.theme_rs_change or 0, reverse=True)
 
     return GroupActionResponse(date=date, stocks=result)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/intersection
+# ---------------------------------------------------------------------------
+
+# @MX:ANCHOR: 교집합 추천 API 엔드포인트
+# @MX:REASON: 이 함수는 프론트엔드(useIntersection 훅)에서 호출되는 핵심 비즈니스 로직입니다.
+#            SPEC-MTT-012에 의해 정의됨 (52주 신고가 × MTT 교집합 추천).
+@router.get("/intersection", response_model=IntersectionResponse)
+def get_intersection(
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
+    db: Session = Depends(get_db),
+):
+    """
+    Find themes and stocks that appear in BOTH data sources (52w_high and MTT) on the same date.
+
+    Query Logic:
+    - Level 1: Find themes existing in both sources on same date (ThemeDaily self-JOIN)
+    - Level 2: Find stocks existing in both sources for each theme (ThemeStockDaily self-JOIN)
+    - Sort by intersection_stock_count DESC
+
+    Parameters:
+    - date: Target date (if not specified, finds latest date where BOTH sources have data)
+
+    Returns:
+    - IntersectionResponse with themes that have common stocks in both sources
+    """
+    # Find latest common date if not specified
+    if date is None:
+        date = _find_latest_common_date(db)
+        if date is None:
+            # No data in at least one source
+            return IntersectionResponse(
+                date="",
+                theme_count=0,
+                total_stock_count=0,
+                themes=[],
+            )
+
+    # Level 1: Find themes that exist in BOTH sources on the given date
+    # Strategy: Group by theme_name and filter for themes with data from both sources
+    # This uses ThemeDaily self-JOIN via GROUP BY + HAVING COUNT(DISTINCT data_source) = 2
+    common_themes_query = (
+        db.query(
+            ThemeDaily.theme_name,
+            func.sum(ThemeDaily.stock_count).label("total_stocks"),
+        )
+        .filter(ThemeDaily.date == date)
+        .filter(ThemeDaily.data_source.in_([SOURCE_52W, SOURCE_MTT]))
+        .group_by(ThemeDaily.theme_name)
+        .having(func.count(ThemeDaily.data_source.distinct()) == 2)
+        .all()
+    )
+
+    if not common_themes_query:
+        return IntersectionResponse(
+            date=date,
+            theme_count=0,
+            total_stock_count=0,
+            themes=[],
+        )
+
+    theme_names = [row[0] for row in common_themes_query]
+
+    # Level 2: For each common theme, find stocks that exist in BOTH sources
+    # Strategy: For each theme, fetch stocks from both sources and compute set intersection
+    themes_result: List[IntersectionThemeItem] = []
+    total_stock_count = 0
+
+    for theme_name in theme_names:
+        # Get all stocks for this theme from both sources
+        stocks_52w = db.query(ThemeStockDaily).filter(
+            ThemeStockDaily.date == date,
+            ThemeStockDaily.theme_name == theme_name,
+            ThemeStockDaily.data_source == SOURCE_52W,
+        ).all()
+
+        stocks_mtt = db.query(ThemeStockDaily).filter(
+            ThemeStockDaily.date == date,
+            ThemeStockDaily.theme_name == theme_name,
+            ThemeStockDaily.data_source == SOURCE_MTT,
+        ).all()
+
+        # Find common stocks by stock_name
+        stocks_52w_map = {s.stock_name: s for s in stocks_52w}
+        stocks_mtt_map = {s.stock_name: s for s in stocks_mtt}
+
+        common_stock_names = set(stocks_52w_map.keys()) & set(stocks_mtt_map.keys())
+
+        if not common_stock_names:
+            continue  # Skip themes with no common stocks
+
+        # Build intersection stocks list
+        intersection_stocks: List[IntersectionStockItem] = []
+        for stock_name in common_stock_names:
+            stock_52w = stocks_52w_map[stock_name]
+            stock_mtt = stocks_mtt_map[stock_name]
+
+            intersection_stocks.append(
+                IntersectionStockItem(
+                    stock_name=stock_name,
+                    rs_score_52w=stock_52w.rs_score,
+                    rs_score_mtt=stock_mtt.rs_score,
+                    change_pct_52w=stock_52w.change_pct,
+                    change_pct_mtt=stock_mtt.change_pct,
+                )
+            )
+
+        # Calculate average RS scores for common stocks only (intersection)
+        if intersection_stocks:
+            avg_rs_52w = sum(s.rs_score_52w for s in intersection_stocks if s.rs_score_52w is not None) / len(intersection_stocks)
+            avg_rs_mtt = sum(s.rs_score_mtt for s in intersection_stocks if s.rs_score_mtt is not None) / len(intersection_stocks)
+        else:
+            avg_rs_52w = None
+            avg_rs_mtt = None
+
+        themes_result.append(
+            IntersectionThemeItem(
+                theme_name=theme_name,
+                intersection_stock_count=len(intersection_stocks),
+                avg_rs_52w=round(avg_rs_52w, 2) if avg_rs_52w is not None else None,
+                avg_rs_mtt=round(avg_rs_mtt, 2) if avg_rs_mtt is not None else None,
+                stock_count_52w=len(stocks_52w),
+                stock_count_mtt=len(stocks_mtt),
+                intersection_stocks=intersection_stocks,
+            )
+        )
+
+        total_stock_count += len(intersection_stocks)
+
+    # Sort by intersection_stock_count DESC
+    themes_result.sort(key=lambda x: x.intersection_stock_count, reverse=True)
+
+    return IntersectionResponse(
+        date=date,
+        theme_count=len(themes_result),
+        total_stock_count=total_stock_count,
+        themes=themes_result,
+    )

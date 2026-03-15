@@ -13,6 +13,10 @@
   - **UI 슬라이더**: 실시간 파라미터 조절로 탐지 조건 유연하게 변경
   - **툴팁 기능** (SPEC-MTT-007): 각 파라미터의 역할과 사용법을 설명하는 접근성 툴팁 제공
   - **성능 최적화**: 인덱스 추가로 쿼리 응답 시간 80% 개선 (500ms → 100ms)
+- **교집합 추천** (SPEC-MTT-012): 52주 신고가와 MTT 두 데이터 소스에서 동시에 출현하는 테마/종목 분석
+  - **높은 신뢰도**: 두 독립적인 분석 방법론의 교차 검증으로 정확도 향상
+  - **자동 날짜 선택**: 양쪽 소스 모두 데이터가 있는 최신 날짜 자동 탐색
+  - **테마/종목 교집합**: Level 1(테마) + Level 2(종목) 2단계 분석
 - **다중 데이터 소스 지원**: 52주 신고가 데이터와 MTT 템플릿 데이터 전환 기능
 
 ## 기술 스택
@@ -224,6 +228,46 @@ curl "http://localhost:8000/api/stocks/group-action?date=2024-01-15&timeWindow=7
 - `returning`: 강한 하락 (RS 변화 < -임계값)
 - `neutral`: 유지 (그 외)
 
+### 교집합 추천 API (SPEC-MTT-012)
+
+교집합 추천은 52주 신고가와 MTT 두 소스에서 동시에 출현하는 테마/종목을 분석합니다.
+
+```bash
+# 특정 날짜의 교집합 조회
+curl "http://localhost:8000/api/stocks/intersection?date=2024-01-15"
+
+# 최신 날짜 자동 선택 (date 파라미터 생략)
+curl "http://localhost:8000/api/stocks/intersection"
+```
+
+**응답 예시:**
+```json
+{
+  "date": "2024-01-15",
+  "theme_count": 2,
+  "total_stock_count": 5,
+  "themes": [
+    {
+      "theme_name": "AI",
+      "intersection_stock_count": 3,
+      "avg_rs_52w": 87.5,
+      "avg_rs_mtt": 85.0,
+      "stock_count_52w": 5,
+      "stock_count_mtt": 4,
+      "intersection_stocks": [
+        {
+          "stock_name": "삼성전자",
+          "rs_score_52w": 90,
+          "rs_score_mtt": 88,
+          "change_pct_52w": 2.5,
+          "change_pct_mtt": 2.3
+        }
+      ]
+    }
+  ]
+}
+```
+
 ### 일반 API 예시
 
 ```bash
@@ -273,6 +317,7 @@ docker-compose ps
 - [SPEC-MTT-009: HTML 자동 감지 및 DB 동기화 시스템](.moai/specs/SPEC-MTT-009/spec.md)
 - [SPEC-MTT-010: 서버 시작 시 자동 동기화](.moai/specs/SPEC-MTT-010/spec.md) - 자동 데이터 적재, 중복 방지, 에러 격리
 - [SPEC-MTT-011: 테스트 DB 분리](.moai/specs/SPEC-MTT-011/spec.md)
+- [SPEC-MTT-012: 52주 신고가 × MTT 교집합 추천](.moai/specs/SPEC-MTT-012/spec.md) - 두 데이터 소스 교차 분석, 높은 신뢰도 추천
 
 ## 라이선스
 

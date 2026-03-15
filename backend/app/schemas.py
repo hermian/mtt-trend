@@ -115,3 +115,32 @@ class GroupActionItem(BaseModel):
 class GroupActionResponse(BaseModel):
     date: str
     stocks: List[GroupActionItem]
+
+
+# ---------------------------------------------------------------------------
+# /api/intersection
+# ---------------------------------------------------------------------------
+
+class IntersectionStockItem(BaseModel):
+    stock_name: str
+    rs_score_52w: Optional[int] = None
+    rs_score_mtt: Optional[int] = None
+    change_pct_52w: Optional[float] = None
+    change_pct_mtt: Optional[float] = None
+
+
+class IntersectionThemeItem(BaseModel):
+    theme_name: str
+    intersection_stock_count: int
+    avg_rs_52w: Optional[float] = None
+    avg_rs_mtt: Optional[float] = None
+    stock_count_52w: int
+    stock_count_mtt: int
+    intersection_stocks: List[IntersectionStockItem]
+
+
+class IntersectionResponse(BaseModel):
+    date: str
+    theme_count: int
+    total_stock_count: int
+    themes: List[IntersectionThemeItem]

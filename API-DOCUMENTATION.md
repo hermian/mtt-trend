@@ -174,6 +174,66 @@ curl "http://localhost:8000/api/stocks/persistent?days=10&min=5&source=52w_high"
 
 ---
 
+#### GET /api/stocks/intersection
+
+52주 신고가 데이터와 MTT 데이터의 교집합을 분석합니다. 두 데이터 소스에서 동일 날짜에 모두 존재하는 테마/종목을 높은 신뢰도의 추천 시그널로 제공합니다.
+
+**파라미터**:
+- `date` (선택): 조회할 날짜 (YYYY-MM-DD 형식). 생략 시 두 소스 모두 데이터가 존재하는 최신 날짜 자동 선택
+
+**응답 형식**:
+```json
+{
+  "date": "2024-01-15",
+  "theme_count": 3,
+  "total_stock_count": 12,
+  "themes": [
+    {
+      "theme_name": "인공지능",
+      "intersection_stock_count": 5,
+      "avg_rs_52w": 88.5,
+      "avg_rs_mtt": 85.2,
+      "stock_count_52w": 8,
+      "stock_count_mtt": 6,
+      "intersection_stocks": [
+        {
+          "stock_name": "삼성전자",
+          "rs_score_52w": 92,
+          "rs_score_mtt": 88,
+          "change_pct_52w": 2.5,
+          "change_pct_mtt": 1.8
+        },
+        {
+          "stock_name": "LG에너지솔루션",
+          "rs_score_52w": 95,
+          "rs_score_mtt": 91,
+          "change_pct_52w": 3.2,
+          "change_pct_mtt": 2.9
+        }
+      ]
+    }
+  ]
+}
+```
+
+**사용 예시**:
+```bash
+# 특정 날짜의 교집합 조회
+curl "http://localhost:8000/api/stocks/intersection?date=2024-01-15"
+
+# 최신 날짜의 교집합 자동 조회 (date 파라미터 생략)
+curl "http://localhost:8000/api/stocks/intersection"
+
+# 교집합 결과 해석
+# - theme_name: 교집합 테마 이름
+# - intersection_stock_count: 해당 테마의 교집합 종목 수 (상위 정렬 기준)
+# - avg_rs_52w: 52주 신고가 소스의 평균 RS 점수
+# - avg_rs_mtt: MTT 소스의 평균 RS 점수
+# - intersection_stocks: 두 소스 모두에 존재하는 종목 목록
+```
+
+---
+
 #### GET /api/stocks/group-action
 
 신규 등장 테마 + RS 상승 추세를 동시에 만족하는 종목을 탐지합니다.
@@ -347,6 +407,43 @@ curl "http://localhost:8000/health"
 | `first_seen_date` | string\|null | 최초 등장 날짜 |
 | `status_threshold` | number | 상태 분류에 사용된 임계값 |
 
+### IntersectionStockItem
+
+교집합 종목 데이터
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `stock_name` | string | 종목명 |
+| `rs_score_52w` | number\|null | 52주 신고가 소스의 RS 점수 |
+| `rs_score_mtt` | number\|null | MTT 소스의 RS 점수 |
+| `change_pct_52w` | number\|null | 52주 신고가 소스의 변화율 |
+| `change_pct_mtt` | number\|null | MTT 소스의 변화율 |
+
+### IntersectionThemeItem
+
+교집합 테마 데이터
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `theme_name` | string | 테마 이름 |
+| `intersection_stock_count` | number | 교집합 종목 수 (정렬 기준) |
+| `avg_rs_52w` | number\|null | 52주 신고가 소스의 평균 RS |
+| `avg_rs_mtt` | number\|null | MTT 소스의 평균 RS |
+| `stock_count_52w` | number\|null | 52주 신고가 소스의 전체 종목 수 |
+| `stock_count_mtt` | number\|null | MTT 소스의 전체 종목 수 |
+| `intersection_stocks` | array[IntersectionStockItem] | 교집합 종목 목록 |
+
+### IntersectionResponse
+
+교집합 응답 데이터
+
+| 필드 | 타입 | 설명 |
+|------|------|------|
+| `date` | string | 조회 날짜 |
+| `theme_count` | number | 교집합 테마 수 |
+| `total_stock_count` | number | 전체 교집합 종목 수 |
+| `themes` | array[IntersectionThemeItem] | 교집합 테마 목록 |
+
 ---
 
 ## 상태 분류 시스템
@@ -429,6 +526,16 @@ export function useStocksGroupAction(
   return useQuery<GroupActionStock[]>({
     queryKey: ["stocks", "group-action", date, source, timeWindow, rsThreshold],
     queryFn: () => api.getStocksGroupAction(date!, source, timeWindow, rsThreshold),
+    enabled: !!date,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// 교집합 종목 조회
+export function useStocksIntersection(date: string | null) {
+  return useQuery<IntersectionResponse>({
+    queryKey: ["stocks", "intersection", date],
+    queryFn: () => api.getIntersection(date!),
     enabled: !!date,
     staleTime: 5 * 60 * 1000,
   });
@@ -534,6 +641,17 @@ docker run -p 8000:8000 mtt-trend-backend
 ---
 
 ## 업데이트 로그
+
+### v1.2.0 (2026-03-15)
+- **52주 신고가 × MTT 교집합 추천 기능** (SPEC-MTT-012)
+  - 새로운 엔드포인트: `GET /api/stocks/intersection`
+  - 자동 최신 날짜 선택 기능 (date 파라미터 미지정 시)
+  - 2단계 교집합 분석: 테마 교집합 + 종목 교집합
+  - 교집합 종목 수 기준 테마 정렬 (DESC)
+  - 3개 새로운 데이터 모델: `IntersectionStockItem`, `IntersectionThemeItem`, `IntersectionResponse`
+  - 프론트엔드 "교집합 추천" 탭 추가
+  - 11/11 테스트 통과, TDD 개발 방식 적용
+  - 교집합 쿼리 성능 최적화 (SQLite self-JOIN)
 
 ### v1.1.0 (2026-03-15)
 - 그룹 액션 탐지 기능 고도화 (SPEC-MTT-006)

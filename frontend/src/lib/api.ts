@@ -48,6 +48,26 @@ export interface SurgingTheme {
   stock_count: number | null;
 }
 
+export interface IntersectionStock {
+  stock_name: string;
+  rs_score_52w: number | null;
+  rs_score_mtt: number | null;
+  change_pct_52w: number | null;
+  change_pct_mtt: number | null;
+}
+
+export interface IntersectionTheme {
+  theme_name: string;
+  stock_count: number;
+  avg_rs_52w: number | null;
+  stocks: IntersectionStock[];
+}
+
+export interface IntersectionResponse {
+  date: string;
+  themes: IntersectionTheme[];
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -126,6 +146,21 @@ export const api = {
       }
     );
     return data.stocks;
+  },
+
+  // @MX:NOTE: SPEC-MTT-012 교집합 추천 API
+  // GET /api/stocks/intersection?date= → { date, themes: IntersectionTheme[] }
+  getIntersection: async (
+    date: string | undefined = undefined,
+    source: DataSource = "52w_high"
+  ): Promise<IntersectionTheme[]> => {
+    const { data } = await apiClient.get<IntersectionResponse>(
+      "/api/stocks/intersection",
+      {
+        params: date ? { date, source } : { source }
+      }
+    );
+    return data.themes;
   },
 };
 

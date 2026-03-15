@@ -2,7 +2,36 @@
 
 모든 중요한 변경 사항은 이 파일에 기록됩니다.
 
-## [1.1.0] - 2026-03-15
+## [1.2.0] - 2026-03-15
+
+### 추가된 기능
+
+#### 52주 신고가 × MTT 교집합 추천 기능 (SPEC-MTT-012)
+- **교집합 API 엔드포인트**:
+  - `GET /api/stocks/intersection` - 52w_high와 MTT 교집합 데이터 조회
+  - 자동 최신 날짜 선택 기능 (date 파라미터 미지정 시)
+  - 테마 교집합(Level 1) + 종목 교집합(Level 2) 2단계 분석
+  - 교집합 종목 수 기준으로 테마 정렬 (DESC)
+- **데이터 모델**:
+  - `IntersectionStockItem` - 교집합 종목 정보 (RS 스코어, 변동륭 등)
+  - `IntersectionThemeItem` - 교집합 테마 정보 (교집합 종목 수, 평균 RS 등)
+  - `IntersectionResponse` - 전체 응답 스키마
+- **프론트엔드 UI**:
+  - "교집합 추천" 탭 추가 (`StockAnalysisTabs`)
+  - `IntersectionTab` 컴포넌트 구현
+  - `useIntersection()` React Query 훅 연동
+  - 교집합 결과 테이블 시각화
+- **테스트 커버리지**:
+  - 11개 테스트 통과 (TDD 방식 적용)
+  - 백엔드 테스트 커버리지 85%+ 달성
+  - 교집합 쿼리 로직, 자동 날짜 선택, 에러 처리 검증
+- **기술 사양**:
+  - SQLite self-JOIN을 통한 고성능 교집합 쿼리
+  - FastAPI 라우터에 새 엔드포인트 추가
+  - TypeScript 인터페이스 완전히 정의
+  - WCAG 2.1 접근성 기준 준수
+
+#### 테스트 DB 분리 시스템 구현 (SPEC-MTT-011)
 
 ### 추가된 기능
 

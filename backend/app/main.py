@@ -136,6 +136,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://192.168.1.150:3000",  # 서버 IP
+        "http://hermian.duckdns.org:30000",  # DuckDNS 도메인 (30000 포트)
     ],
     allow_credentials=True,
     allow_methods=["*"],

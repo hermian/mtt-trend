@@ -9,7 +9,6 @@ pnpm build
 
 echo "Copying static files to standalone directory..."
 cp -r .next/static .next/standalone/.next/static
-cp -r public .next/standalone/public
 
 echo "Restarting pm2..."
 pm2 restart mtt-frontend

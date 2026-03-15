@@ -31,6 +31,31 @@
   - TypeScript 인터페이스 완전히 정의
   - WCAG 2.1 접근성 기준 준수
 
+### 버그 수정
+
+#### 교집합 탭 API 필드명 매칭 수정
+- Frontend TypeScript 인터페이스를 Backend API 응답과 일치하도록 수정
+  - `stock_count` → `intersection_stock_count`
+  - `stocks` → `intersection_stocks`
+  - 누락된 필드 추가: `avg_rs_mtt`, `stock_count_52w`, `stock_count_mtt`
+- `IntersectionTab` 컴포넌트에서 수정된 필드명 사용
+- Optional chaining 추가 (`intersection_stocks?.map`)
+
+### 개선 사항
+
+#### 교집합 탭 UI 간소화
+- 테이블 컬럼 통합으로 UI 간소화
+  - RS(52w), RS(MTT) → RS로 통합 (52w 값 사용)
+  - 등락률(52w), 등락률(MTT) → 등락률로 통합 (52w 값 사용)
+  - "52w 평균 RS" → "평균 RS"로 변경
+- 5컬럼에서 3컬럼으로 간소화 (종목명, RS, 등락률)
+
+#### 교집합 탭 정렬 기준 Tooltip 추가
+- 전체 안내 문구에 tooltip 추가 (정렬 기준 설명)
+- "교집합 종목" 라벨에 tooltip 추가
+- ℹ️ 아이콘 추가로 tooltip 표시 유도
+- 정렬 기준: 교집합 종목 수 내림차순 (intersection_stock_count DESC)
+
 #### 테스트 DB 분리 시스템 구현 (SPEC-MTT-011)
 
 ### 추가된 기능

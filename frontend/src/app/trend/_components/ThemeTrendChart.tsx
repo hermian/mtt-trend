@@ -244,7 +244,7 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
         const history = historiesData[theme] || [];
         const entry = history.find((h) => h.date === date);
         if (entry) {
-          point[theme] = entry.avg_rs;
+          point[theme] = entry.avg_rs ?? "";
         }
       });
       return point;

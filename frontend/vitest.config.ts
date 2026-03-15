@@ -8,11 +8,6 @@ export default defineConfig({
     globals: true,
     environment: "jsdom",
     setupFiles: ["./vitest.setup.ts"],
-    environmentOptions: {
-      jsdom: {
-        ResizeObserver: true,
-      },
-    },
     exclude: [
       "node_modules/**",
       "dist/**",

@@ -58,7 +58,7 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
       <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl">
         <p className="text-white font-semibold mb-1">{data.theme_name}</p>
         <p className="text-blue-400 text-sm">
-          RS 점수: <span className="text-white">{data.avg_rs.toFixed(1)}</span>
+          RS 점수: <span className="text-white">{(data.avg_rs ?? 0).toFixed(1)}</span>
         </p>
         <p className="text-gray-400 text-sm">
           종목 수: <span className="text-white">{data.stock_count}개</span>
@@ -68,11 +68,11 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
             등락합:{" "}
             <span
               className={
-                data.change_sum >= 0 ? "text-green-400" : "text-red-400"
+                (data.change_sum ?? 0) >= 0 ? "text-green-400" : "text-red-400"
               }
             >
-              {data.change_sum >= 0 ? "+" : ""}
-              {data.change_sum.toFixed(2)}%
+              {(data.change_sum ?? 0) >= 0 ? "+" : ""}
+              {(data.change_sum ?? 0).toFixed(2)}%
             </span>
           </p>
         )}
@@ -132,7 +132,7 @@ export function TopThemesBar({ date, source = "52w_high", onThemeClick, selected
 
   // Take top N themes (F-01: 동적 설정, 범위 5-30, 기본값 10)
   const topThemes = [...themes]
-    .sort((a, b) => b.avg_rs - a.avg_rs)
+    .sort((a, b) => (b.avg_rs ?? 0) - (a.avg_rs ?? 0))
     .slice(0, themeCount)
     .reverse(); // Reverse so highest is at top of horizontal bar chart
 
@@ -203,7 +203,7 @@ export function TopThemesBar({ date, source = "52w_high", onThemeClick, selected
             {topThemes.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
-                fill={getBarColor(entry.avg_rs)}
+                fill={getBarColor(entry.avg_rs ?? 0)}
                 // @MX:NOTE: SPEC-MTT-013 선택된 바 강조 표시
                 opacity={selectedTheme === entry.theme_name ? SELECTED_BAR_OPACITY : UNSELECTED_BAR_OPACITY}
               />

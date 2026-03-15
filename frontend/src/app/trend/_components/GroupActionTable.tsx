@@ -302,18 +302,18 @@ export function GroupActionTable({
                     <span
                       className={clsx(
                         "font-semibold",
-                        stock.rs_score >= 70
+                        (stock.rs_score ?? 0) >= 70
                           ? "text-red-400"
-                          : stock.rs_score >= 50
+                          : (stock.rs_score ?? 0) >= 50
                             ? "text-yellow-400"
                             : "text-blue-400"
                       )}
                     >
-                      {stock.rs_score.toFixed(1)}
+                      {(stock.rs_score ?? 0).toFixed(1)}
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <ChangePctCell value={stock.change_pct} />
+                    <ChangePctCell value={stock.change_pct ?? 0} />
                   </td>
                   <td className="px-4 py-3 text-gray-300">
                     {stock.theme_name}

@@ -77,12 +77,12 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
 
           {/* Stocks Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm table-fixed">
               <thead>
                 <tr className="border-b border-gray-700">
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">종목명</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">RS</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">등락률</th>
+                  <th className="px-4 py-3 text-left text-gray-400 font-medium w-1/2">종목명</th>
+                  <th className="px-4 py-3 text-right text-gray-400 font-medium w-1/4">RS</th>
+                  <th className="px-4 py-3 text-right text-gray-400 font-medium w-1/4">등락률</th>
                 </tr>
               </thead>
               <tbody>
@@ -94,7 +94,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                     <td className="px-4 py-3 text-white font-medium">
                       {stock.stock_name}
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <span
                         className={clsx(
                           "font-semibold",
@@ -108,7 +108,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                         {stock.rs_score_52w != null ? stock.rs_score_52w.toFixed(1) : "-"}
                       </span>
                     </td>
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 text-right">
                       <span
                         className={clsx(
                           "font-medium",

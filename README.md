@@ -266,6 +266,7 @@ docker-compose ps
 - [SPEC-MTT-002: 데이터 파이프라인 완성 및 트렌드 대시보드 MVP](.moai/specs/SPEC-MTT-002/spec.md)
 - [SPEC-MTT-006: 그룹 액션 탐지 기능 고도화](.moai/specs/SPEC-MTT-006/spec.md) - 파라미터화, UI 슬라이더, 성능 최적화
 - [SPEC-MTT-007: 그룹 액션 탐지 파라미터 툴팁 추가](.moai/specs/SPEC-MTT-007/spec.md) - 접근성 툴팁, 사용성 개선
+- [SPEC-MTT-010: 서버 시작 시 자동 동기화](.moai/specs/SPEC-MTT-010/spec.md) - 자동 데이터 적재, 중복 방지, 에러 격리
 
 ## 라이선스
 

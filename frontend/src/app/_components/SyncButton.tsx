@@ -8,7 +8,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { api } from "@/lib/api";
 
 // @MX:ANCHOR: SyncButton 컴포넌트 (fan_in: Sidebar)
-export function SyncButton() {
+export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const toast = useToast();
   // @MX:FIX: 컴포넌트 unmount 후 상태 업데이트 방지
@@ -57,23 +57,25 @@ export function SyncButton() {
       onClick={handleSync}
       disabled={isSyncing}
       className={`
-        flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors
+        flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
         ${isSyncing
           ? "bg-gray-600 text-gray-400 cursor-not-allowed"
           : "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800"
         }
       `}
-      aria-label="데이터 동기화"
+      aria-label={collapsed ? "동기화" : "데이터 동기화"}
+      title={collapsed ? "동기화" : undefined}
     >
+      <span className={collapsed ? "" : "hidden"}>{collapsed ? "↻" : ""}</span>
       {isSyncing ? (
         <>
           <span className="animate-spin">⟳</span>
-          <span>동기화 중...</span>
+          {!collapsed && <span>동기화 중...</span>}
         </>
       ) : (
         <>
           <span>↻</span>
-          <span>동기화</span>
+          {!collapsed && <span>동기화</span>}
         </>
       )}
     </button>

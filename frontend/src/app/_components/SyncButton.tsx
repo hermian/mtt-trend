@@ -60,7 +60,7 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
       onClick={handleSync}
       disabled={isSyncing}
       className={`
-        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm
+        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10
         ${isSyncing
           ? "bg-gray-600 text-gray-400 cursor-not-allowed"
           : "text-gray-400 hover:text-white hover:bg-gray-700"
@@ -69,7 +69,7 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
       aria-label={collapsed ? "동기화" : "데이터 동기화"}
       title={collapsed ? "동기화" : undefined}
     >
-      {/* @MX:NOTE: 52주 트렌드와 동일한 높이의 SVG 아이콘 */}
+      {/* @MX:NOTE: 52주 트렌드와 동일한 크기의 SVG 아이콘 */}
       <svg
         xmlns="http://www.w3.org/2000/svg"
         className="w-5 h-5 flex-shrink-0"

@@ -1,7 +1,7 @@
 # SPEC-MTT-010: 서버 시작 시 자동 동기화
 
 **TAG**: SPEC-MTT-010
-**Status**: 완료 (Completed)
+**Status**: Completed
 **Priority**: High
 **Created**: 2026-03-15
 **Domain**: Backend

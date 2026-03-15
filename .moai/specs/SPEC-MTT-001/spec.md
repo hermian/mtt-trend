@@ -4,7 +4,7 @@
 |------|-----|
 | SPEC-ID | SPEC-MTT-001 |
 | 제목 | MTT 데이터 소스 지원 (Multi Data Source Support) |
-| 상태 | IMPLEMENTED (소급 SPEC) |
+| 상태 | Completed |
 | 작성일 | 2026-03-11 |
 | 구현 완료일 | 2026-03-11 |
 

@@ -1,7 +1,7 @@
 ---
 id: SPEC-MTT-004
 version: "1.0.0"
-status: completed
+status: Completed
 created: 2026-03-14
 updated: 2026-03-14
 author: Hosung Kim

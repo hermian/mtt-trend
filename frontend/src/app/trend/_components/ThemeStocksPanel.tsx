@@ -41,26 +41,22 @@ interface ThemeStocksPanelProps {
 
 export function ThemeStocksPanel({ themeName, date, source, onClose }: ThemeStocksPanelProps) {
   const { data: stocks, isLoading, error } = useThemeStocks(themeName, date, source);
-  const [isVisible, setIsVisible] = useState(false);
+  // @MX:NOTE: 컴포넌트 마운트 시 즉시 패널 열기 (즉시 열기 UX)
+  const [isVisible, setIsVisible] = useState(true);
   const contentRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(0);
 
-  // @MX:NOTE: SPEC-MTT-013 슬라이드 다운 애니메이션
+  // @MX:NOTE: SPEC-MTT-013 슬라이드 다운 애니메이션 및 높이 계산
   useEffect(() => {
-    if (stocks && stocks.length > 0) {
-      setIsVisible(true);
-      // @MX:NOTE: 실제 높이 계산을 위해 offsetHeight 사용
-      if (contentRef.current) {
-        const targetHeight = contentRef.current.offsetHeight;
-        setHeight(targetHeight);
-      }
-    } else {
-      setIsVisible(false);
-      setHeight(0);
+    // 컴포넌트가 열려있으면 항상 높이 계산
+    if (isVisible && contentRef.current) {
+      const targetHeight = contentRef.current.offsetHeight;
+      setHeight(targetHeight);
     }
-  }, [stocks]);
+  }, [isVisible, stocks, isLoading]); // stocks, isLoading 변경 시 높이 재계산
 
-  if (!isVisible && height === 0) {
+  // 패널이 닫혀 있으면 렌더링하지 않음
+  if (!isVisible) {
     return null;
   }
 

@@ -6,7 +6,7 @@
 |------|-----|
 | SPEC ID | SPEC-MTT-016 |
 | 제목 | 모바일 반응형 레이아웃 수정 |
-| 상태 | Planned |
+| 상태 | Completed |
 | 우선순위 | High |
 | 생성일 | 2026-03-16 |
 | 담당 | expert-frontend |
@@ -181,3 +181,32 @@
 - TAG: SPEC-MTT-016
 - 관련 이슈: 모바일 레이아웃 깨짐 (Android Chrome)
 - 관련 revert: ac54190, 5c3fdac
+
+---
+
+## 구현 완료 (Implementation Notes)
+
+구현일: 2026-03-16
+커밋: 71c6ef1
+
+### 실제 구현 내용
+
+- **viewport export 분리**: Next.js 16 Viewport 타입 사용, metadata에서 분리
+- **LayoutClient 신규 생성**: Client Component로 모바일 사이드바 상태 관리 분리
+- **MobileHeader 신규 생성**: md:hidden, fixed top-0 z-40, h-14 (모바일 헤더)
+- **MobileSidebar 신규 생성**: fixed inset-0 z-50 오버레이, translate-x 슬라이드 애니메이션
+- **Sidebar 수정**: hidden md:flex 적용 (기존 PC 동작 완전 보존)
+- **trend/page.tsx 수정**: p-3 md:p-6, space-y-4 md:space-y-6
+- **테스트 추가**: 40개 신규 (LayoutClient, MobileHeader, MobileSidebar, Sidebar, layout, page-responsive)
+
+### 설계 결정
+
+- **"PC를 바꾸지 않는다" 원칙**: 기존 클래스 유지 + md: prefix만 추가
+- **Server/Client Component 분리**: layout.tsx(Server) + LayoutClient.tsx(Client)
+- **새 라이브러리 추가 없음**: Tailwind CSS 반응형 유틸리티만 활용
+
+### 품질 지표
+
+- **빌드 성공**: pnpm build 성공 (TypeScript 0 errors)
+- **테스트 커버리지**: 40개 신규 테스트 모두 PASS
+- **PC 호환성**: 기존 스타일 완전 유지 (md:hidden / hidden md:flex 패턴)

@@ -37,6 +37,11 @@ mtt-trend/
 │   │   │   ├── layout.tsx           # 루트 레이아웃 컴포넌트
 │   │   │   ├── page.tsx             # 홈 페이지
 │   │   │   ├── globals.css          # 전역 스타일
+│   │   │   ├── _components/         # 전역 컴포넌트
+│   │   │   │   ├── Sidebar.tsx      # 사이드바 (hidden md:flex, 모바일 반응형)
+│   │   │   │   ├── LayoutClient.tsx # 클라이언트 상태 관리 (모바일 사이드바)
+│   │   │   │   ├── MobileHeader.tsx # 모바일 헤더 (md:hidden)
+│   │   │   │   └── MobileSidebar.tsx# 모바일 오버레이 사이드바
 │   │   │   └── trend/
 │   │   │       ├── page.tsx         # 테마 분석 페이지
 │   │   │       └── _components/     # 페이지별 서브 컴포넌트
@@ -151,6 +156,30 @@ mtt-trend/
 - 루트 레이아웃 컴포넌트
 - 전체 페이지 틀 (헤더, 네비게이션, 푸터)
 - React Query Provider, Tailwind 적용
+- Next.js 16 viewport export 분리 (SPEC-MTT-016)
+- LayoutClient 클라이언트 컴포넌트 통합
+
+#### `src/app/_components/Sidebar.tsx`
+- 사이드바 네비게이션 (SPEC-MTT-016)
+- PC: flex 표시 (md: 768px 이상)
+- 모바일: hidden (md 미만)
+- 접기/펼치기 버튼 동작
+
+#### `src/app/_components/LayoutClient.tsx`
+- 클라이언트 전용 컴포넌트 (SPEC-MTT-016)
+- 모바일 사이드바 오버레이 상태 관리
+- MobileHeader, MobileSidebar 렌더링
+
+#### `src/app/_components/MobileHeader.tsx`
+- 모바일 전용 헤더 (SPEC-MTT-016)
+- 햄버거 메뉴 + 앱 제목 표시
+- md:hidden으로 PC에서 숨김
+
+#### `src/app/_components/MobileSidebar.tsx`
+- 모바일 오버레이 사이드바 (SPEC-MTT-016)
+- fixed inset-0 z-50 오버레이
+- 슬라이드 인 애니메이션 (translate-x)
+- 오버레이 배경 클릭으로 닫힘
 
 #### `src/app/page.tsx`
 - 홈 페이지

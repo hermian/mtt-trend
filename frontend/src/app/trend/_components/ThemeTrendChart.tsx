@@ -14,19 +14,75 @@ import {
 import { useThemesDaily, useMultipleThemeHistories } from "@/hooks/useThemes";
 import { DataSource } from "@/lib/api";
 import clsx from "clsx";
+import { Tooltip as TooltipComponent } from "./Tooltip";
 
 interface ThemeTrendChartProps {
   date: string;
   source?: DataSource;
 }
 
-type PeriodOption = { label: string; days: number };
-
-const PERIOD_OPTIONS: PeriodOption[] = [
+// @MX:NOTE: SPEC-MTT-008 F-02: 프리셋 기간 옵션
+const PRESET_PERIODS = [
   { label: "7일", days: 7 },
   { label: "30일", days: 30 },
+  { label: "90일", days: 90 },
   { label: "전체", days: 365 },
 ];
+
+// @MX:NOTE: SPEC-MTT-008 F-01: 슬라이더 기반 기간 선택 컴포넌트
+function SliderControl({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  rangeLabel,
+  onChange,
+  unit = "",
+  tooltip,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  rangeLabel: string;
+  onChange: (value: number) => void;
+  unit?: string;
+  tooltip?: string;
+}) {
+  const tooltipId = tooltip ? `${label}-tooltip` : undefined;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <TooltipComponent content={tooltip} id={tooltipId}>
+        <div className="flex items-center gap-2">
+          <label
+            htmlFor={`${label}-slider`}
+            className="text-sm text-gray-400"
+            aria-describedby={tooltipId}
+          >
+            {label}: {value}{unit}
+          </label>
+          <span className="text-xs text-gray-500">[{rangeLabel}]</span>
+        </div>
+      </TooltipComponent>
+      <input
+        id={`${label}-slider`}
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        aria-label={label}
+        aria-describedby={tooltipId}
+        name={label}
+        className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+      />
+    </div>
+  );
+}
 
 // Color palette for multiple theme lines
 const LINE_COLORS = [
@@ -128,7 +184,9 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
   });
   const disabledThemes = disabledThemesBySource[source] || new Set();
 
-  const [period, setPeriod] = useState<PeriodOption>(PERIOD_OPTIONS[1]); // Default 30일
+  // @MX:NOTE: SPEC-MTT-008 F-01: 기간을 number 타입으로 변경 (기본값 30일)
+  // @MX:ANCHOR: period 상태는 useMultipleThemeHistories hook에 직접 전달됨
+  const [period, setPeriod] = useState<number>(30);
   const [searchQuery, setSearchQuery] = useState("");
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -160,9 +218,10 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
       );
   }, [dailyThemes, searchQuery]);
 
-  // Fetch history for selected themes
+  // @MX:NOTE: SPEC-MTT-008 F-01: period를 number로 전달
+  // @MX:ANCHOR: 기간 변경 시 자동으로 차트 데이터 재조회됨
   const { data: historiesData, isLoading: historiesLoading } =
-    useMultipleThemeHistories(selectedThemes, period.days, source);
+    useMultipleThemeHistories(selectedThemes, period, source);
 
   // Merge all theme histories into a single dataset for recharts
   const chartData = useMemo(() => {
@@ -375,24 +434,40 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
           )}
         </div>
 
-        {/* Period Selector */}
+        {/* @MX:NOTE: SPEC-MTT-008 F-01, F-02, F-03: 슬라이더 및 프리셋 버튼 기간 선택 */}
         <div>
           <label className="block text-xs text-gray-400 mb-1">기간</label>
-          <div className="flex rounded-lg overflow-hidden border border-gray-600">
-            {PERIOD_OPTIONS.map((opt) => (
-              <button
-                key={opt.label}
-                onClick={() => setPeriod(opt)}
-                className={clsx(
-                  "px-4 py-2 text-sm transition-colors",
-                  period.label === opt.label
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-700 text-gray-400 hover:text-white hover:bg-gray-600"
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+          <div className="flex flex-col gap-2">
+            {/* @MX:NOTE: SPEC-MTT-008 F-01: 슬라이더 컨트롤 */}
+            <SliderControl
+              label="기간"
+              value={period}
+              min={7}
+              max={365}
+              step={1}
+              rangeLabel="7일 ~ 365일"
+              onChange={setPeriod}
+              unit="일"
+              tooltip="RS 추이 조회 기간 (7~365일)\n기간이 길수록 더 많은 과거 데이터를 표시합니다"
+            />
+
+            {/* @MX:NOTE: SPEC-MTT-008 F-02: 프리셋 퀵셀릭트 버튼 */}
+            <div className="flex gap-2">
+              {PRESET_PERIODS.map((preset) => (
+                <button
+                  key={preset.label}
+                  onClick={() => setPeriod(preset.days)}
+                  className={clsx(
+                    "px-3 py-1 text-xs rounded transition-colors",
+                    period === preset.days
+                      ? "bg-blue-600 text-white"
+                      : "bg-gray-700 text-gray-400 hover:bg-gray-600"
+                  )}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

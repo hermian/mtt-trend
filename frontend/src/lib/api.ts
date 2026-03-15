@@ -1,4 +1,5 @@
 import { apiClient, API_CONFIG } from "./apiClient";
+import type { SyncResponse, SyncStatusResponse } from "@/types/sync";
 
 // @MX:NOTE: API 기본 URL은 환경 변수 NEXT_PUBLIC_API_URL에서 로드되며, 기본값은 로컬호스트입니다.
 // @MX:ANCHOR: API 객체 내보내기 (fan_in: useThemes, useStocks hooks + page.tsx)
@@ -164,6 +165,19 @@ export const api = {
       }
     );
     return data.themes;
+  },
+
+  // @MX:NOTE: SPEC-MTT-009 동기화 API
+  // POST /api/sync → SyncResponse
+  syncData: async (): Promise<SyncResponse> => {
+    const { data } = await apiClient.post<SyncResponse>("/api/sync");
+    return data;
+  },
+
+  // GET /api/sync/status → SyncStatusResponse
+  getSyncStatus: async (): Promise<SyncStatusResponse> => {
+    const { data } = await apiClient.get<SyncStatusResponse>("/api/sync/status");
+    return data;
   },
 };
 

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
+import { SyncButton } from "./SyncButton";
 
 interface NavItem {
   href: string;
@@ -95,6 +96,11 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* Sync Button Section */}
+        <div className={clsx("pt-2", collapsed ? "" : "px-3")}>
+          <SyncButton />
+        </div>
       </nav>
 
       {/* Footer */}

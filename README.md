@@ -278,7 +278,154 @@ curl "http://localhost:8000/api/dates?source=52w_high"
 curl "http://localhost:8000/api/themes/daily?date=2024-01-15&source=52w_high"
 ```
 
-### Docker로 실행 (선택)
+---
+
+## 자체 리눅스 서버 배포
+
+### 사전 요구사항
+
+- **운영체제**: Linux (Ubuntu 20.04+, CentOS 7+, RHEL 8+)
+- **Python**: 3.11 이상
+- **Node.js**: 18.0 이상
+- **uv**: Python 패키지 매니저
+- **pnpm**: Node.js 패키지 매니저
+
+### 1. 서버 접속 및 코드 배포
+
+```bash
+# 서버 접속 (SSH)
+ssh user@your-server.com
+
+# 프로젝트 클론 (최초 1회)
+git clone https://github.com/hermian/mtt-trend.git
+cd mtt-trend
+```
+
+### 2. 백엔드 배포
+
+```bash
+# 백엔드 디렉토리 이동
+cd backend
+
+# 가상 환경 생성
+uv venv
+
+# 패키지 설치
+uv pip install -r requirements.txt
+
+# 프로덕션 서버 기동 (백그라운드)
+nohup uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 > /var/log/mtt-trend/backend.log 2>&1 &
+
+# 또는 pm2/supervisord 사용 (권장)
+pm2 start "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" --name mtt-backend
+```
+
+### 3. 프론트엔드 배포
+
+```bash
+# 프론트엔드 디렉토리 이동
+cd frontend
+
+# 의존성 설치
+pnpm install
+
+# 프로덕션 빌드
+pnpm build
+
+# 프로덕션 서버 기동 (백그라운드)
+nohup pnpm start > /var/log/mtt-trend/frontend.log 2>&1 &
+
+# 또는 pm2/supervisord 사용 (권장)
+pm2 start "pnpm start" --name mtt-frontend
+```
+
+### 4. 서버 상태 확인
+
+```bash
+# 백엔드 확인
+curl http://localhost:8000/api/dates?source=52w_high
+
+# 프론트엔드 확인
+curl http://localhost:3000
+
+# 프로세스 확인
+ps aux | grep uvicorn
+ps aux | grep "next start"
+```
+
+### 5. 프로세스 관리 (pm2 사용 권장)
+
+```bash
+# pm2 설치
+npm install -g pm2
+
+# 백엔드 등록
+cd backend
+pm2 start "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" --name mtt-backend
+
+# 프론트엔드 등록
+cd ../frontend
+pm2 start "pnpm start" --name mtt-frontend
+
+# 상태 확인
+pm2 status
+
+# 로그 확인
+pm2 logs mtt-backend
+pm2 logs mtt-frontend
+
+# 재시작
+pm2 restart mtt-backend
+pm2 restart mtt-frontend
+
+# 서버 부팅 시 자동 시작
+pm2 startup
+pm2 save
+```
+
+### 6. Nginx 리버스 프록시 설정 (선택)
+
+```nginx
+# /etc/nginx/sites-available/mtt-trend
+
+# 백엔드 API 프록시
+location /api/ {
+    proxy_pass http://localhost:8000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+
+# 프론트엔드 프록시
+location / {
+    proxy_pass http://localhost:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+```
+
+### 7. 방화wall 설정
+
+```bash
+# 포트 열기
+sudo ufw allow 80    # HTTP
+sudo ufw allow 443   # HTTPS
+sudo ufw allow 22    # SSH
+
+# 또는 firewalld
+sudo firewall-cmd --permanent --add-port=80/tcp
+sudo firewall-cmd --permanent --add-port=443/tcp
+sudo firewall-cmd --reload
+```
+
+---
+
+## Docker로 실행 (선택)
 
 ```bash
 # 프로젝트 루트에서

@@ -1,6 +1,7 @@
 ---
 spec_id: SPEC-MTT-007
 version: "1.0.0"
+status: Completed
 created: 2026-03-15
 updated: 2026-03-15
 author: Hosung Kim

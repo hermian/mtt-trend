@@ -7,6 +7,7 @@
 | SPEC ID | SPEC-MTT-013 |
 | 제목 | TopThemesBar 클릭 시 테마별 종목 목록 슬라이드 다운 패널 |
 | 관련 태그 | SPEC-MTT-013-F01, F02, F03, F04 |
+| 상태 | Completed |
 
 ---
 

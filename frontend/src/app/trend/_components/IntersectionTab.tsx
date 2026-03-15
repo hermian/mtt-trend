@@ -61,7 +61,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                 <div className="text-right">
                   <p className="text-xs text-gray-400">교집합 종목</p>
                   <p className="text-lg font-bold text-blue-400">
-                    {theme.stock_count}개
+                    {theme.intersection_stock_count}개
                   </p>
                 </div>
                 <div className="text-right">
@@ -87,7 +87,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                 </tr>
               </thead>
               <tbody>
-                {theme.stocks.map((stock) => (
+                {theme.intersection_stocks?.map((stock) => (
                   <tr
                     key={stock.stock_name}
                     className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"

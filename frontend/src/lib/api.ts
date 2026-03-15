@@ -58,9 +58,12 @@ export interface IntersectionStock {
 
 export interface IntersectionTheme {
   theme_name: string;
-  stock_count: number;
+  intersection_stock_count: number;
   avg_rs_52w: number | null;
-  stocks: IntersectionStock[];
+  avg_rs_mtt: number | null;
+  stock_count_52w: number | null;
+  stock_count_mtt: number | null;
+  intersection_stocks: IntersectionStock[];
 }
 
 export interface IntersectionResponse {

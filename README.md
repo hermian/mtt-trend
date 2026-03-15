@@ -264,9 +264,15 @@ docker-compose ps
 
 - [SPEC-MTT-001: MTT 데이터 소스 지원](.moai/specs/SPEC-MTT-001/spec.md)
 - [SPEC-MTT-002: 데이터 파이프라인 완성 및 트렌드 대시보드 MVP](.moai/specs/SPEC-MTT-002/spec.md)
+- [SPEC-MTT-003: 신규 급등 테마 탐지 UI 컴포넌트](.moai/specs/SPEC-MTT-003/spec.md)
+- [SPEC-MTT-004: 테마 RS 대시보드 레이아웃 개선](.moai/specs/SPEC-MTT-004/spec.md)
+- [SPEC-MTT-005: 테마 RS 추이 차트 인터랙티브 개선](.moai/specs/SPEC-MTT-005/spec.md)
 - [SPEC-MTT-006: 그룹 액션 탐지 기능 고도화](.moai/specs/SPEC-MTT-006/spec.md) - 파라미터화, UI 슬라이더, 성능 최적화
 - [SPEC-MTT-007: 그룹 액션 탐지 파라미터 툴팁 추가](.moai/specs/SPEC-MTT-007/spec.md) - 접근성 툴팁, 사용성 개선
+- [SPEC-MTT-008: 테마 RS 추이 슬라이딩 윈도우 기간 설정](.moai/specs/SPEC-MTT-008/spec.md)
+- [SPEC-MTT-009: HTML 자동 감지 및 DB 동기화 시스템](.moai/specs/SPEC-MTT-009/spec.md)
 - [SPEC-MTT-010: 서버 시작 시 자동 동기화](.moai/specs/SPEC-MTT-010/spec.md) - 자동 데이터 적재, 중복 방지, 에러 격리
+- [SPEC-MTT-011: 테스트 DB 분리](.moai/specs/SPEC-MTT-011/spec.md)
 
 ## 라이선스
 

@@ -6,9 +6,6 @@ SPEC-MTT-006: 그룹 액션 탐지 기능 고도화
 """
 
 import pytest
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
 from datetime import datetime, timedelta
 import sys
 from pathlib import Path
@@ -17,40 +14,17 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.main import app
-from app.database import get_db, Base
+from app.database import Base
 from app.models import ThemeStockDaily, ThemeDaily
 
 
-# 테스트 데이터베이스 설정 (프로젝트 루트 기준)
-project_root = Path(__file__).parent.parent.parent
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{project_root}/test_group_action.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-client = TestClient(app)
-
-
 @pytest.fixture(autouse=True)
-def setup_database():
-    """테스트 전후 데이터베이스 설정/정리"""
-    # 테이블 생성
-    Base.metadata.create_all(bind=engine)
+def setup_database(test_db_session):
+    """
+    테스트 전후 데이터베이스 설정/정리
 
-    # 테스트 데이터 삽입
-    db = TestingSessionLocal()
-
+    conftest.py의 client fixture를 통해 test_db_session을 주입받음
+    """
     # 기준 날짜 설정 (2024-01-15)
     base_date = datetime(2024, 1, 15)
 
@@ -75,7 +49,7 @@ def setup_database():
                 volume_sum=1000000.0,
                 data_source="52w_high"
             )
-            db.add(theme_daily)
+            test_db_session.add(theme_daily)
 
     # 주식-테마 매핑 데이터 생성
     stocks_data = [
@@ -131,7 +105,7 @@ def setup_database():
             change_pct=stock_data["change_pct"],
             data_source="52w_high"
         )
-        db.add(theme_stock)
+        test_db_session.add(theme_stock)
 
         # first_seen 날짜에도 데이터 추가 (최초 등장일)
         if stock_data["first_seen"] != stock_data["date"]:
@@ -143,21 +117,19 @@ def setup_database():
                 change_pct=1.0,
                 data_source="52w_high"
             )
-            db.add(theme_stock_first)
+            test_db_session.add(theme_stock_first)
 
-    db.commit()
-    db.close()
+    test_db_session.commit()
 
     yield
 
-    # 테스트 후 정리
-    Base.metadata.drop_all(bind=engine)
+    # 테스트 후 정리는 conftest.py의 test_db_engine fixture에서 자동 처리됨
 
 
 class TestTimeWindowParameter:
     """AC-01: 시간 윈도우 파라미터 테스트"""
 
-    def test_time_window_default_value(self, setup_database):
+    def test_time_window_default_value(self, client, setup_database):
         """
         Scenario 1.3: 기본값 (3일)
         기본값으로 호출 시 기존 3일 윈도우와 동일한 결과 반환
@@ -175,7 +147,7 @@ class TestTimeWindowParameter:
         assert "네이버" in stock_names
         assert "카카오" not in stock_names  # 4일 전 등장 (3일 윈도우 외)
 
-    def test_time_window_min_value(self, setup_database):
+    def test_time_window_min_value(self, client, setup_database):
         """
         Scenario 1.1: 최소값 (1일)
         1일 내 등장한 종목만 반환
@@ -191,7 +163,7 @@ class TestTimeWindowParameter:
         assert "SK하이닉스" not in stock_names  # 2일 전
         assert "네이버" not in stock_names  # 3일 전
 
-    def test_time_window_max_value(self, setup_database):
+    def test_time_window_max_value(self, client, setup_database):
         """
         Scenario 1.2: 최대값 (7일)
         7일 내 등장한 종목 모두 반환
@@ -208,7 +180,7 @@ class TestTimeWindowParameter:
         assert "네이버" in stock_names
         assert "카카오" in stock_names  # 4일 전 등장
 
-    def test_time_window_invalid_too_low(self, setup_database):
+    def test_time_window_invalid_too_low(self, client, setup_database):
         """
         Scenario 1.4: 범위 외 값 거부 (0)
         0 또는 음수 값은 400 Bad Request
@@ -217,7 +189,7 @@ class TestTimeWindowParameter:
 
         assert response.status_code == 422  # Pydantic validation error
 
-    def test_time_window_invalid_too_high(self, setup_database):
+    def test_time_window_invalid_too_high(self, client, setup_database):
         """
         Scenario 1.4: 범위 외 값 거부 (8)
         8 이상 값은 400 Bad Request
@@ -230,7 +202,7 @@ class TestTimeWindowParameter:
 class TestRsThresholdParameter:
     """AC-02: RS 임계값 파라미터 테스트"""
 
-    def test_rs_threshold_default_value(self, setup_database):
+    def test_rs_threshold_default_value(self, client, setup_database):
         """
         Scenario 2.3: 기본값 (0)
         기본값으로 호출 시 RS 변화량 > 0인 종목만 반환
@@ -245,7 +217,7 @@ class TestRsThresholdParameter:
             if stock["theme_rs_change"] is not None:
                 assert stock["theme_rs_change"] > 0
 
-    def test_rs_threshold_positive_value(self, setup_database):
+    def test_rs_threshold_positive_value(self, client, setup_database):
         """
         Scenario 2.1: 양수 임계값 (5)
         RS 변화량이 5보다 큰 종목만 반환
@@ -262,7 +234,7 @@ class TestRsThresholdParameter:
         assert "셀트리온" in stock_names  # 신규 테마
         # AI, 반도체 테마 종목은 RS 변화량이 5 미만이어야 제외
 
-    def test_rs_threshold_negative_value(self, setup_database):
+    def test_rs_threshold_negative_value(self, client, setup_database):
         """
         Scenario 2.2: 음수 임계값 (-5)
         RS 변화량이 -5보다 큰 종목 모두 반환 (더 완화된 조건)
@@ -277,7 +249,7 @@ class TestRsThresholdParameter:
             if stock["theme_rs_change"] is not None:
                 assert stock["theme_rs_change"] > -5
 
-    def test_rs_threshold_invalid_too_low(self, setup_database):
+    def test_rs_threshold_invalid_too_low(self, client, setup_database):
         """
         Scenario 2.4: 범위 외 값 거부 (-11)
         -11 미만 값은 422 Bad Request
@@ -286,7 +258,7 @@ class TestRsThresholdParameter:
 
         assert response.status_code == 422  # Pydantic validation error
 
-    def test_rs_threshold_invalid_too_high(self, setup_database):
+    def test_rs_threshold_invalid_too_high(self, client, setup_database):
         """
         Scenario 2.4: 범위 외 값 거부 (21)
         21 초과 값은 422 Bad Request
@@ -299,7 +271,7 @@ class TestRsThresholdParameter:
 class TestSchemaExtension:
     """AC-03: 상태 분류 임계값 파라미터 테스트"""
 
-    def test_response_includes_status_threshold_field(self, setup_database):
+    def test_response_includes_status_threshold_field(self, client, setup_database):
         """
         Scenario 3.3: 스키마 필드 추가
         각 종목 응답에 status_threshold 필드 포함
@@ -314,7 +286,7 @@ class TestSchemaExtension:
             assert "status_threshold" in stock
             assert isinstance(stock["status_threshold"], int)
 
-    def test_status_threshold_default_value(self, setup_database):
+    def test_status_threshold_default_value(self, client, setup_database):
         """
         Scenario 3.1: 기본값 (5)
         status_threshold 기본값이 5인지 확인
@@ -332,7 +304,7 @@ class TestSchemaExtension:
 class TestBackwardCompatibility:
     """AC-07: 하위 호환성 테스트"""
 
-    def test_default_parameters_match_existing_behavior(self, setup_database):
+    def test_default_parameters_match_existing_behavior(self, client, setup_database):
         """
         Scenario 7.1: 기존 API 호출
         파라미터 없이 호출 시 기존 SPEC-MTT-002와 동일한 결과 반환
@@ -357,7 +329,7 @@ class TestBackwardCompatibility:
 class TestCombinedParameters:
     """파라미터 조합 테스트"""
 
-    def test_time_window_and_rs_threshold_combined(self, setup_database):
+    def test_time_window_and_rs_threshold_combined(self, client, setup_database):
         """
         AC-08 Scenario 8.1: 파라미터 조합
         시간 윈도우=5, RS 임계값=3 조합 테스트

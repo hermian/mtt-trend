@@ -7,9 +7,7 @@ SPEC-MTT-006: 그룹 액션 탐지 기능 고도화
 
 import pytest
 import time
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy import text
 from datetime import datetime, timedelta
 import sys
 from pathlib import Path
@@ -18,44 +16,23 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.main import app
-from app.database import get_db, Base
+from app.database import Base
 from app.models import ThemeStockDaily, ThemeDaily
 
 
-# 테스트 데이터베이스 설정 (프로젝트 루트 기준)
-project_root = Path(__file__).parent.parent.parent
-SQLALCHEMY_DATABASE_URL = f"sqlite:///{project_root}/test_group_action.db"
-engine = create_engine(SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-def override_get_db():
-    try:
-        db = TestingSessionLocal()
-        yield db
-    finally:
-        db.close()
-
-
-app.dependency_overrides[get_db] = override_get_db
-
-client = TestClient(app)
-
-
 @pytest.fixture(autouse=True)
-def setup_database():
-    """테스트 전후 데이터베이스 설정/정리"""
-    Base.metadata.create_all(bind=engine)
+def setup_database(test_db_session, test_db_engine):
+    """
+    테스트 전후 데이터베이스 설정/정리
 
+    conftest.py의 client fixture를 통해 test_db_session과 test_db_engine을 주입받음
+    """
     # 인덱스 생성 (SPEC-MTT-006 NFR-01)
-    with engine.connect() as conn:
+    with test_db_engine.connect() as conn:
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_stock_first_seen ON theme_stock_daily(stock_name, date, data_source)"
         ))
         conn.commit()
-
-    db = TestingSessionLocal()
 
     # 기존 SPEC-MTT-002 동작과 동일한 테스트 데이터
     base_date = datetime(2024, 1, 15)
@@ -70,7 +47,7 @@ def setup_database():
         volume_sum=1000000.0,
         data_source="52w_high"
     )
-    db.add(theme_daily)
+    test_db_session.add(theme_daily)
 
     theme_daily = ThemeDaily(
         date="2024-01-15",
@@ -81,7 +58,7 @@ def setup_database():
         volume_sum=1000000.0,
         data_source="52w_high"
     )
-    db.add(theme_daily)
+    test_db_session.add(theme_daily)
 
     # 주식-테마 매핑 데이터 생성 (기존 동작 반영)
     stock_data = ThemeStockDaily(
@@ -92,7 +69,7 @@ def setup_database():
         change_pct=2.5,
         data_source="52w_high"
     )
-    db.add(stock_data)
+    test_db_session.add(stock_data)
 
     # 3일 전에 처음 등장한 종목
     stock_data_first = ThemeStockDaily(
@@ -103,21 +80,19 @@ def setup_database():
         change_pct=1.5,
         data_source="52w_high"
     )
-    db.add(stock_data_first)
+    test_db_session.add(stock_data_first)
 
-    db.commit()
-    db.close()
+    test_db_session.commit()
 
     yield
 
-    # 테스트 후 정리
-    Base.metadata.drop_all(bind=engine)
+    # 테스트 후 정리는 conftest.py의 test_db_engine fixture에서 자동 처리됨
 
 
 class TestBackwardCompatibility:
     """AC-07: 하위 호환성 테스트"""
 
-    def test_no_parameters_returns_default_behavior(self, setup_database):
+    def test_no_parameters_returns_default_behavior(self, client, setup_database):
         """
         Scenario: 파라미터 없이 호출 시 기존 동작과 동일한 결과 반환
         - 기본값: timeWindow=3, rsThreshold=0, statusThreshold=5
@@ -132,7 +107,7 @@ class TestBackwardCompatibility:
         assert "status_threshold" in data["stocks"][0]
         assert data["stocks"][0]["status_threshold"] == 5
 
-    def test_default_values_match_spec_mtt_002(self, setup_database):
+    def test_default_values_match_spec_mtt_002(self, client, setup_database):
         """
         Scenario: SPEC-MTT-002와 동일한 결과 반환 확인
         """
@@ -154,7 +129,7 @@ class TestBackwardCompatibility:
 class TestPerformanceRequirements:
     """NFR-01, NFR-02: 성능 요구사항 테스트"""
 
-    def test_api_response_time_under_500ms(self, setup_database):
+    def test_api_response_time_under_500ms(self, client, setup_database):
         """
         NFR-02: API 응답 시간 < 500ms
         """
@@ -168,12 +143,12 @@ class TestPerformanceRequirements:
         # NFR-02: 500ms 이내 응답
         assert response_time_ms < 500, f"응답 시간 {response_time_ms:.2f}ms이 500ms를 초과함"
 
-    def test_index_effectiveness(self, setup_database):
+    def test_index_effectiveness(self, test_db_engine, setup_database):
         """
         NFR-01: 인덱스 유효성 검증
         idx_stock_first_seen 인덱스가 존재하는지 확인
         """
-        with engine.connect() as conn:
+        with test_db_engine.connect() as conn:
             result = conn.execute(text("""
                 SELECT name FROM sqlite_master
                 WHERE type='index' AND name='idx_stock_first_seen'

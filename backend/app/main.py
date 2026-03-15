@@ -87,7 +87,7 @@ async def lifespan(app: FastAPI):
     create_tables()
 
     # data 디렉토리 경로 확인
-    data_dir = Path(__file__).resolve().parent.parent.parent / "data"
+    data_dir = Path(__file__).resolve().parent.parent / "data"
 
     # 초기 동기화 실행 (REQ-MTT-010-01 ~ REQ-MTT-010-06)
     # @MX:NOTE: 초기 동기화는 Watchdog 시작 전에 수행되어야 함

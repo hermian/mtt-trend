@@ -29,12 +29,25 @@ class Base(DeclarativeBase):
     pass
 
 
-def create_tables() -> None:
-    """Create all tables and indexes defined in models."""
-    from app.models import ThemeDaily, ThemeStockDaily  # noqa: F401 - trigger metadata
-    Base.metadata.create_all(bind=engine)
+def create_tables(bind_engine=None) -> None:
+    """
+    Create all tables and indexes defined in models.
 
-    with engine.connect() as conn:
+    Args:
+        bind_engine: Optional engine to bind to. If None, uses the global engine.
+                     This allows testing with a different engine.
+
+    @MX:NOTE: bind_engine 파라미터는 테스트에서 테스트 DB 엔진을 전달하는 데 사용됩니다
+    @MX:REASON: 테스트에서 In-Memory DB를 사용할 수 있도록 유연성 제공
+    """
+    from app.models import ThemeDaily, ThemeStockDaily  # noqa: F401 - trigger metadata
+
+    # 바인딩할 엔진 결정 (엔진이 지정되지 않으면 전역 엔진 사용)
+    target_engine = bind_engine if bind_engine is not None else engine
+
+    Base.metadata.create_all(bind=target_engine)
+
+    with target_engine.connect() as conn:
         # Ensure indexes exist
         conn.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_td_date ON theme_daily(date)"

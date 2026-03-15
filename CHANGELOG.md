@@ -99,6 +99,31 @@
   - 총 18/18 테스트 통과 (100% 성공률)
 - **테스트 커버리지**: 85%+ 달성, 모든 변경 사항 검증
 
+#### 테스트 DB 분리 시스템 구현 (SPEC-MTT-011)
+- **테스트-프로덕션 DB 완전 분리**:
+  - 테스트용 임시 파일 DB 사용 (`tempfile.mktemp()`)
+  - monkeypatch로 전역 `app.database` 모듈 오버라이드
+  - 프로덕션 DB(`backend/db/trends.sqlite`) 절대 접근 방지
+- **자동화된 테스트 환경**:
+  - `test_db_engine` fixture: 독립적인 DB 엔진 + 테이블/인덱스 자동 생성
+  - `test_db_session` fixture: 각 테스트별 독립적인 세션
+  - `client` fixture: FastAPI dependency override + monkeypatch
+  - 테스트 종료 후 자동 정리 (임시 파일 삭제)
+- **테스트 간섭 제거**:
+  - 모듈 레벨 전역 상태 제거 (`test_api_group_action.py`, `test_backward_compatibility.py`)
+  - conftest.py fixture를 통한 중앙 집중식 관리
+  - 테스트 순서 무관성 보장 (어떤 순서로 실행해도 통과)
+  - 병렬 테스트 실행 지원 (`pytest -n auto`)
+- **테스트 격리 검증**:
+  - 5개 격리 검증 테스트 통과 (`test_db_isolation.py`)
+  - 프로덕션 DB 파일 수정 시간 변화 없음 검증
+  - In-Memory/임시 파일 DB 사용 확인
+  - 자동 정리 기능 확인
+- **최종 결과**:
+  - 83개 테스트 모두 통과 (100% 성공률)
+  - 테스트 실행 시간: 0.85초
+  - 모든 Acceptance Criteria(AC-011-01 ~ AC-011-06) 달성
+
 #### 데이터 모델 확장
 - **백엔드**: `GroupActionItem` 스키마에 `status_threshold` 필드 추가
 - **프론트엔드**: `GroupActionStock` 인터페이스에 동일 필드 추가

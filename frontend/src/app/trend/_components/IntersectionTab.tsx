@@ -42,8 +42,9 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-gray-400" title="테마는 교집합 종목 수가 많은 순서대로 정렬됩니다">
         52w 신고가와 MTT 모두에서 강세인 종목 ({themes.length}개 테마)
+        <span className="ml-2 text-gray-500">ℹ️</span>
       </p>
 
       {themes.map((theme) => (
@@ -58,7 +59,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                 {theme.theme_name}
               </h3>
               <div className="flex items-center gap-4">
-                <div className="text-right">
+                <div className="text-right" title="교집합 종목 수가 많은 테마가 상위에 표시됩니다">
                   <p className="text-xs text-gray-400">교집합 종목</p>
                   <p className="text-lg font-bold text-blue-400">
                     {theme.intersection_stock_count}개

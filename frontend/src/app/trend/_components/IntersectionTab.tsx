@@ -65,7 +65,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                   </p>
                 </div>
                 <div className="text-right">
-                  <p className="text-xs text-gray-400">52w 평균 RS</p>
+                  <p className="text-xs text-gray-400">평균 RS</p>
                   <p className="text-lg font-bold text-white">
                     {theme.avg_rs_52w != null ? theme.avg_rs_52w.toFixed(1) : "-"}
                   </p>
@@ -80,10 +80,8 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
               <thead>
                 <tr className="border-b border-gray-700">
                   <th className="px-4 py-3 text-left text-gray-400 font-medium">종목명</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">RS (52w)</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">RS (MTT)</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">등락률 (52w)</th>
-                  <th className="px-4 py-3 text-left text-gray-400 font-medium">등락률 (MTT)</th>
+                  <th className="px-4 py-3 text-left text-gray-400 font-medium">RS</th>
+                  <th className="px-4 py-3 text-left text-gray-400 font-medium">등락률</th>
                 </tr>
               </thead>
               <tbody>
@@ -112,20 +110,6 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                     <td className="px-4 py-3">
                       <span
                         className={clsx(
-                          "font-semibold",
-                          (stock.rs_score_mtt ?? 0) >= 70
-                            ? "text-red-400"
-                            : (stock.rs_score_mtt ?? 0) >= 50
-                              ? "text-yellow-400"
-                              : "text-blue-400"
-                        )}
-                      >
-                        {stock.rs_score_mtt != null ? stock.rs_score_mtt.toFixed(1) : "-"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={clsx(
                           "font-medium",
                           (stock.change_pct_52w ?? 0) > 0
                             ? "text-red-400"
@@ -136,22 +120,6 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                       >
                         {stock.change_pct_52w != null
                           ? `${stock.change_pct_52w > 0 ? "+" : ""}${stock.change_pct_52w.toFixed(2)}%`
-                          : "-"}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={clsx(
-                          "font-medium",
-                          (stock.change_pct_mtt ?? 0) > 0
-                            ? "text-red-400"
-                            : (stock.change_pct_mtt ?? 0) < 0
-                              ? "text-blue-400"
-                              : "text-gray-400"
-                        )}
-                      >
-                        {stock.change_pct_mtt != null
-                          ? `${stock.change_pct_mtt > 0 ? "+" : ""}${stock.change_pct_mtt.toFixed(2)}%`
                           : "-"}
                       </span>
                     </td>

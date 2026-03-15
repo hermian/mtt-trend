@@ -8,6 +8,7 @@
 | 우선순위 | Medium |
 | 영향 파일 수 | 2개 (sync_service.py, file_watcher.py) |
 | 위험도 | 낮음 (기존 upsert 로직 변경 없음) |
+| 상태 | Completed |
 
 ---
 

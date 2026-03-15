@@ -8,7 +8,7 @@
 | 제목 | 마지막 날짜 HTML 파일 덮어쓰기 처리 (Last Date HTML File Overwrite Handling) |
 | 도메인 | FIX/UPDATE |
 | 우선순위 | Medium |
-| 상태 | Draft |
+| 상태 | Completed |
 | 작성자 | Hosung Kim |
 | 이슈 번호 | 0 |
 

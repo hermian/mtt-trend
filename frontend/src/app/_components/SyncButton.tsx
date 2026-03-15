@@ -52,31 +52,54 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
     }
   };
 
+  // @MX:NOTE: 축소 시 아이콘 2개, 펼쳐질 때는 1개
+  const syncIcon = collapsed ? "⟳⟳" : "⟳";
+
   return (
     <button
       onClick={handleSync}
       disabled={isSyncing}
       className={`
-        flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors
+        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm
         ${isSyncing
           ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-          : "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800"
+          : "text-gray-400 hover:text-white hover:bg-gray-700"
         }
       `}
       aria-label={collapsed ? "동기화" : "데이터 동기화"}
       title={collapsed ? "동기화" : undefined}
     >
-      <span className={collapsed ? "" : "hidden"}>{collapsed ? "↻" : ""}</span>
+      {/* @MX:NOTE: 52주 트렌드와 동일한 높이의 SVG 아이콘 */}
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-5 h-5 flex-shrink-0"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M21 2v6h-3" />
+        <path d="M21 10v6h-3" />
+      </svg>
       {isSyncing ? (
-        <>
-          <span className="animate-spin">⟳</span>
-          {!collapsed && <span>동기화 중...</span>}
-        </>
-      ) : (
-        <>
-          <span>↻</span>
-          {!collapsed && <span>동기화</span>}
-        </>
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          className="w-5 h-5 flex-shrink-0 animate-spin"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0" />
+          <path d="M21 3v6" />
+        </svg>
+      ) : null}
+      {!collapsed && (
+        <span className="truncate">{isSyncing ? "동기화 중..." : "동기화"}</span>
       )}
     </button>
   );

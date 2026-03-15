@@ -23,9 +23,16 @@ const MIN_THEME_COUNT = 5;
 const MAX_THEME_COUNT = 30;
 const DEFAULT_THEME_COUNT = 10;
 
+// @MX:NOTE: SPEC-MTT-013 선택된 테마 강조 투명도
+const SELECTED_BAR_OPACITY = 1.0;
+const UNSELECTED_BAR_OPACITY = 0.4;
+
 interface TopThemesBarProps {
   date: string;
   source?: DataSource;
+  // @MX:NOTE: SPEC-MTT-013 테마 클릭 핸들러
+  onThemeClick?: (themeName: string) => void;
+  selectedTheme?: string | null;
 }
 
 // Compute color based on RS score (blue=low, red=high)
@@ -75,7 +82,14 @@ function CustomTooltip({ active, payload }: CustomTooltipProps) {
   return null;
 }
 
-export function TopThemesBar({ date, source = "52w_high" }: TopThemesBarProps) {
+// @MX:NOTE: SPEC-MTT-013 테마 바 클릭 핸들러
+function handleBarClick(data: ThemeDaily, onThemeClick?: (themeName: string) => void) {
+  if (onThemeClick) {
+    onThemeClick(data.theme_name);
+  }
+}
+
+export function TopThemesBar({ date, source = "52w_high", onThemeClick, selectedTheme }: TopThemesBarProps) {
   const { data: themes, isLoading, error } = useThemesDaily(date, source);
 
   // SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 설정
@@ -180,11 +194,18 @@ export function TopThemesBar({ date, source = "52w_high" }: TopThemesBarProps) {
             content={<CustomTooltip />}
             cursor={{ fill: "rgba(255,255,255,0.05)" }}
           />
-          <Bar dataKey="avg_rs" radius={[0, 4, 4, 0]}>
+          <Bar
+            dataKey="avg_rs"
+            radius={[0, 4, 4, 0]}
+            onClick={(data) => handleBarClick(data, onThemeClick)}
+            cursor="pointer"
+          >
             {topThemes.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}
                 fill={getBarColor(entry.avg_rs)}
+                // @MX:NOTE: SPEC-MTT-013 선택된 바 강조 표시
+                opacity={selectedTheme === entry.theme_name ? SELECTED_BAR_OPACITY : UNSELECTED_BAR_OPACITY}
               />
             ))}
             <LabelList

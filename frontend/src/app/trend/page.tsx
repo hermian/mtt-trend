@@ -6,11 +6,16 @@ import { TopThemesBar } from "./_components/TopThemesBar";
 import { SurgingThemesCard } from "./_components/SurgingThemesCard";
 import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
+import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
 import type { DataSource } from "@/lib/api";
 
 // @MX:NOTE: 데이터 소스 전환 시 선택된 날짜를 자동으로 초기화하여 데이터 불일치를 방지합니다.
 // @MX:ANCHOR: 트렌드 페이지 기본 컴포넌트 (fan_in: Next.js 라우터)
 // @MX:REASON: 이 컴포넌트는 테마 트렌드 대시보드의 메인 진입점입니다.
+
+// @MX:NOTE: SPEC-MTT-013 선택된 테마 상태
+// @MX:ANCHOR: 테마 종목 패널 상태 관리 (fan_in: TopThemesBar, ThemeStocksPanel)
+// @MX:REASON: 이 상태는 테마 클릭 시 패널 표시/숨김을 제어합니다.
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   "52w_high": "52주 신고가",
@@ -21,6 +26,8 @@ export default function TrendPage() {
   const [source, setSource] = useState<DataSource>("52w_high");
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // @MX:NOTE: SPEC-MTT-013 선택된 테마 상태
+  const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
 
   // @MX:NOTE: 데이터 소스 변경 시 날짜를 초기화하고, 데이터 로드 완료 시 최신 날짜를 자동 선택합니다.
   // 데이터 소스 전환과 날짜 자동 선택을 하나의 useEffect로 통합하여 로직을 단순화했습니다.
@@ -33,6 +40,21 @@ export default function TrendPage() {
       setSelectedDate(dates[dates.length - 1]);
     }
   }, [source, dates]);
+
+  // @MX:NOTE: SPEC-MTT-013 테마 클릭 핸들러
+  function handleThemeClick(themeName: string) {
+    // 같은 테마를 재클릭하면 패널 닫기 (토글 동작)
+    if (selectedTheme === themeName) {
+      setSelectedTheme(null);
+    } else {
+      setSelectedTheme(themeName);
+    }
+  }
+
+  // @MX:NOTE: SPEC-MTT-013 패널 닫기 핸들러
+  function handleClosePanel() {
+    setSelectedTheme(null);
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -102,7 +124,12 @@ export default function TrendPage() {
               <h2 className="text-lg font-semibold text-white mb-4">
                 테마별 RS 점수 — {SOURCE_LABELS[source]}
               </h2>
-              <TopThemesBar date={selectedDate} source={source} />
+              <TopThemesBar
+                date={selectedDate}
+                source={source}
+                onThemeClick={handleThemeClick}
+                selectedTheme={selectedTheme}
+              />
             </div>
 
             {/* Surging Themes Card */}
@@ -113,6 +140,16 @@ export default function TrendPage() {
               <SurgingThemesCard date={selectedDate} source={source} />
             </div>
           </section>
+
+          {/* @MX:NOTE: SPEC-MTT-013 ThemeStocksPanel 슬라이드 다운 패널 */}
+          {selectedTheme && (
+            <ThemeStocksPanel
+              themeName={selectedTheme}
+              date={selectedDate}
+              source={source}
+              onClose={handleClosePanel}
+            />
+          )}
 
           {/* Section 3: Theme RS Trend Chart */}
           <section>

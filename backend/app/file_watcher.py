@@ -12,7 +12,6 @@ from pathlib import Path
 from typing import Optional
 
 from watchdog.events import FileSystemEventHandler, FileSystemEvent
-from sqlalchemy.orm import Session
 
 from app.sync_service import sync_service
 from app.database import SessionLocal

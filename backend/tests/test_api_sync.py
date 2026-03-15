@@ -8,16 +8,14 @@ SPEC-MTT-009: HTML 자동 감지 및 DB 동기화 시스템
 import tempfile
 from pathlib import Path
 
-import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.main import app
 from app.database import SessionLocal, create_tables
-from app.models import ThemeDaily, SOURCE_52W
+from app.models import ThemeDaily
 from app.sync_service import sync_service
 
 

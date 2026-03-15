@@ -8,14 +8,13 @@
 """
 
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 import sys
 sys.path.insert(0, '.')
 
 from app.main import app
 from app.database import SessionLocal, create_tables
-from app.models import ThemeDaily, SOURCE_52W, SOURCE_MTT
+from app.models import ThemeDaily, SOURCE_MTT
 
 client = TestClient(app)
 

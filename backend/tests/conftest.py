@@ -9,7 +9,6 @@ import sys
 from pathlib import Path
 
 import pytest
-import pytest_asyncio
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -37,7 +36,6 @@ def test_db_engine():
     from app.database import Base
     from app.models import ThemeDaily, ThemeStockDaily  # noqa: F401 - 모델 등록
     from sqlalchemy import text
-    import os
 
     # 테스트용 임시 파일 DB 엔진 생성
     engine = create_engine(
@@ -79,7 +77,6 @@ def test_db_session(test_db_engine):
 
     SPEC-MTT-011 REQ-MTT-011-05: 병렬 테스트 지원 (각 테스트가 독립적인 세션 사용)
     """
-    from app.database import Base
 
     Session = sessionmaker(bind=test_db_engine)
     session = Session()
@@ -102,7 +99,7 @@ def client(test_db_session, test_db_engine, monkeypatch):
     """
     from fastapi.testclient import TestClient
     from app.main import app as fastapi_app
-    from app.database import get_db, DB_PATH
+    from app.database import get_db
     import app.database
 
     # @MX:ANCHOR: 전역 engine, DB_PATH, SessionLocal을 테스트 DB로 교체

@@ -8,7 +8,7 @@ SPEC-MTT-006: 그룹 액션 탐지 기능 고도화
 import pytest
 import time
 from sqlalchemy import text
-from datetime import datetime, timedelta
+from datetime import datetime
 import sys
 from pathlib import Path
 
@@ -16,7 +16,6 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.database import Base
 from app.models import ThemeStockDaily, ThemeDaily
 
 

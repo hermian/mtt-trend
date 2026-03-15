@@ -9,17 +9,14 @@ SPEC-MTT-009: HTML 자동 감지 및 DB 동기화 시스템
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch
 from datetime import datetime
 
-import pytest
-from sqlalchemy.orm import Session
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.sync_service import SyncService, SyncResult
-from app.models import SOURCE_52W, SOURCE_MTT, ThemeDaily
+from app.models import SOURCE_52W, ThemeDaily
 from app.database import SessionLocal
 
 
@@ -141,7 +138,6 @@ class TestSyncService:
     def test_sync_files_skips_already_loaded_files(self):
         """이미 적재된 파일 건너뛰기 테스트 (ACC-02 시나리오 2-2)"""
         # given
-        from app.models import ThemeDaily
         service = SyncService()
 
         # 먼저 파일을 적재

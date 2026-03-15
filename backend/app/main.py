@@ -11,7 +11,6 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.database import create_tables, SessionLocal

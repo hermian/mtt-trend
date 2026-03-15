@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { api, API_CONFIG, ThemeDaily, ThemeHistory, SurgingTheme, DataSource } from "@/lib/api";
+import { api, API_CONFIG, ThemeDaily, ThemeHistory, SurgingTheme, ThemeStock, DataSource } from "@/lib/api";
 
 // @MX:NOTE: 모든 훅은 API_CONFIG.DEFAULT_STALE_TIME을 사용하여 불필요한 재요청을 방지합니다.
 // @MX:ANCHOR: 테마 관련 React Query 훅 (fan_in: TopThemesBar, ThemeTrendChart, page.tsx)
@@ -63,6 +63,17 @@ export function useMultipleThemeHistories(themeNames: string[], days = 30, sourc
       );
     },
     enabled: themeNames.length > 0,
+    staleTime: API_CONFIG.DEFAULT_STALE_TIME,
+  });
+}
+
+// @MX:NOTE: SPEC-MTT-013 테마 종목 조회 Hook
+// Hook for fetching theme stocks
+export function useThemeStocks(themeName: string, date: string | null, source: DataSource = "52w_high") {
+  return useQuery<ThemeStock[]>({
+    queryKey: ["themes", "stocks", themeName, date, source],
+    queryFn: () => api.getThemeStocks(themeName, date!, source),
+    enabled: !!themeName && !!date,
     staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }

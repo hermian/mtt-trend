@@ -4,7 +4,6 @@
 GREEN Phase: 테스트 DB가 프로덕션 DB와 완전히 분리되는지 검증
 """
 
-import pytest
 from pathlib import Path
 import os
 from sqlalchemy import create_engine, text

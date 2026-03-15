@@ -1,0 +1,35 @@
+[project]
+name = "mtt-trend-backend"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+# 기본 설정
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# 활성화할 규칙 세트
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "TYP", # flake8-type-checking (타입 체크)
+]
+
+# 사용하지 않는 import 제거 (F401) 선택적 무시
+ignore = []
+
+# 타입 체크 및 린트 예외 설정
+[tool.ruff.lint.per-file-ignores]
+# 테스트 파일: import 순서와 타입 체크 무시
+"tests/**/*.py" = ["E402", "F841", "TYP"]
+# 스크립트: import 순서와 타입 체크 무시
+"scripts/**/*.py" = ["E402", "TYP"]
+# 섹션 구분을 위한 import 순서 무시
+"app/sync_service.py" = ["E402"]
+"app/main.py" = ["E402"]
+"app/routers/sync.py" = ["E402"]
+# watchdog.Observer 타입 힌트 문제
+"app/file_watcher.py" = ["F821"]

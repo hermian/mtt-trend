@@ -20,17 +20,15 @@ Acceptance Criteria:
 
 import tempfile
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 from datetime import datetime
 
-import pytest
-from sqlalchemy.orm import Session
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.sync_service import SyncService, SyncResult
-from app.models import SOURCE_52W, SOURCE_MTT, ThemeDaily
+from app.models import SOURCE_52W, ThemeDaily
 from app.database import SessionLocal
 
 
@@ -380,8 +378,6 @@ class TestStartupSyncIntegration:
         mock_create_watcher.return_value = (mock_observer, mock_handler)
 
         # when: FastAPI app 시작 (lifespan 함수 실행)
-        from fastapi.testclient import TestClient
-        from app.main import app
 
         # Note: lifespan은 async context manager이므로 직접 테스트 어려움
         # 대신 실제 서버 시작 시 동작을 확인하기 위해 app 객체 생성

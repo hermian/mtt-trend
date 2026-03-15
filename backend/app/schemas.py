@@ -118,6 +118,22 @@ class GroupActionResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# /api/themes/{name}/stocks
+# ---------------------------------------------------------------------------
+
+class ThemeStockItem(_Base):
+    stock_name: str
+    rs_score: Optional[int] = None
+    change_pct: Optional[float] = None
+
+
+class ThemeStocksResponse(BaseModel):
+    theme_name: str
+    date: str
+    stocks: List[ThemeStockItem]
+
+
+# ---------------------------------------------------------------------------
 # /api/intersection
 # ---------------------------------------------------------------------------
 

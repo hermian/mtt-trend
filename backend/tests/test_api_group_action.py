@@ -14,7 +14,6 @@ from pathlib import Path
 backend_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_dir))
 
-from app.database import Base
 from app.models import ThemeStockDaily, ThemeDaily
 
 

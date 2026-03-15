@@ -7,11 +7,9 @@ SPEC-MTT-009: HTML 자동 감지 및 DB 동기화 시스템
 """
 
 import tempfile
-import time
 from pathlib import Path
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch
 
-import pytest
 
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

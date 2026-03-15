@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.sync_service import sync_service, SyncResult
+from app.sync_service import sync_service
 from app.file_watcher import get_watchdog_state
 
 logger = logging.getLogger(__name__)

@@ -5,12 +5,13 @@ Routes:
     GET /api/themes/daily?date=YYYY-MM-DD
     GET /api/themes/surging?date=YYYY-MM-DD&threshold=10
     GET /api/themes/{name}/history?days=30
+    GET /api/themes/{name}/stocks?date=YYYY-MM-DD
 """
 
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, text
+from sqlalchemy import func
 
 from app.database import get_db
 from app.models import ThemeDaily, ThemeStockDaily, SOURCE_52W
@@ -21,6 +22,8 @@ from app.schemas import (
     ThemeSurgingResponse,
     ThemeHistoryItem,
     ThemeHistoryResponse,
+    ThemeStockItem,
+    ThemeStocksResponse,
 )
 
 router = APIRouter(prefix="/themes", tags=["themes"])
@@ -181,4 +184,45 @@ def get_theme_history(
         theme_name=name,
         days=days,
         history=[ThemeHistoryItem.model_validate(r) for r in rows_sorted],
+    )
+
+
+# ---------------------------------------------------------------------------
+# GET /api/themes/{name}/stocks
+# ---------------------------------------------------------------------------
+
+@router.get("/{name:path}/stocks", response_model=ThemeStocksResponse)
+def get_theme_stocks(
+    name: str,
+    date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
+    source: str = Query(SOURCE_52W, description="Data source: '52w_high' or 'mtt'"),
+    db: Session = Depends(get_db),
+):
+    """Return all stocks for a specific theme on the given date, sorted by rs_score descending."""
+    if date is None:
+        date = _latest_date(db, source)
+        if date is None:
+            raise HTTPException(status_code=404, detail="No data available")
+
+    rows = (
+        db.query(ThemeStockDaily)
+        .filter(
+            ThemeStockDaily.theme_name == name,
+            ThemeStockDaily.date == date,
+            ThemeStockDaily.data_source == source,
+        )
+        .order_by(ThemeStockDaily.rs_score.desc().nullslast())
+        .all()
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No stocks found for theme '{name}' on date {date}",
+        )
+
+    return ThemeStocksResponse(
+        theme_name=name,
+        date=date,
+        stocks=[ThemeStockItem.model_validate(r) for r in rows],
     )

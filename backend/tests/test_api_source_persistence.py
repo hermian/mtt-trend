@@ -11,7 +11,6 @@ SPEC-MTT-005 개선 사항:
 """
 
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
 
 import sys
 sys.path.insert(0, '.')

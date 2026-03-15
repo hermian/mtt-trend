@@ -8,7 +8,6 @@ SPEC-MTT-002 F-01: 데이터 수집
 - R-01-4: 수집 결과 요약 출력
 """
 
-import re
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -27,7 +26,6 @@ from scripts.ingest import (
     compute_aggregates,
 )
 from app.models import SOURCE_52W, SOURCE_MTT
-from app.database import SessionLocal, create_tables
 
 
 class TestExtractDateFromFilename:

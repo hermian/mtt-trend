@@ -3,7 +3,6 @@ Database engine and session management.
 SQLite database stored at backend/db/trends.sqlite.
 """
 
-import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, text

@@ -67,6 +67,20 @@ export interface IntersectionTheme {
   intersection_stocks: IntersectionStock[];
 }
 
+// @MX:NOTE: SPEC-MTT-013 테마 종목 데이터 인터페이스
+export interface ThemeStock {
+  stock_name: string;
+  rs_score: number | null;
+  change_pct: number | null;
+}
+
+// @MX:NOTE: SPEC-MTT-013 테마 종목 응답 인터페이스
+export interface ThemeStocksResponse {
+  theme_name: string;
+  date: string;
+  stocks: ThemeStock[];
+}
+
 export interface IntersectionResponse {
   date: string;
   themes: IntersectionTheme[];
@@ -178,6 +192,22 @@ export const api = {
   getSyncStatus: async (): Promise<SyncStatusResponse> => {
     const { data } = await apiClient.get<SyncStatusResponse>("/api/sync/status");
     return data;
+  },
+
+  // @MX:NOTE: SPEC-MTT-013 테마 종목 조회 API
+  // GET /api/themes/{name}/stocks?date=&source= → ThemeStocksResponse
+  getThemeStocks: async (
+    name: string,
+    date: string,
+    source: DataSource = "52w_high"
+  ): Promise<ThemeStock[]> => {
+    const { data } = await apiClient.get<ThemeStocksResponse>(
+      `/api/themes/${encodeURIComponent(name)}/stocks`,
+      {
+        params: { date, source }
+      }
+    );
+    return data.stocks;
   },
 };
 

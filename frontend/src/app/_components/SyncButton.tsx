@@ -60,14 +60,14 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
       onClick={handleSync}
       disabled={isSyncing}
       className={`
-        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10
+        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full
         ${isSyncing
-          ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-          : "text-gray-400 hover:text-white hover:bg-gray-700"
+          ? "bg-blue-400 text-white cursor-not-allowed"
+          : "bg-blue-600 text-white hover:bg-blue-700"
         }
       `}
-      aria-label={collapsed ? "동기화" : "데이터 동기화"}
-      title={collapsed ? "동기화" : undefined}
+      aria-label={collapsed ? "DB 동기화" : "DB 동기화"}
+      title={collapsed ? "DB 동기화" : undefined}
     >
       {/* @MX:NOTE: 52주 트렌드와 동일한 크기의 SVG 아이콘 */}
       <svg
@@ -80,8 +80,10 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
         strokeLinecap="round"
         strokeLinejoin="round"
       >
-        <path d="M21 2v6h-3" />
-        <path d="M21 10v6h-3" />
+        <path d="M21 2v6h-6" />
+        <path d="M3 12a9 9 0 0 1 15-6.7L21 8" />
+        <path d="M3 22v-6h6" />
+        <path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
       </svg>
       {isSyncing ? (
         <svg
@@ -99,7 +101,7 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
         </svg>
       ) : null}
       {!collapsed && (
-        <span className="truncate">{isSyncing ? "동기화 중..." : "동기화"}</span>
+        <span className="truncate">{isSyncing ? "DB 동기화 중..." : "DB 동기화"}</span>
       )}
     </button>
   );

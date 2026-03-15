@@ -97,8 +97,8 @@ export function Sidebar() {
           );
         })}
 
-        {/* Sync Button Section */}
-        <div className={clsx("pt-2", collapsed ? "" : "px-3")}>
+        {/* Sync Button */}
+        <div className="pt-2">
           <SyncButton collapsed={collapsed} />
         </div>
       </nav>

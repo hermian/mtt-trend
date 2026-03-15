@@ -223,6 +223,57 @@ curl "http://localhost:8000/api/stocks/group-action?date=2024-01-15&timeWindow=7
 
 ### 헬스 체크
 
+---
+
+### 동기화 API
+
+#### POST /api/sync
+
+HTML 리포트 파일의 DB 동기화를 수동으로 트리거합니다.
+
+**파라미터**: Body 없음
+
+**응답 형식**:
+```json
+{
+  "status": "completed",
+  "total_files_scanned": 10,
+  "files_processed": 3,
+  "files_skipped": 7,
+  "records_created": 45,
+  "errors": [],
+  "started_at": "2026-03-15T10:30:00Z",
+  "completed_at": "2026-03-15T10:30:05Z"
+}
+```
+
+**사용 예시**:
+```bash
+curl -X POST "http://localhost:8000/api/sync"
+```
+
+#### GET /api/sync/status (Optional)
+
+동기화 시스템의 현재 상태를 조회합니다.
+
+**응답 형식**:
+```json
+{
+  "watchdog_active": true,
+  "watched_directory": "backend/data/",
+  "last_sync_at": "2026-03-15T10:30:05Z",
+  "last_sync_result": {
+    "files_processed": 3,
+    "errors": []
+  }
+}
+```
+
+**사용 예시**:
+```bash
+curl "http://localhost:8000/api/sync/status"
+```
+
 #### GET /health
 
 API 서버의 상태를 확인합니다.

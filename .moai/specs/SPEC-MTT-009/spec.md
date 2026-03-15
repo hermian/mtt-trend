@@ -2,7 +2,7 @@
 id: SPEC-MTT-009
 title: HTML 자동 감지 및 DB 동기화 시스템
 version: 1.0.0
-status: draft
+status: completed
 created: 2026-03-15
 updated: 2026-03-15
 author: Hosung Kim

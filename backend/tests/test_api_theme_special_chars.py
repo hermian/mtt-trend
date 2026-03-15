@@ -31,6 +31,9 @@ class TestThemeNameSpecialCharacters:
 
     def setup_method(self):
         """각 테스트 전에 데이터베이스 초기화 및 테스트 데이터 생성"""
+        # 테이블 생성
+        create_tables()
+
         # 기존 데이터 정리
         with SessionLocal() as db:
             db.query(ThemeDaily).delete()

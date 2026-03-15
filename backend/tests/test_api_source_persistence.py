@@ -17,7 +17,7 @@ import sys
 sys.path.insert(0, '.')
 
 from app.main import app
-from app.database import SessionLocal
+from app.database import SessionLocal, create_tables
 from app.models import ThemeDaily, SOURCE_52W, SOURCE_MTT
 
 client = TestClient(app)
@@ -34,6 +34,9 @@ class TestSourceBasedThemeSelection:
 
     def setup_method(self):
         """각 테스트 전에 데이터베이스 초기화"""
+        # 테이블 생성
+        create_tables()
+
         with SessionLocal() as db:
             db.query(ThemeDaily).delete()
             db.commit()

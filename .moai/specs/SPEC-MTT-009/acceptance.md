@@ -2,7 +2,7 @@
 id: SPEC-MTT-009
 title: HTML 자동 감지 및 DB 동기화 시스템 - 인수 기준
 version: 1.0.0
-status: draft
+status: completed
 created: 2026-03-15
 updated: 2026-03-15
 author: Hosung Kim
@@ -238,14 +238,14 @@ Then 네트워크 오류 토스트 알림이 표시된다
 
 ### Definition of Done
 
-- [ ] 모든 인수 기준(ACC-01 ~ ACC-05) 시나리오 통과
-- [ ] 백엔드 테스트 커버리지 85% 이상
-- [ ] 프론트엔드 SyncButton 컴포넌트 테스트 작성
-- [ ] `watchdog>=4.0.0` 의존성 추가 완료
-- [ ] 기존 `ingest.py` CLI 기능 회귀 테스트 통과
-- [ ] API 문서(Swagger) 자동 생성 확인
-- [ ] INFO/WARNING 로그 출력 확인
-- [ ] 중복 실행 방지(409 Conflict) 동작 확인
+- [x] 모든 인수 기준(ACC-01 ~ ACC-05) 시나리오 통과
+- [x] 백엔드 테스트 커버리지 85% 이상
+- [x] 프론트엔드 SyncButton 컴포넌트 테스트 작성
+- [x] `watchdog>=4.0.0` 의존성 추가 완료
+- [x] 기존 `ingest.py` CLI 기능 회귀 테스트 통과
+- [x] API 문서(Swagger) 자동 생성 확인
+- [x] INFO/WARNING 로그 출력 확인
+- [x] 중복 실행 방지(409 Conflict) 동작 확인
 
 ---
 

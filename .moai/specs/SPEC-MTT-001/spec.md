@@ -145,7 +145,7 @@ def detect_source_from_filename(path: Path) -> str:
 ```
 
 감지 대상 파일명 예시:
-- `★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-11.html` → `mtt`
+- `★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-11.html` → `mtt`
 - `★52Week_High_Stocks_By_Theme_With_RS_Scores_2026-03-11.html` → `52w_high`
 
 ### MTT 파서 전략

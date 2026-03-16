@@ -27,7 +27,7 @@ class TestIsValidHtmlPattern:
 
     def test_valid_mtt_pattern(self):
         """유효한 MTT 파일명 패턴"""
-        assert is_valid_html_pattern("★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-15.html") is True
+        assert is_valid_html_pattern("★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-15.html") is True
 
     def test_invalid_html_pattern(self):
         """유효하지 않은 HTML 파일명 패턴 (ACC-04 시나리오 4-2)"""

@@ -133,7 +133,7 @@ mtt-trend/
 - HTML 파일을 BeautifulSoup로 파싱
 - 파일명 자동 감지로 데이터 소스 구분:
   - `★52Week_High_Stocks_By_Theme_With_RS_Scores_*.html` → source: '52w_high'
-  - `★Themes_With_7_or_More_MTT_Stocks-Top7_*.html` → source: 'mtt'
+  - `★Themes_With_7_or_More_MTT_Stocks-FullList_*.html` → source: 'mtt'
 - MTT 파일의 경우 평탄 테이블 형식 파싱 및 "종목명(RS/등락률%)" 형식 파싱
 - 테이블 데이터 추출 및 정규화
 - SQLite에 적재하는 배치 스크립트 (각 행에 data_source 포함)
@@ -143,7 +143,7 @@ mtt-trend/
 - 제공되는 HTML 리포트 파일 저장
 - 파일명 규칙:
   - 52주 신고가: `★52Week_High_Stocks_By_Theme_With_RS_Scores_YYYY-MM-DD.html`
-  - MTT 템플릿: `★Themes_With_7_or_More_MTT_Stocks-Top7_YYYY-MM-DD.html`
+  - MTT 템플릿: `★Themes_With_7_or_More_MTT_Stocks-FullList_YYYY-MM-DD.html`
 
 #### `db/trends.sqlite`
 - SQLite 데이터베이스 파일

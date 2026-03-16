@@ -38,7 +38,7 @@ class TestExtractDateFromFilename:
 
     def test_mtt_filename(self):
         """MTT 파일명에서 날짜 추출"""
-        filename = Path("★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-13.html")
+        filename = Path("★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-13.html")
         assert extract_date_from_filename(filename) == "2026-03-13"
 
     def test_no_date_in_filename(self):
@@ -57,7 +57,7 @@ class TestDetectSourceFromFilename:
 
     def test_detect_mtt_source(self):
         """MTT 소스 감지"""
-        filename = Path("★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-13.html")
+        filename = Path("★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-13.html")
         assert detect_source_from_filename(filename) == SOURCE_MTT
 
 

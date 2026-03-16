@@ -3,7 +3,7 @@ SQLAlchemy ORM models for the 52-week high theme trend dashboard.
 
 data_source values:
   '52w_high' - ★52Week_High_Stocks_By_Theme_With_RS_Scores_YYYY-MM-DD.html
-  'mtt'      - ★Themes_With_7_or_More_MTT_Stocks-Top7_YYYY-MM-DD.html
+  'mtt'      - ★Themes_With_7_or_More_MTT_Stocks-FullList_YYYY-MM-DD.html
 """
 
 from sqlalchemy import Column, Integer, String, Float, UniqueConstraint, Index

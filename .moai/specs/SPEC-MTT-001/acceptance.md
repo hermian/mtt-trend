@@ -12,7 +12,7 @@
 
 ### AC-01: MTT 파일명 자동 감지
 
-**Given** 파일명이 `★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-11.html`인 HTML 파일이 존재할 때
+**Given** 파일명이 `★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-11.html`인 HTML 파일이 존재할 때
 **When** `detect_source_from_filename()` 함수에 해당 경로를 전달하면
 **Then** 반환값은 `"mtt"` 이어야 한다
 

@@ -522,7 +522,7 @@ cd backend
 uv run python scripts/ingest.py --file data/★52Week_High_Stocks_By_Theme_With_RS_Scores_2024-01-15.html
 
 # MTT 템플릿 데이터 적재 (자동 소스 감지)
-python scripts/ingest.py --file data/★Themes_With_7_or_More_MTT_Stocks-Top7_2024-01-15.html
+python scripts/ingest.py --file data/★Themes_With_7_or_More_MTT_Stocks-FullList_2024-01-15.html
 
 # 배치 처리 (data 폴더의 모든 파일 자동 소스 감지)
 python scripts/ingest.py --batch data/

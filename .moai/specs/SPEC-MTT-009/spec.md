@@ -190,7 +190,7 @@ tags: [watchdog, sync, ingestion, automation]
 | 파일명 패턴 | data_source | 처리 방식 |
 |-------------|-------------|-----------|
 | `★52Week_High_Stocks_By_Theme_With_RS_Scores_YYYY-MM-DD.html` | `52w_high` | 자동 파싱 및 적재 |
-| `★Themes_With_7_or_More_MTT_Stocks-Top7_YYYY-MM-DD.html` | `mtt` | 자동 파싱 및 적재 |
+| `★Themes_With_7_or_More_MTT_Stocks-FullList_YYYY-MM-DD.html` | `mtt` | 자동 파싱 및 적재 |
 | 기타 `.html` 파일 | - | 무시 (경고 로그) |
 | `.html` 외 파일 | - | 완전 무시 |
 

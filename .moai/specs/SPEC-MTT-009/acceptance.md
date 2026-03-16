@@ -41,7 +41,7 @@ Then 시스템은 파일을 자동으로 감지하여 파싱한다
 
 ```gherkin
 Given FastAPI 서버가 실행 중이고 Watchdog Observer가 활성 상태일 때
-When "★Themes_With_7_or_More_MTT_Stocks-Top7_2026-03-15.html" 파일을 backend/data/ 폴더에 복사하면
+When "★Themes_With_7_or_More_MTT_Stocks-FullList_2026-03-15.html" 파일을 backend/data/ 폴더에 복사하면
 Then 시스템은 파일을 자동으로 감지하여 파싱한다
   And theme_daily 테이블에 date="2026-03-15", data_source="mtt" 레코드가 생성된다
   And theme_stock_daily 테이블에 해당 날짜의 종목 데이터가 생성된다

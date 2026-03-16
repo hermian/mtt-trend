@@ -18,7 +18,7 @@
 
 ### 2. MTT 템플릿 데이터 (mtt)
 
-**파일 패턴**: `★Themes_With_7_or_More_MTT_Stocks-Top7_YYYY-MM-DD.html`
+**파일 패턴**: `★Themes_With_7_or_More_MTT_Stocks-FullList_YYYY-MM-DD.html`
 
 **특징**:
 - MTT(Market Trend Template) 기반 테마

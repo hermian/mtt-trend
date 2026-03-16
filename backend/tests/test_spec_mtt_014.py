@@ -176,7 +176,7 @@ class TestSpecMTT014_ACC01_LastDateReingestion:
 
             (tmpdir_path / "★52Week_High_Stocks_By_Theme_With_RS_Scores_2024-01-14.html").write_text(html_52w_14)
             (tmpdir_path / "★52Week_High_Stocks_By_Theme_With_RS_Scores_2024-01-15.html").write_text(html_52w_15)
-            (tmpdir_path / "★Themes_With_7_or_More_MTT_Stocks-Top7_2024-01-14.html").write_text(html_mtt_14)
+            (tmpdir_path / "★Themes_With_7_or_More_MTT_Stocks-FullList_2024-01-14.html").write_text(html_mtt_14)
 
             with SessionLocal() as db:
                 # when

@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 
 # 파일명 패턴 정의
 _52W_PATTERN = re.compile(r"★52Week_High_Stocks_By_Theme_With_RS_Scores_\d{4}-\d{2}-\d{2}\.html", re.IGNORECASE)
-_MTT_PATTERN = re.compile(r"★Themes_With_7_or_More_MTT_Stocks-Top7_\d{4}-\d{2}-\d{2}\.html", re.IGNORECASE)
+_MTT_PATTERN = re.compile(r"★Themes_With_7_or_More_MTT_Stocks-FullList_\d{4}-\d{2}-\d{2}\.html", re.IGNORECASE)
 
 
 def is_valid_html_pattern(filename: str) -> bool:

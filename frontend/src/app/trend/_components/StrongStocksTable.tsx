@@ -5,6 +5,68 @@ import { useStocksPersistent } from "@/hooks/useStocks";
 import { PersistentStock, DataSource } from "@/lib/api";
 import clsx from "clsx";
 
+// SPEC-MTT-017: 등락률 셀 컴포넌트 (null/undefined이면 "-" 표시)
+function ChangePctCell({ value }: { value: number | null | undefined }) {
+  if (value == null) {
+    return <span className="text-gray-400">-</span>;
+  }
+  const isPositive = value > 0;
+  return (
+    <span
+      className={clsx(
+        "font-medium",
+        value > 0
+          ? "text-green-400"
+          : value < 0
+            ? "text-red-400"
+            : "text-gray-400"
+      )}
+    >
+      {isPositive ? "+" : ""}
+      {value.toFixed(2)}%
+    </span>
+  );
+}
+
+// SPEC-MTT-017: 테마RS변화 뱃지 컴포넌트 (null이면 "-" 표시)
+function RsChangeBadge({ value }: { value: number | null | undefined }) {
+  if (value == null) {
+    return <span className="text-gray-400">-</span>;
+  }
+  const isPositive = value > 0;
+  const isNeutral = value === 0;
+  return (
+    <span
+      className={clsx(
+        "inline-flex items-center gap-0.5 font-semibold",
+        isNeutral
+          ? "text-gray-400"
+          : isPositive
+            ? "text-green-400"
+            : "text-red-400"
+      )}
+    >
+      {!isNeutral && (
+        <svg
+          className="w-3 h-3"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d={isPositive ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"}
+          />
+        </svg>
+      )}
+      {isPositive ? "+" : ""}
+      {value.toFixed(2)}
+    </span>
+  );
+}
+
 type SortKey = "stock_name" | "avg_rs" | "appearance_count";
 type SortDir = "asc" | "desc";
 
@@ -140,6 +202,9 @@ export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource
                   </div>
                 </th>
               ))}
+              {/* SPEC-MTT-017: 등락률, 테마RS변화 컬럼 추가 */}
+              <th className="px-4 py-3 text-left text-gray-400 font-medium">등락률</th>
+              <th className="px-4 py-3 text-left text-gray-400 font-medium">테마RS변화</th>
               <th className="px-4 py-3 text-left text-gray-400 font-medium">소속 테마</th>
             </tr>
           </thead>
@@ -170,6 +235,13 @@ export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource
                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300">
                     {stock.appearance_count}회
                   </span>
+                </td>
+                {/* SPEC-MTT-017: 등락률, 테마RS변화 셀 */}
+                <td className="px-4 py-3">
+                  <ChangePctCell value={stock.change_pct} />
+                </td>
+                <td className="px-4 py-3">
+                  <RsChangeBadge value={stock.theme_rs_change} />
                 </td>
                 <td className="px-4 py-3 text-gray-300">
                   {stock.themes.join(", ")}

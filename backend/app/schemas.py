@@ -90,6 +90,10 @@ class PersistentStockItem(BaseModel):
     appearance_count: int
     avg_rs: Optional[float] = None
     themes: List[str]
+    # SPEC-MTT-017: 등락률 (조회 윈도우 내 가장 최신 날짜 기준)
+    change_pct: Optional[float] = None
+    # SPEC-MTT-017: 테마RS변화 (소속 테마들의 RS변화량 평균)
+    theme_rs_change: Optional[float] = None
 
 
 class PersistentStocksResponse(BaseModel):

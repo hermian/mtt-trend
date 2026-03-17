@@ -28,6 +28,10 @@ export interface PersistentStock {
   appearance_count: number;
   avg_rs: number | null;
   themes: string[];
+  // SPEC-MTT-017: 조회 윈도우 내 가장 최신 날짜 기준 등락률
+  change_pct?: number | null;
+  // SPEC-MTT-017: 소속 테마들의 RS변화량 평균
+  theme_rs_change?: number | null;
 }
 
 export interface GroupActionStock {

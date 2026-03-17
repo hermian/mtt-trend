@@ -102,8 +102,10 @@ def get_persistent_stocks(
             days=days, min_appearances=min, stocks=[]
         )
 
-    # Collect all themes per stock within the window
+    # 조회 윈도우 내 종목 목록
     stock_names = [r[0] for r in rows]
+
+    # 소속 테마 수집 (윈도우 내 중복 제거)
     theme_rows = (
         db.query(ThemeStockDaily.stock_name, ThemeStockDaily.theme_name)
         .filter(
@@ -118,12 +120,93 @@ def get_persistent_stocks(
     for stock, theme in theme_rows:
         themes_map[stock].append(theme)
 
+    # SPEC-MTT-017: 각 종목의 가장 최신 날짜 change_pct 조회
+    # 서브쿼리: 종목별 윈도우 내 최신 날짜
+    latest_date_subq = (
+        db.query(
+            ThemeStockDaily.stock_name,
+            func.max(ThemeStockDaily.date).label("latest_date"),
+        )
+        .filter(
+            ThemeStockDaily.date.in_(recent),
+            ThemeStockDaily.stock_name.in_(stock_names),
+            ThemeStockDaily.data_source == source,
+        )
+        .group_by(ThemeStockDaily.stock_name)
+        .subquery()
+    )
+    # 최신 날짜의 change_pct 조회 (테마가 여러 개일 수 있으므로 종목별 그룹핑 후 첫 번째 값 사용)
+    # SQLite/PostgreSQL 호환: DISTINCT ON 대신 GROUP BY + subquery 활용
+    latest_change_rows = (
+        db.query(
+            ThemeStockDaily.stock_name,
+            func.min(ThemeStockDaily.change_pct).label("change_pct"),
+        )
+        .join(
+            latest_date_subq,
+            (ThemeStockDaily.stock_name == latest_date_subq.c.stock_name)
+            & (ThemeStockDaily.date == latest_date_subq.c.latest_date),
+        )
+        .filter(ThemeStockDaily.data_source == source)
+        .group_by(ThemeStockDaily.stock_name)
+        .all()
+    )
+    change_pct_map: dict[str, Optional[float]] = {
+        r.stock_name: r.change_pct for r in latest_change_rows
+    }
+
+    # SPEC-MTT-017: 테마RS변화 계산 (오늘/어제 ThemeDaily avg_rs 차이의 평균)
+    # 최신 날짜(윈도우의 마지막 날)와 그 전 날을 구함
+    latest_date = recent[0]  # _recent_dates는 내림차순 반환
+    yesterday_date = recent[1] if len(recent) >= 2 else None
+
+    # 오늘과 어제의 테마 avg_rs 조회
+    today_theme_rs: dict[str, float] = {}
+    yesterday_theme_rs: dict[str, float] = {}
+
+    if latest_date:
+        today_rs_rows = (
+            db.query(ThemeDaily.theme_name, ThemeDaily.avg_rs)
+            .filter(ThemeDaily.date == latest_date, ThemeDaily.data_source == source)
+            .all()
+        )
+        today_theme_rs = {r.theme_name: r.avg_rs for r in today_rs_rows if r.avg_rs is not None}
+
+    if yesterday_date:
+        yesterday_rs_rows = (
+            db.query(ThemeDaily.theme_name, ThemeDaily.avg_rs)
+            .filter(ThemeDaily.date == yesterday_date, ThemeDaily.data_source == source)
+            .all()
+        )
+        yesterday_theme_rs = {r.theme_name: r.avg_rs for r in yesterday_rs_rows if r.avg_rs is not None}
+
+    def calc_theme_rs_change(stock_themes: list[str]) -> Optional[float]:
+        """종목 소속 테마들의 RS변화량(오늘 - 어제) 평균을 계산한다."""
+        changes = []
+        for theme in stock_themes:
+            today_rs = today_theme_rs.get(theme)
+            yesterday_rs = yesterday_theme_rs.get(theme)
+            # 오늘 데이터가 없으면 해당 테마 제외
+            if today_rs is None:
+                continue
+            # 어제 데이터가 없으면 None (변화량 계산 불가)
+            if yesterday_rs is None:
+                continue
+            changes.append(today_rs - yesterday_rs)
+        if not changes:
+            return None
+        return round(sum(changes) / len(changes), 2)
+
     stocks = [
         PersistentStockItem(
             stock_name=r[0],
             appearance_count=r[1],
             avg_rs=round(r[2], 2) if r[2] is not None else None,
             themes=themes_map.get(r[0], []),
+            # SPEC-MTT-017: 최신 날짜 등락률
+            change_pct=change_pct_map.get(r[0]),
+            # SPEC-MTT-017: 소속 테마 RS변화 평균
+            theme_rs_change=calc_theme_rs_change(themes_map.get(r[0], [])),
         )
         for r in rows
     ]

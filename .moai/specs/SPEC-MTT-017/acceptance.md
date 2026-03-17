@@ -148,12 +148,12 @@ tags: [frontend, backend, UI, persistent-stocks]
 
 ### 4.3 완료 정의 (Definition of Done)
 
-- [ ] `PersistentStockItem` 스키마에 두 필드 추가 완료
-- [ ] `get_persistent_stocks()` 쿼리에 `change_pct` 조회 로직 추가 완료
-- [ ] `theme_rs_change` 계산 로직 구현 완료
-- [ ] `PersistentStock` TypeScript 인터페이스 확장 완료
-- [ ] `StrongStocksTable.tsx`에 두 컬럼 추가 및 렌더링 완료
-- [ ] 컴포넌트 재사용 (ChangePctCell, RsChangeBadge) 완료
-- [ ] NULL 케이스 처리 완료
-- [ ] 기존 기능 정상 동작 확인
-- [ ] 코드 리뷰 완료
+- [x] `PersistentStockItem` 스키마에 두 필드 추가 완료
+- [x] `get_persistent_stocks()` 쿼리에 `change_pct` 조회 로직 추가 완료
+- [x] `theme_rs_change` 계산 로직 구현 완료
+- [x] `PersistentStock` TypeScript 인터페이스 확장 완료
+- [x] `StrongStocksTable.tsx`에 두 컬럼 추가 및 렌더링 완료
+- [x] 컴포넌트 재사용 (ChangePctCell, RsChangeBadge) 완료
+- [x] NULL 케이스 처리 완료
+- [x] 기존 기능 정상 동작 확인
+- [x] 코드 리뷰 완료

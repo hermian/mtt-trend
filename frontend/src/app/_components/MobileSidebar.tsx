@@ -6,6 +6,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
+import { SyncButton } from "./SyncButton";
 
 interface MobileSidebarProps {
   isOpen: boolean;
@@ -131,6 +132,11 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               </Link>
             );
           })}
+
+          {/* Sync Button */}
+          <div className="pt-2">
+            <SyncButton />
+          </div>
         </nav>
       </div>
     </div>

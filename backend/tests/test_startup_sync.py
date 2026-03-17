@@ -101,7 +101,8 @@ class TestStartupSync:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
-            # 먼저 DB에 데이터 적재
+            # DB에 데이터 적재 (2026-03-15, 2026-03-16 두 날짜)
+            # last_db_date = "2026-03-16"이 되어 2026-03-15 파일은 재적재 대상이 아님
             with SessionLocal() as db:
                 db.add(ThemeDaily(
                     date="2026-03-15",
@@ -110,9 +111,16 @@ class TestStartupSync:
                     stock_count=10,
                     avg_rs=85.0,
                 ))
+                db.add(ThemeDaily(
+                    date="2026-03-16",
+                    theme_name="반도체",
+                    data_source=SOURCE_52W,
+                    stock_count=10,
+                    avg_rs=86.0,
+                ))
                 db.commit()
 
-            # HTML 파일 생성 (이미 적재된 파일)
+            # HTML 파일 생성 (이미 적재된 파일, last_db_date보다 이전 날짜)
             html_content = """
             <html><body>
                 <h2>반도체</h2>
@@ -128,7 +136,7 @@ class TestStartupSync:
                 # when: 초기 동기화 실행
                 result = service.sync_files(tmpdir_path, db)
 
-                # then: 이미 적재된 파일은 건너뛰어야 함
+                # then: 이미 적재된 파일은 건너뛰어야 함 (last_db_date != 2026-03-15이므로 skip)
                 assert result is not None
                 assert result.total_files_scanned == 1
                 assert result.files_processed == 0  # 새로 적재된 파일 없음
@@ -147,7 +155,8 @@ class TestStartupSync:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmpdir_path = Path(tmpdir)
 
-            # 먼저 2026-03-14 파일만 DB에 적재
+            # DB에 2026-03-14, 2026-03-15 두 날짜 적재 (last_db_date = "2026-03-15")
+            # 2026-03-14는 last가 아니므로 skip, 2026-03-15는 last이므로 재적재
             with SessionLocal() as db:
                 db.add(ThemeDaily(
                     date="2026-03-14",
@@ -155,6 +164,13 @@ class TestStartupSync:
                     data_source=SOURCE_52W,
                     stock_count=10,
                     avg_rs=85.0,
+                ))
+                db.add(ThemeDaily(
+                    date="2026-03-15",
+                    theme_name="반도체",
+                    data_source=SOURCE_52W,
+                    stock_count=10,
+                    avg_rs=86.0,
                 ))
                 db.commit()
 

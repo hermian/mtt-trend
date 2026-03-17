@@ -2,6 +2,7 @@
 id: SPEC-MTT-018
 type: acceptance
 version: "1.0"
+status: completed
 created: "2026-03-17"
 updated: "2026-03-17"
 author: Hosung Kim

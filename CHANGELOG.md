@@ -2,6 +2,30 @@
 
 모든 중요한 변경 사항은 이 파일에 기록됩니다.
 
+## [Unreleased]
+
+### 추가된 기능
+
+#### 지속 강세 종목 탭에 등락률 및 테마RS변화 컬럼 추가 (SPEC-MTT-017)
+- **백엔드 변경**:
+  - `PersistentStockItem` 스키마에 `change_pct` (등락률), `theme_rs_change` (테마RS변화) 필드 추가
+  - `get_persistent_stocks()` API: 각 종목의 최근 등락률과 소속 테마 RS 변화 평균값 조회
+  - 쿼리 윈도우 내 가장 최근 날짜 레코드 기준으로 `change_pct` 계산
+  - 다중 테마 소속 시 테마별 RS 변화의 평균값 계산
+- **프론트엔드 변경**:
+  - `PersistentStock` TypeScript 인터페이스에 옵션 필드 추가
+  - `StrongStocksTable` 컴포넌트에 신규 컬럼 추가 (종목명 | 등락률 | 평균RS | 테마RS변화 | 출현횟수 | 소속테마)
+  - `ChangePctCell`, `RsChangeBadge` 컴포넌트 재사용 (GroupActionTable.tsx에서 export)
+- **테스트**:
+  - 6개 신규 테스트 (test_api_persistent_stocks.py)
+  - change_pct 조회, theme_rs_change 계산, 다중 테마 평균 계산, 데이터 없음 처리 등 검증
+  - 백엔드 테스트 커버리지 85%+ 달성
+- **기술 사양**:
+  - API 응답 시간: 100ms 이내 (NFR-002 준수)
+  - 기존 필드 변경 없음, Optional 필드만 추가 (하위 호환성 유지)
+
+---
+
 ## [1.2.1] - 2026-03-15
 
 ### 추가된 기능

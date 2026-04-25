@@ -96,6 +96,7 @@ export interface ChartDataPoint {
   high?: number;
   low?: number;
   close?: number;
+  volume?: number;
   indicators?: Record<string, number>;
 }
 

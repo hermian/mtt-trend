@@ -70,7 +70,7 @@ function TrendPageContent() {
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
                 {activeTab === "overview" ? "Theme Overview" : "Technical Analysis"}
               </h2>
-              {activeTab === "chart" && selectedTheme && (
+              {selectedTheme && (
                 <span className="bg-blue-900/40 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-800/50">
                   Selected: {selectedTheme}
                 </span>

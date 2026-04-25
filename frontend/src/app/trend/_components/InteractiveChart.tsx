@@ -113,27 +113,27 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             priceScaleId: "overlay" 
           }));
           chart.priceScale("overlay").applyOptions({ scaleMargins: { top: 0.65, bottom: 0 } });
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#10b981", lineWidth: 1.5, crosshairMarkerVisible: false }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#f43f5e", lineWidth: 1.5, crosshairMarkerVisible: false }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#10b981", lineWidth: 2, crosshairMarkerVisible: false }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#f43f5e", lineWidth: 2, crosshairMarkerVisible: false }));
         } else if (config.id === "sma_group") {
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 1.5 }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#22c55e", lineWidth: 1.5 }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 1.5 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 2 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#22c55e", lineWidth: 2 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
         } else if (config.id === "macd") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#f97316", lineWidth: 1.5, lineStyle: 2 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#f97316", lineWidth: 2, lineStyle: 2 }));
         } else if (config.id === "stochastic") {
-          activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(239, 68, 68, 0.4)", bottomColor: "rgba(239, 68, 68, 0.0)", lineVisible: false, crosshairMarkerVisible: false, base: 80 }));
-          activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(59, 130, 246, 0.0)", bottomColor: "rgba(59, 130, 246, 0.4)", lineVisible: false, crosshairMarkerVisible: false, base: 20 }));
+          activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(239, 68, 68, 0.4)", bottomColor: "rgba(239, 68, 68, 0.0)", lineVisible: false, crosshairMarkerVisible: false }));
+          activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(59, 130, 246, 0.0)", bottomColor: "rgba(59, 130, 246, 0.4)", lineVisible: false, crosshairMarkerVisible: false }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#fbbf24", lineWidth: 2 }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#f8fafc", lineWidth: 1.5, lineStyle: 2 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#f8fafc", lineWidth: 2, lineStyle: 2 }));
         } else {
           const seriesType = config.type === "histogram" ? HistogramSeries : LineSeries;
           activeSeries.push(chart.addSeries(seriesType, { color: config.color || "#60a5fa", lineWidth: 2 }));
         }
 
         chart.subscribeCrosshairMove((param) => {
-           chartsRef.current.forEach((c) => { if (c !== chart) { if (!param.time || (param.point && param.point.x < 0)) { c.setCrosshairPosition(undefined, undefined, undefined as any); } else { c.setCrosshairPosition(undefined, param.time, undefined as any); } } });
+           chartsRef.current.forEach((c) => { if (c !== chart) { if (!param.time || (param.point && param.point.x < 0)) { c.setCrosshairPosition(null as any, null as any, null as any); } else { c.setCrosshairPosition(null as any, param.time as any, null as any); } } });
            if (!param.time || !param.point || param.point.x < 0) { setHoveredData(null); } else {
               const currentPoint = chartDataRef.current?.data.find((p: any) => p.time === param.time);
               if (currentPoint) { 
@@ -172,8 +172,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       if (config.id === "main") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, open: p.open ?? 0, high: p.high ?? 0, low: p.low ?? 0, close: p.close ?? 0 })));
         activeSeries[1].setData(sortedData.map((p, idx) => {
-          const prevClose = idx > 0 ? sortedData[idx - 1].close : p.open;
-          const isUp = p.close >= prevClose;
+          const prevClose = idx > 0 ? (sortedData[idx - 1].close ?? p.open ?? 0) : (p.open ?? 0);
+          const isUp = (p.close ?? 0) >= prevClose;
           // 투명도 30%로 하향 조정
           return { 
             time: p.time, 

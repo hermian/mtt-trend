@@ -209,6 +209,14 @@ When fixing bugs:
 - Fix the bug with minimal code changes
 - Verify the reproduction test passes after the fix
 
+**Rule 5: Build-First Completion (CRITICAL)**
+
+Before committing code or claiming a task is complete:
+- Run the full project build command (`pnpm run build` for frontend)
+- Ensure zero TypeScript errors and zero build failures
+- Verification is mandatory; never assume success without a clean build output
+- If build fails, return to Phase 1: Root Cause Investigation
+
 ### Go-Specific Guidelines
 
 For Go development:

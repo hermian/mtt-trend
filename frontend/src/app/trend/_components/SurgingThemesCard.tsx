@@ -10,9 +10,11 @@ import { SurgingTheme, DataSource } from "@/lib/api";
 interface SurgingThemesCardProps {
   date: string;
   source?: DataSource;
+  onThemeClick?: (themeName: string) => void;
+  selectedTheme?: string | null;
 }
 
-export function SurgingThemesCard({ date, source = "52w_high" }: SurgingThemesCardProps) {
+export function SurgingThemesCard({ date, source = "52w_high", onThemeClick, selectedTheme }: SurgingThemesCardProps) {
   const [threshold, setThreshold] = useState(10);
   const { data: themesData, isLoading, error } = useThemesSurging(date, threshold, source);
   
@@ -85,10 +87,18 @@ export function SurgingThemesCard({ date, source = "52w_high" }: SurgingThemesCa
             </tr>
           </thead>
           <tbody>
-            {themes.map((theme) => (
-              <tr key={theme.theme_name} className="border-b border-gray-700 last:border-b-0 hover:bg-gray-700 transition-colors">
-                <td className="py-3 px-4 text-white font-medium">{theme.theme_name}</td>
-                <td className="py-3 px-4 text-right text-green-400 font-medium">
+            {themes.map((theme) => {
+              const isSelected = selectedTheme === theme.theme_name;
+              return (
+                <tr 
+                  key={theme.theme_name} 
+                  className={`border-b border-gray-700 last:border-b-0 hover:bg-gray-700 transition-colors cursor-pointer ${isSelected ? "bg-blue-900/20" : ""}`}
+                  onClick={() => onThemeClick?.(theme.theme_name)}
+                >
+                  <td className={`py-3 px-4 font-medium ${isSelected ? "text-blue-400" : "text-white"}`}>
+                    {theme.theme_name}
+                  </td>
+                  <td className="py-3 px-4 text-right text-green-400 font-medium">
                   +{theme.rs_change?.toFixed(1) || "0.0"}
                 </td>
                 <td className="py-3 px-4 text-right text-gray-300">
@@ -101,7 +111,8 @@ export function SurgingThemesCard({ date, source = "52w_high" }: SurgingThemesCa
                   {theme.stock_count ?? 0}개
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

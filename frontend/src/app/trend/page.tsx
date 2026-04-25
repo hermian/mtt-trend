@@ -150,7 +150,12 @@ function TrendPageContent() {
                         <span className="w-1.5 h-6 bg-emerald-500 rounded-full"></span>
                         신규 급등 테마 탐지
                       </h3>
-                      <SurgingThemesCard date={selectedDate} source={source} />
+                      <SurgingThemesCard
+                        date={selectedDate}
+                        source={source}
+                        onThemeClick={handleThemeClick}
+                        selectedTheme={selectedTheme}
+                      />
                     </div>
                   </section>
 

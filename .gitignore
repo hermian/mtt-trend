@@ -210,3 +210,5 @@ dist-ssr/
 !backend/db/.gitkeep
 backend/data/*.html
 !frontend/.env.local.example
+.bkit
+.gemini

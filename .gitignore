@@ -212,3 +212,4 @@ backend/data/*.html
 !frontend/.env.local.example
 .bkit
 .gemini
+backend/data/charts/*.csv

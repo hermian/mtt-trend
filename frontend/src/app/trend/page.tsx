@@ -17,9 +17,15 @@ const SOURCE_LABELS: Record<DataSource, string> = {
 };
 
 const CHART_CONFIGS: IndicatorConfig[] = [
-  { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 3 },
-  { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 1, color: "#fbbf24" },
-  { id: "macd", name: "MACD", type: "histogram", heightRatio: 1, color: "#10b981" },
+  { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 5 },
+  { id: "sma10", name: "SMA 10 (Pct)", type: "line", heightRatio: 1, color: "#f87171" },
+  { id: "sma20", name: "SMA 20 (Pct)", type: "line", heightRatio: 1, color: "#fbbf24" },
+  { id: "sma50", name: "SMA 50 (Pct)", type: "line", heightRatio: 1, color: "#34d399" },
+  { id: "sma200", name: "SMA 200 (Pct)", type: "line", heightRatio: 1, color: "#60a5fa" },
+  { id: "adr14", name: "ADR 14 (Pct)", type: "line", heightRatio: 2, color: "#a78bfa" },
+  { id: "adr20", name: "ADR 20 (Pct)", type: "line", heightRatio: 2, color: "#f472b6" },
+  { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 2, color: "#fbbf24" },
+  { id: "macd", name: "MACD (12,26,9)", type: "line", heightRatio: 2, color: "#3b82f6" },
 ];
 
 function TrendPageContent() {
@@ -31,6 +37,13 @@ function TrendPageContent() {
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
+
+  // 차트 탭 진입 시 테마가 선택되어 있지 않거나 KOSPI(더미)라면 기본값으로 kodex_leverage 설정
+  useEffect(() => {
+    if (activeTab === "chart" && (!selectedTheme || selectedTheme === "KOSPI")) {
+      setSelectedTheme("kodex_leverage");
+    }
+  }, [activeTab, selectedTheme]);
 
   useEffect(() => {
     setSelectedDate(null);
@@ -165,10 +178,26 @@ function TrendPageContent() {
 
               {activeTab === "chart" && (
                 <div className="max-w-7xl mx-auto h-full flex flex-col">
+                  {(!selectedTheme || selectedTheme !== "kodex_leverage") && (
+                    <div className="mb-4 p-3 bg-amber-900/30 border border-amber-800/50 rounded-xl flex items-center gap-3">
+                      <span className="text-amber-500 animate-pulse">⚠️</span>
+                      <p className="text-[11px] text-amber-200/80 font-medium">
+                        <strong className="text-amber-400">DUMMY DATA WARNING:</strong> 현재 {selectedTheme || "KOSPI"} 데이터는 서버에서 생성된 시뮬레이션 값입니다. 실제 데이터를 보려면 <button onClick={() => setSelectedTheme("kodex_leverage")} className="underline font-bold text-amber-300 hover:text-white">KODEX 레버리지</button>를 로드하세요.
+                      </p>
+                    </div>
+                  )}
                   <div className="mb-6 flex justify-between items-end border-b border-gray-800 pb-6">
                     <div>
                       <h3 className="text-2xl font-extrabold text-white tracking-tight">Interactive Technical Analytics</h3>
-                      <p className="text-gray-400 text-sm mt-1">실시간 가격 및 기술적 지표 심층 분석 엔진 (Beta)</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-gray-400 text-sm">실시간 가격 및 기술적 지표 심층 분석 엔진 (Beta)</p>
+                        <button 
+                          onClick={() => setSelectedTheme("kodex_leverage")}
+                          className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded font-bold transition-colors"
+                        >
+                          LOAD KODEX LEVERAGE
+                        </button>
+                      </div>
                     </div>
                     {selectedTheme && (
                        <button 

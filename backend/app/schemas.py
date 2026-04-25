@@ -4,8 +4,27 @@ Pydantic response schemas for the 52-week high theme trend dashboard API.
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, ConfigDict
+
+
+# ---------------------------------------------------------------------------
+# /api/charts/data
+# ---------------------------------------------------------------------------
+
+class ChartDataPoint(BaseModel):
+    time: str
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+    # 동적 지표 필드 (RSI, MACD 등)
+    indicators: Optional[Dict[str, float]] = None
+
+
+class ChartDataResponse(BaseModel):
+    symbol: str
+    data: List[ChartDataPoint]
 
 
 # ---------------------------------------------------------------------------

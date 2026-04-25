@@ -4,7 +4,7 @@
 // isOpen 상태에 따라 fixed 오버레이로 표시
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { SyncButton } from "./SyncButton";
 
@@ -61,6 +61,9 @@ const navItems: NavItem[] = [
 
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const isChartActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "chart";
 
   return (
     <div
@@ -114,7 +117,9 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
         {/* 네비게이션 */}
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const isActive =
+              pathname.startsWith(item.href) &&
+              (!item.href.includes("tab=chart") || isChartActive);
             return (
               <Link
                 key={item.href}
@@ -132,6 +137,33 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               </Link>
             );
           })}
+
+          {/* 심층지표 분석 Button-styled Link */}
+          <Link
+            href="/trend?tab=chart"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+              isChartActive
+                ? "bg-blue-600 text-white shadow-lg"
+                : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+            )}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 flex-shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M3 3v18h18" />
+              <path d="m19 9-5 5-4-4-3 3" />
+            </svg>
+            <span className="truncate">심층지표 분석</span>
+          </Link>
 
           {/* Sync Button */}
           <div className="pt-2">

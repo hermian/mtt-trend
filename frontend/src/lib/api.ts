@@ -90,10 +90,36 @@ export interface IntersectionResponse {
   themes: IntersectionTheme[];
 }
 
+export interface ChartDataPoint {
+  time: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+  indicators?: Record<string, number>;
+}
+
+export interface ChartDataResponse {
+  symbol: string;
+  data: ChartDataPoint[];
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
 export const api = {
+  // GET /api/charts/data?symbol=&indicators= → ChartDataResponse
+  getChartData: async (
+    symbol: string,
+    indicators?: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<ChartDataResponse> => {
+    const { data } = await apiClient.get<ChartDataResponse>("/api/charts/data", {
+      params: { symbol, indicators, start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
   // GET /api/dates → { dates: string[] }
   getDates: async (source: DataSource = "52w_high"): Promise<string[]> => {
     const { data } = await apiClient.get<{ dates: string[] }>("/api/dates", { params: { source } });

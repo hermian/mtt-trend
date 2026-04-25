@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
 import { SyncButton } from "./SyncButton";
@@ -54,7 +54,11 @@ const navItems: NavItem[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [collapsed, setCollapsed] = useState(false);
+
+  const isChartActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "chart";
 
   return (
     <aside
@@ -97,7 +101,9 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 p-3 space-y-1">
         {navItems.map((item) => {
-          const isActive = pathname.startsWith(item.href);
+          const isActive =
+            pathname.startsWith(item.href) &&
+            (!item.href.includes("tab=chart") || isChartActive);
           return (
             <Link
               key={item.href}
@@ -115,6 +121,33 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* 심층지표 분석 Button-styled Link */}
+        <Link
+          href="/trend?tab=chart"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isChartActive
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "심층지표 분석" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 3v18h18" />
+            <path d="m19 9-5 5-4-4-3 3" />
+          </svg>
+          {!collapsed && <span className="truncate">심층지표 분석</span>}
+        </Link>
 
         {/* Sync Button */}
         <div className="pt-2">

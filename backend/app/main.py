@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.database import create_tables, SessionLocal
 from app.models import ThemeDaily
-from app.routers import themes, stocks, sync
+from app.routers import themes, stocks, sync, charts
 from app.file_watcher import create_file_watcher, set_watchdog_active
 
 
@@ -150,6 +150,7 @@ app.add_middleware(
 app.include_router(themes.router, prefix="/api")
 app.include_router(stocks.router, prefix="/api")
 app.include_router(sync.router, prefix="/api")
+app.include_router(charts.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

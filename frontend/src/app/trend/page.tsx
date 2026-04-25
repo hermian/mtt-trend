@@ -18,13 +18,12 @@ const SOURCE_LABELS: Record<DataSource, string> = {
 
 const CHART_CONFIGS: IndicatorConfig[] = [
   { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 5 },
-  { id: "sma10", name: "SMA 10 (Pct)", type: "line", heightRatio: 1, color: "#f87171" },
-  { id: "sma20", name: "SMA 20 (Pct)", type: "line", heightRatio: 1, color: "#fbbf24" },
-  { id: "sma50", name: "SMA 50 (Pct)", type: "line", heightRatio: 1, color: "#34d399" },
-  { id: "sma200", name: "SMA 200 (Pct)", type: "line", heightRatio: 1, color: "#60a5fa" },
-  { id: "adr14", name: "ADR 14 (Pct)", type: "line", heightRatio: 2, color: "#a78bfa" },
-  { id: "adr20", name: "ADR 20 (Pct)", type: "line", heightRatio: 2, color: "#f472b6" },
+  { id: "sma_group", name: "SMA 10/20/50 (R/G/B)", type: "line", heightRatio: 1.5 },
+  { id: "sma200", name: "SMA 200 (Score)", type: "line", heightRatio: 1, color: "#60a5fa" },
+  { id: "adr14", name: "ADR 14 (Ratio)", type: "line", heightRatio: 2, color: "#a78bfa" },
+  { id: "adr20", name: "ADR 20 (Ratio)", type: "line", heightRatio: 2, color: "#f472b6" },
   { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 2, color: "#fbbf24" },
+  { id: "stochastic", name: "Stochastic (5,3,3)", type: "line", heightRatio: 2 },
   { id: "macd", name: "MACD (12,26,9)", type: "line", heightRatio: 2, color: "#3b82f6" },
 ];
 
@@ -64,56 +63,58 @@ function TrendPageContent() {
     <div className="flex flex-col min-h-screen bg-gray-950 text-white">
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header Bar */}
-        <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
-          <div className="flex items-center gap-4">
-            <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
-              {activeTab === "overview" ? "Theme Overview" : "Technical Analysis"}
-            </h2>
-            {activeTab === "chart" && selectedTheme && (
-              <span className="bg-blue-900/40 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-800/50">
-                Selected: {selectedTheme}
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-6">
-            {/* Source Toggle */}
-            <div className="hidden sm:flex items-center bg-black/30 p-1 rounded-lg border border-gray-800">
-                {(["52w_high", "mtt"] as DataSource[]).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSource(s)}
-                    className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
-                      source === s ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-                    }`}
-                  >
-                    {SOURCE_LABELS[s]}
-                  </button>
-                ))}
-            </div>
-
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-gray-500 font-medium">기준일</span>
-              {datesLoading ? (
-                <div className="h-8 w-32 bg-gray-800 rounded animate-pulse" />
-              ) : (
-                <select
-                  value={selectedDate || ""}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="bg-gray-800 text-xs border border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
-                >
-                  {dates?.map((date) => (
-                    <option key={date} value={date}>{date}</option>
-                  ))}
-                </select>
+        {/* Header Bar - 차트 탭일 때는 숨김 처리하여 공간 확보 */}
+        {activeTab !== "chart" && (
+          <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
+            <div className="flex items-center gap-4">
+              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
+                {activeTab === "overview" ? "Theme Overview" : "Technical Analysis"}
+              </h2>
+              {activeTab === "chart" && selectedTheme && (
+                <span className="bg-blue-900/40 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-800/50">
+                  Selected: {selectedTheme}
+                </span>
               )}
             </div>
-          </div>
-        </header>
 
-        {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 custom-scrollbar">
+            <div className="flex items-center gap-6">
+              {/* Source Toggle */}
+              <div className="hidden sm:flex items-center bg-black/30 p-1 rounded-lg border border-gray-800">
+                  {(["52w_high", "mtt"] as DataSource[]).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSource(s)}
+                      className={`px-3 py-1 text-[11px] font-bold rounded-md transition-all ${
+                        source === s ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+                      }`}
+                    >
+                      {SOURCE_LABELS[s]}
+                    </button>
+                  ))}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-gray-500 font-medium">기준일</span>
+                {datesLoading ? (
+                  <div className="h-8 w-32 bg-gray-800 rounded animate-pulse" />
+                ) : (
+                  <select
+                    value={selectedDate || ""}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="bg-gray-800 text-xs border border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"
+                  >
+                    {dates?.map((date) => (
+                      <option key={date} value={date}>{date}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          </header>
+        )}
+
+        {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
+        <div className={`flex-1 ${activeTab === "chart" ? "overflow-hidden p-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
           {!selectedDate ? (
             <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
               데이터를 로드하고 있습니다...
@@ -178,11 +179,11 @@ function TrendPageContent() {
 
               {activeTab === "chart" && (
                 <div className="max-w-7xl mx-auto h-full flex flex-col">
-                  {(!selectedTheme || selectedTheme !== "kodex_leverage") && (
+                  {(!selectedTheme || !["kodex_leverage", "kosdaq_leverage"].includes(selectedTheme)) && (
                     <div className="mb-4 p-3 bg-amber-900/30 border border-amber-800/50 rounded-xl flex items-center gap-3">
                       <span className="text-amber-500 animate-pulse">⚠️</span>
                       <p className="text-[11px] text-amber-200/80 font-medium">
-                        <strong className="text-amber-400">DUMMY DATA WARNING:</strong> 현재 {selectedTheme || "KOSPI"} 데이터는 서버에서 생성된 시뮬레이션 값입니다. 실제 데이터를 보려면 <button onClick={() => setSelectedTheme("kodex_leverage")} className="underline font-bold text-amber-300 hover:text-white">KODEX 레버리지</button>를 로드하세요.
+                        <strong className="text-amber-400">DUMMY DATA WARNING:</strong> 현재 {selectedTheme || "KOSPI"} 데이터는 서버에서 생성된 시뮬레이션 값입니다. 실제 데이터를 보려면 <button onClick={() => setSelectedTheme("kodex_leverage")} className="underline font-bold text-amber-300 hover:text-white">KODEX</button> 또는 <button onClick={() => setSelectedTheme("kosdaq_leverage")} className="underline font-bold text-amber-300 hover:text-white">KOSDAQ 레버리지</button>를 로드하세요.
                       </p>
                     </div>
                   )}
@@ -193,9 +194,15 @@ function TrendPageContent() {
                         <p className="text-gray-400 text-sm">실시간 가격 및 기술적 지표 심층 분석 엔진 (Beta)</p>
                         <button 
                           onClick={() => setSelectedTheme("kodex_leverage")}
-                          className="text-[10px] bg-blue-600 hover:bg-blue-500 text-white px-2 py-0.5 rounded font-bold transition-colors"
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold transition-colors ${selectedTheme === "kodex_leverage" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
                         >
-                          LOAD KODEX LEVERAGE
+                          KODEX LEVERAGE
+                        </button>
+                        <button 
+                          onClick={() => setSelectedTheme("kosdaq_leverage")}
+                          className={`text-[10px] px-2 py-0.5 rounded font-bold transition-colors ${selectedTheme === "kosdaq_leverage" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                        >
+                          KOSDAQ LEVERAGE
                         </button>
                       </div>
                     </div>

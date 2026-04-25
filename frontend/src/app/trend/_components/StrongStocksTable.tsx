@@ -86,8 +86,11 @@ export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource
 
   const sortedStocks = useMemo(() => {
     if (!stocks) return [];
-    return [...stocks].sort((a, b) => {
-      const aVal = a[sortKey];
+    // 'kodex_leverage', 'kosdaq_leverage' 테마 소속 종목 제외 필터링 추가
+    return [...stocks]
+      .filter(s => !s.themes.includes("kodex_leverage") && !s.themes.includes("kosdaq_leverage"))
+      .sort((a, b) => {
+        const aVal = a[sortKey];
       const bVal = b[sortKey];
       if (typeof aVal === "number" && typeof bVal === "number") {
         return sortDir === "asc" ? aVal - bVal : bVal - aVal;

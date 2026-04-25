@@ -14,7 +14,10 @@ interface SurgingThemesCardProps {
 
 export function SurgingThemesCard({ date, source = "52w_high" }: SurgingThemesCardProps) {
   const [threshold, setThreshold] = useState(10);
-  const { data: themes, isLoading, error } = useThemesSurging(date, threshold, source);
+  const { data: themesData, isLoading, error } = useThemesSurging(date, threshold, source);
+  
+  // 'kodex_leverage', 'kosdaq_leverage' 테마 제외 필터링 추가
+  const themes = themesData ? themesData.filter(t => t.theme_name !== "kodex_leverage" && t.theme_name !== "kosdaq_leverage") : [];
 
   // 로딩 상태 (R-03-1)
   if (isLoading) {

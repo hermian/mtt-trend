@@ -214,6 +214,8 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
     return dailyThemes
       .map((t) => t.theme_name)
       .filter((name) =>
+        name !== "kodex_leverage" && 
+        name !== "kosdaq_leverage" && 
         name.toLowerCase().includes(searchQuery.toLowerCase())
       );
   }, [dailyThemes, searchQuery]);

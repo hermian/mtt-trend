@@ -37,6 +37,13 @@ function TrendPageContent() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
 
+  // 오버뷰 탭(52주 트렌드)에서는 레버리지 테마가 선택되지 않도록 제어 (내비게이션 캐시 문제 해결)
+  useEffect(() => {
+    if (activeTab === "overview" && (selectedTheme === "kodex_leverage" || selectedTheme === "kosdaq_leverage")) {
+      setSelectedTheme(null);
+    }
+  }, [activeTab, selectedTheme]);
+
   // 차트 탭 진입 시 테마가 선택되어 있지 않거나 KOSPI(더미)라면 기본값으로 kodex_leverage 설정
   useEffect(() => {
     if (activeTab === "chart" && (!selectedTheme || selectedTheme === "KOSPI")) {

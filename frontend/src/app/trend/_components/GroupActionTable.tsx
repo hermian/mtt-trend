@@ -171,7 +171,10 @@ export function GroupActionTable({
   const [statusThreshold, setStatusThreshold] = useState(initialStatusThreshold);
 
   // @MX:NOTE: SPEC-MTT-006 F-04: 시간 윈도우/RS 임계값 변경 시 API 재호출
-  const { data: stocks, isLoading, error } = useStocksGroupAction(date, source, timeWindow, rsThreshold);
+  const { data: stocksData, isLoading, error } = useStocksGroupAction(date, source, timeWindow, rsThreshold);
+
+  // 'kodex_leverage', 'kosdaq_leverage' 테마 소속 종목 제외 필터링 추가
+  const stocks = stocksData ? stocksData.filter(s => s.theme_name !== "kodex_leverage" && s.theme_name !== "kosdaq_leverage") : [];
 
   if (isLoading) {
     return (

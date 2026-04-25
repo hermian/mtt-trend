@@ -5,7 +5,10 @@ import { DataSource } from "@/lib/api";
 import clsx from "clsx";
 
 export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }) {
-  const { data: themes, isLoading, error } = useIntersection(undefined, source);
+  const { data: themesData, isLoading, error } = useIntersection(undefined, source);
+
+  // 'kodex_leverage', 'kosdaq_leverage' 테마 제외 필터링 추가
+  const themes = themesData ? themesData.filter(t => t.theme_name !== "kodex_leverage" && t.theme_name !== "kosdaq_leverage") : [];
 
   if (isLoading) {
     return (

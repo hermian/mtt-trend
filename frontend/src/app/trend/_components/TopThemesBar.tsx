@@ -131,7 +131,9 @@ export function TopThemesBar({ date, source = "52w_high", onThemeClick, selected
   }
 
   // Take top N themes (F-01: 동적 설정, 범위 5-30, 기본값 10)
+  // 'kodex_leverage', 'kosdaq_leverage' 테마 제외 필터링 추가
   const topThemes = [...themes]
+    .filter(t => t.theme_name !== "kodex_leverage" && t.theme_name !== "kosdaq_leverage")
     .sort((a, b) => (b.avg_rs ?? 0) - (a.avg_rs ?? 0))
     .slice(0, themeCount)
     .reverse(); // Reverse so highest is at top of horizontal bar chart

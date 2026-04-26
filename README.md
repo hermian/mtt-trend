@@ -289,17 +289,21 @@ curl "http://localhost:8000/api/themes/daily?date=2024-01-15&source=52w_high"
 - **Node.js**: 18.0 이상
 - **uv**: Python 패키지 매니저
 - **pnpm**: Node.js 패키지 매니저
+## 자체 리눅스 서버 배포
 
-### 1. 서버 접속 및 코드 배포
+### 통합 배포 스크립트 (권장)
+
+프로젝트 루트에 포함된 `deploy.sh`를 사용하여 백엔드와 프론트엔드를 한꺼번에 업데이트하고 배포할 수 있습니다.
 
 ```bash
-# 서버 접속 (SSH)
-ssh user@your-server.com
+# 실행 권한 부여 (최초 1회)
+chmod +x deploy.sh
 
-# 프로젝트 클론 (최초 1회)
-git clone https://github.com/hermian/mtt-trend.git
-cd mtt-trend
+# 배포 실행 (git pull부터 빌드, PM2 재시작까지 자동 수행)
+./deploy.sh
 ```
+
+### 단계별 수동 배포 (상세)
 
 ### 2. 백엔드 배포
 
@@ -332,10 +336,15 @@ pnpm install
 # 프로덕션 빌드
 pnpm build
 
-# 프로덕션 서버 기동 (백그라운드)
-nohup pnpm start > /var/log/mtt-trend/frontend.log 2>&1 &
+# [중요] standalone 모드 정적 자산 복사 (Ubuntu 등 일반 서버 배포 시 필수)
+# Next.js standalone 빌드는 정적 자산을 자동으로 복사하지 않으므로 수동 복사가 필요합니다.
+mkdir -p .next/standalone/.next/static
+cp -r .next/static/* .next/standalone/.next/static/
+# public 폴더가 있는 경우 복사 (없으면 빈 폴더 생성)
+[ -d public ] && cp -r public .next/standalone/ || mkdir -p .next/standalone/public
 
-# 또는 pm2/supervisord 사용 (권장)
+# 프로덕션 서버 기동 (백그라운드)
+# pnpm start는 node .next/standalone/server.js를 실행합니다.
 pm2 start "pnpm start" --name mtt-frontend
 ```
 

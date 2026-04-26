@@ -88,6 +88,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
       if (!scrollArea) return;
       
+      // @MX:NOTE: 모바일 기기 여부 감지
+      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
       configs.forEach((config, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${config.id}"]`) as HTMLElement;
         if (!el) return;
@@ -99,7 +102,23 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           layout: { background: { type: ColorType.Solid, color: "#0f172a" }, textColor: "#94a3b8" },
           grid: { vertLines: { color: "#1e293b" }, horzLines: { color: "#1e293b" } },
           timeScale: { visible: index === configs.length - 1, borderColor: "#334155", rightOffset: 20, barSpacing: 10 },
-          rightPriceScale: { borderColor: "#334155", scaleMargins: { top: 0.1, bottom: 0.1 }, autoScale: true, minimumWidth: 100 },
+          rightPriceScale: { 
+            borderColor: "#334155", 
+            scaleMargins: { top: 0.1, bottom: 0.1 }, 
+            autoScale: true, // @MX:NOTE: 항상 오토 스케일링 유지
+            minimumWidth: 100,
+          },
+          // @MX:NOTE: 확대/축소(Scale) 조작 제어
+          handleScale: isMobile ? false : {
+            axisPressedMouseMove: config.id === "main",
+            pinch: config.id === "main",
+            mouseWheel: true,
+          },
+          // @MX:NOTE: 스크롤(Scroll) 조작 제어
+          handleScroll: isMobile ? {
+            horzTouchDrag: config.id === "main", // 좌우 이동만 허용
+            vertTouchDrag: false,               // @MX:NOTE: Y축 방향 드래그 차단 (오토 스케일 유지 핵심)
+          } : true, // @MX:NOTE: PC는 기본값(true)을 사용하여 모든 스크롤 기능 활성화 (마우스 드래그 포함)
           crosshair: { mode: CrosshairMode.Normal, vertLine: { labelVisible: index === configs.length - 1, color: "#64748b", width: 1, style: 1 }, horzLine: { color: "#64748b", width: 1, style: 1 } },
         });
 
@@ -252,11 +271,15 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         {hoveredData && (
           <div className="flex items-center gap-3 text-[9px] font-mono">
             <span className="text-slate-400">{hoveredData.time}</span>
-            <div className="flex gap-2">
+            <div className="flex gap-2 border-r border-slate-700 pr-3">
               <span className="text-slate-400">O:<span className="text-slate-100">{hoveredData.ohlc?.open.toLocaleString()}</span></span>
               <span className="text-red-400">H:<span>{hoveredData.ohlc?.high.toLocaleString()}</span></span>
               <span className="text-blue-400">L:<span>{hoveredData.ohlc?.low.toLocaleString()}</span></span>
               <span className="text-slate-100">C:<span>{hoveredData.ohlc?.close.toLocaleString()}</span></span>
+            </div>
+            <div className="flex gap-2">
+              <span className="text-[#10b981] font-bold">SMA50:<span className="text-slate-100 ml-0.5">{hoveredData.indicators["price_sma50"]?.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></span>
+              <span className="text-[#f43f5e] font-bold">SMA200:<span className="text-slate-100 ml-0.5">{hoveredData.indicators["price_sma200"]?.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></span>
             </div>
           </div>
         )}

@@ -121,7 +121,7 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" ? "overflow-hidden p-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+        <div className={`flex-1 ${activeTab === "chart" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
           {!selectedDate ? (
             <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
               데이터를 로드하고 있습니다...
@@ -190,7 +190,7 @@ function TrendPageContent() {
               )}
 
               {activeTab === "chart" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col">
+                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0">
                   {(!selectedTheme || !["kodex_leverage", "kosdaq_leverage"].includes(selectedTheme)) && (
                     <div className="mb-4 p-3 bg-amber-900/30 border border-amber-800/50 rounded-xl flex items-center gap-3">
                       <span className="text-amber-500 animate-pulse">⚠️</span>

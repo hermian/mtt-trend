@@ -5,6 +5,7 @@ SPEC-MTT-009: 테스트 DB 초기화 자동화
 SPEC-MTT-011: 테스트 DB 분리 (In-Memory SQLite)
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,22 @@ from sqlalchemy.orm import sessionmaker
 # 프로젝트 루트를 경로에 추가
 backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
+
+_LEVERAGE_FIXTURE_DIR = (
+    Path(__file__).resolve().parent / "fixtures" / "kodex_levarage"
+)
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _leverage_csv_dir_env():
+    """차트 CSV 경로를 저장소 픽스처로 고정 (기본 ~/.cache 의존 제거)."""
+    prev = os.environ.get("MTT_LEVERAGE_CSV_DIR")
+    os.environ["MTT_LEVERAGE_CSV_DIR"] = str(_LEVERAGE_FIXTURE_DIR)
+    yield
+    if prev is None:
+        os.environ.pop("MTT_LEVERAGE_CSV_DIR", None)
+    else:
+        os.environ["MTT_LEVERAGE_CSV_DIR"] = prev
 
 # 테스트용 임시 파일 DB URL
 # @MX:NOTE: In-Memory DB는 여러 세션에서 공유되지 않으므로 파일 기반 사용

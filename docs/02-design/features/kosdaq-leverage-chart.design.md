@@ -18,7 +18,7 @@
 ## 2. 기술적 사양 (Technical Spec)
 
 ### 2.1 백엔드 (Python/Polars)
-- **종목 연동**: `kosdaq_leverage.csv` 데이터 로드 및 종목별 독립 캐시(`_CHART_CACHE`) 구축.
+- **종목 연동**: `~/.cache/db/kodex_levarage/kosdaq_leverage.csv` 데이터 로드 및 종목별 독립 캐시(`_CHART_CACHE`) 구축.
 - **정밀 지표 엔진**:
     - **Slow Stochastic (5,3,3)**: Fast %K → Slow %K(3일 평활) → Slow %D(3일 평활) 3단계 계산.
     - **수학적 안정성**: `clip(1e-10)`을 통한 Zero-Divider 방지 및 `fill_null(50.0)` 처리.

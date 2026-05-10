@@ -6,13 +6,13 @@ client = TestClient(app)
 
 def test_get_kodex_leverage_chart_data():
     """
-    KODEX 레버리지 CSV 데이터가 올바르게 반환되는지 테스트합니다.
+    KODEX 레버리지 CSV(~/.cache/db/kodex_levarage/kodex_leverage.csv) 데이터가 올바르게 반환되는지 테스트합니다.
     """
     response = client.get("/api/charts/data?symbol=kodex_leverage")
     assert response.status_code == 200
     
     data = response.json()
-    assert data["symbol"] == "kodex_leverage"
+    assert data["symbol"] == "KODEX_LEVERAGE"
     assert len(data["data"]) > 0
     
     # 첫 번째 데이터 포인트 검증
@@ -39,13 +39,12 @@ def test_get_kodex_leverage_with_filtering():
     for point in data["data"]:
         assert point["time"] >= "2026-01-01"
 
-def test_get_dummy_chart_data():
+def test_get_unknown_symbol_returns_empty_chart_data():
     """
-    일반 종목에 대해 더미 데이터가 반환되는지 테스트합니다.
+    레버리지 CSV에 없는 종목은 빈 data 배열을 반환합니다 (routers/charts.py).
     """
     response = client.get("/api/charts/data?symbol=KOSPI")
     assert response.status_code == 200
     data = response.json()
     assert data["symbol"] == "KOSPI"
-    # 더미 데이터는 기본적으로 100개를 반환함 (routers/charts.py 참고)
-    assert len(data["data"]) == 100
+    assert data["data"] == []

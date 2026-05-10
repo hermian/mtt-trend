@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from app.utils.chart_utils import load_chart_data
 
 def test_kodex_leverage_data_and_indicators():
-    """KODEX 레버리지 실제 데이터(CSV)와 Polars 지표 계산의 정확성을 검증합니다."""
+    """KODEX 레버리지 실제 데이터(~/.cache/db/kodex_levarage/kodex_leverage.csv)와 Polars 지표 계산의 정확성을 검증합니다."""
     response = load_chart_data("kodex_leverage")
     assert response is not None
     data = response.data

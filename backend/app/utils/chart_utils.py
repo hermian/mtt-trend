@@ -8,8 +8,12 @@ from app.schemas import ChartDataPoint, ChartDataResponse
 
 logger = logging.getLogger(__name__)
 
-_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
-_CHARTS_DIR = _DATA_DIR / "charts"
+def _leverage_csv_dir() -> Path:
+    """KODEX/KOSDAQ 레버리지 CSV 디렉터리. MTT_LEVERAGE_CSV_DIR이 있으면 우선(테스트 등)."""
+    override = os.environ.get("MTT_LEVERAGE_CSV_DIR")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path.home() / ".cache" / "db" / "kodex_levarage"
 
 SYMBOL_MAP = {
     "kodex_leverage": "kodex_leverage.csv",
@@ -31,7 +35,7 @@ def load_chart_data(
     
     file_name = SYMBOL_MAP.get(symbol)
     if not file_name: return None
-    csv_path = _CHARTS_DIR / file_name
+    csv_path = _leverage_csv_dir() / file_name
     if not csv_path.exists(): return None
 
     try:

@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 - **Problem**: 현재 인터랙티브 차트 시스템은 더미 데이터를 사용하고 있어 실질적인 분석 도구로 활용할 수 없습니다. 특히 `KODEX 레버리지`와 같은 핵심 종목의 시계열 데이터와 기술 지표(SMA, ADR 등)를 시각화하는 기능이 필요합니다.
-- **Solution**: 로컬 캐시 디렉토리에 존재하는 `kodex_leverage.csv` 파일을 백엔드 시스템에 이관하고, 이를 파싱하여 API로 제공하는 전용 데이터 공급자(Data Provider)를 구축합니다.
+- **Solution**: 사용자 로컬 캐시 `~/.cache/db/kodex_levarage/kodex_leverage.csv`를 백엔드가 읽어 파싱하고, API로 제공하는 전용 데이터 공급자(Data Provider)를 구축합니다.
 - **Core Value**: 실질적인 시장 데이터 기반의 고성능 기술 분석 환경 제공.
 
 ## Context Anchor
@@ -16,12 +16,13 @@
 
 ## 2. Requirements
 - **Functional**:
-  - `backend/data/charts/kodex_leverage.csv` 파일 로드 및 캐싱 로직.
+  - `~/.cache/db/kodex_levarage/kodex_leverage.csv` 파일 로드 및 캐싱 로직.
   - API 호출 시 `symbol=kodex_leverage` 파라미터 지원.
   - CSV의 모든 컬럼(`SMA10_pct`, `ADR14` 등)을 `indicators` 맵으로 변환.
   - 프론트엔드 `CHART_CONFIGS`에 SMA 및 ADR 지표 추가.
 - **Non-Functional**:
   - 1000개 이상의 데이터 포인트 로드 시 응답 시간 500ms 이내 유지.
+  - CSV 디렉터리는 필요 시 환경 변수 `MTT_LEVERAGE_CSV_DIR`로 재지정 가능 (로컬 개발·테스트용).
 
 ## 3. Milestones
 1. **[Backend] Data Migration**: CSV 파일 위치 확정 및 데이터 검증.

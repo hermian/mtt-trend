@@ -1,7 +1,7 @@
 # 01-Plan: KOSDAQ Leverage Chart Integration
 
 ## Executive Summary
-본 계획은 KODEX 레버리지 차트의 성공적인 구현 모델을 바탕으로, KOSDAQ 레버리지(`kosdaq_leverage.csv`) 실제 데이터를 연동하고 정밀 기술 지표 분석 엔진을 확장하는 것을 목표로 합니다. 코드 중복을 최소화하기 위해 백엔드 분석 유틸리티를 추상화합니다.
+본 계획은 KODEX 레버리지 차트의 성공적인 구현 모델을 바탕으로, KOSDAQ 레버리지(`~/.cache/db/kodex_levarage/kosdaq_leverage.csv`) 실제 데이터를 연동하고 정밀 기술 지표 분석 엔진을 확장하는 것을 목표로 합니다. 코드 중복을 최소화하기 위해 백엔드 분석 유틸리티를 추상화합니다.
 
 ## Context Anchor
 | Dimension | Content |
@@ -27,7 +27,7 @@
 - **코드 중복**: 각 종목마다 별도의 계산 함수를 만들 경우 유지보수 난이도가 상승함. -> Polars 계산 로직을 단일 공통 함수로 모듈화.
 
 ## 3. Success Criteria
-1. `kosdaq_leverage.csv`의 OHLC 데이터가 정확히 로드됨.
+1. `~/.cache/db/kodex_levarage/kosdaq_leverage.csv`의 OHLC 데이터가 정확히 로드됨.
 2. RSI, MACD(Signal), SMA50/200 지표가 Polars를 통해 자동 계산됨.
 3. 데이터 밀림 현상 없이 모든 차트가 수직으로 정렬됨.
 4. 기존 KODEX 레버리지 기능에 영향을 주지 않음 (회귀 테스트).

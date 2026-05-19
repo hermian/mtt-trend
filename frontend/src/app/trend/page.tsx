@@ -18,10 +18,10 @@ const SOURCE_LABELS: Record<DataSource, string> = {
 
 const CHART_CONFIGS: IndicatorConfig[] = [
   { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 5 },
-  { id: "sma_group", name: "SMA 10/20/50 (R/G/B)", type: "line", heightRatio: 1.5 },
-  { id: "sma200", name: "SMA 200 (Score)", type: "line", heightRatio: 1, color: "#60a5fa" },
-  { id: "adr14", name: "ADR 14 (Ratio)", type: "line", heightRatio: 2, color: "#a78bfa" },
-  { id: "adr20", name: "ADR 20 (Ratio)", type: "line", heightRatio: 2, color: "#f472b6" },
+  { id: "above_sma_group", name: "Above SMA 10/20/50 (R/G/B)", type: "line", heightRatio: 1.5 },
+  { id: "above_sma200", name: "Above SMA 200 (Breadth)", type: "line", heightRatio: 1, color: "#60a5fa" },
+  { id: "adr_group", name: "ADR 14/20 (Ratio)", type: "line", heightRatio: 2 },
+  { id: "disparity_sma50", name: "SMA50 이격도", type: "line", heightRatio: 2, color: "#eab308" },
   { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 2, color: "#fbbf24" },
   { id: "stochastic", name: "Stochastic (5,3,3)", type: "line", heightRatio: 2 },
   { id: "macd", name: "MACD (12,26,9)", type: "line", heightRatio: 2, color: "#3b82f6" },

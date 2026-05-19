@@ -9,6 +9,7 @@ import {
   LineSeries,
   HistogramSeries,
   AreaSeries,
+  BaselineSeries,
   IChartApi,
   ISeriesApi,
   SeriesType,
@@ -48,10 +49,12 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   const indicatorConfigs = useMemo(() => configs.filter(c => c.id !== "main"), [configs]);
 
   const indicatorNames = useMemo(() => {
-    const names = configs.filter(c => !["main", "sma_group"].includes(c.id)).map(c => c.id);
+    const names = configs.filter(c => !["main", "above_sma_group", "adr_group", "disparity_sma50"].includes(c.id)).map(c => c.id);
     if (configs.some(c => c.id === "macd")) names.push("macd_signal");
     if (configs.some(c => c.id === "stochastic")) names.push("stoch_k", "stoch_d");
-    if (configs.some(c => c.id === "sma_group")) names.push("sma10", "sma20", "sma50");
+    if (configs.some(c => c.id === "above_sma_group")) names.push("above_sma10", "above_sma20", "above_sma50");
+    if (configs.some(c => c.id === "adr_group")) names.push("adr14", "adr20");
+    if (configs.some(c => c.id === "disparity_sma50")) names.push("disparity_sma50");
     names.push("price_sma50", "price_sma200");
     return names.join(",");
   }, [configs]);
@@ -134,10 +137,24 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           chart.priceScale("overlay").applyOptions({ scaleMargins: { top: 0.65, bottom: 0 } });
           activeSeries.push(chart.addSeries(LineSeries, { color: "#10b981", lineWidth: 2, crosshairMarkerVisible: false }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f43f5e", lineWidth: 2, crosshairMarkerVisible: false }));
-        } else if (config.id === "sma_group") {
+        } else if (config.id === "above_sma_group") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#22c55e", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
+        } else if (config.id === "adr_group") {
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#a78bfa", lineWidth: 2 }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#f472b6", lineWidth: 2 }));
+        } else if (config.id === "disparity_sma50") {
+          activeSeries.push(chart.addSeries(BaselineSeries, {
+            baseValue: { type: "price", price: 100 },
+            topLineColor: "#eab308",
+            bottomLineColor: "#eab308",
+            topFillColor1: "rgba(234, 179, 8, 0.45)",
+            topFillColor2: "rgba(234, 179, 8, 0.05)",
+            bottomFillColor1: "rgba(234, 179, 8, 0.05)",
+            bottomFillColor2: "rgba(234, 179, 8, 0.45)",
+            lineWidth: 2,
+          }));
         } else if (config.id === "macd") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f97316", lineWidth: 2, lineStyle: 2 }));
@@ -202,10 +219,15 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         }));
         activeSeries[2].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.price_sma50 || p.close || 0 })));
         activeSeries[3].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.price_sma200 || p.close || 0 })));
-      } else if (config.id === "sma_group") {
-        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.sma10 || 0 })));
-        activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.sma20 || 0 })));
-        activeSeries[2].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.sma50 || 0 })));
+      } else if (config.id === "above_sma_group") {
+        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma10 || 0 })));
+        activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma20 || 0 })));
+        activeSeries[2].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma50 || 0 })));
+      } else if (config.id === "adr_group") {
+        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.adr14 || 0 })));
+        activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.adr20 || 0 })));
+      } else if (config.id === "disparity_sma50") {
+        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.disparity_sma50 ?? 100 })));
       } else if (config.id === "macd") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.macd || 0 })));
         if (activeSeries[1]) activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.macd_signal || 0 })));
@@ -240,8 +262,12 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             <span className={hoveredData.ohlc && hoveredData.ohlc.close >= hoveredData.ohlc.open ? "text-red-400" : "text-blue-400"}>C: {hoveredData.ohlc?.close}</span>
             <span className="text-slate-100 font-bold ml-1">V: {(hoveredData.ohlc?.volume || 0).toLocaleString()}</span>
           </>
-        ) : config.id === "sma_group" ? (
-          <><span className="text-red-500 font-bold">10:{hoveredData.indicators["sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["sma50"]?.toFixed(1)}</span></>
+        ) : config.id === "above_sma_group" ? (
+          <><span className="text-red-500 font-bold">10:{hoveredData.indicators["above_sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["above_sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["above_sma50"]?.toFixed(1)}</span></>
+        ) : config.id === "adr_group" ? (
+          <><span className="text-[#a78bfa] font-bold">14:{hoveredData.indicators["adr14"]?.toFixed(1)}</span><span className="text-[#f472b6] font-bold">20:{hoveredData.indicators["adr20"]?.toFixed(1)}</span></>
+        ) : config.id === "disparity_sma50" ? (
+          <span className="text-[#eab308] font-bold">이격:{hoveredData.indicators["disparity_sma50"]?.toFixed(1)}</span>
         ) : config.id === "macd" ? (
           <><span className="text-blue-400">M:{hoveredData.indicators["macd"]?.toFixed(1)}</span><span className="text-orange-400">S:{hoveredData.indicators["macd_signal"]?.toFixed(1)}</span></>
         ) : config.id === "stochastic" ? (

@@ -18,7 +18,7 @@ backend_dir = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_dir))
 
 _LEVERAGE_FIXTURE_DIR = (
-    Path(__file__).resolve().parent / "fixtures" / "kodex_levarage"
+    Path(__file__).resolve().parent / "fixtures" / "kodex_leverage"
 )
 
 

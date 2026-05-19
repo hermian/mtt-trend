@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from app.utils.chart_utils import load_chart_data
 
 def test_kodex_leverage_data_and_indicators():
-    """KODEX 레버리지 실제 데이터(~/.cache/db/kodex_levarage/kodex_leverage.csv)와 Polars 지표 계산의 정확성을 검증합니다."""
+    """KODEX 레버리지 실제 데이터(~/.cache/db/kodex_leverage/kodex_leverage.csv)와 Polars 지표 계산의 정확성을 검증합니다."""
     response = load_chart_data("kodex_leverage")
     assert response is not None
     data = response.data
@@ -15,9 +15,23 @@ def test_kodex_leverage_data_and_indicators():
     
     # 지표 존재 여부 확인
     indicators = last_point.indicators
-    for ind in ["rsi", "macd", "stoch_k", "stoch_d", "price_sma50"]:
+    for ind in ["rsi", "macd", "stoch_k", "stoch_d", "price_sma50", "above_sma50", "disparity_sma50"]:
         assert ind in indicators
         assert indicators[ind] is not None
+
+
+def test_disparity_sma50_separate_from_above_sma50_breadth():
+    """above_sma50(SMA50_pct)는 breadth, disparity_sma50은 Close/SMA50*100 이격도."""
+    response = load_chart_data("kodex_leverage")
+    assert response is not None
+
+    last = response.data[-1]
+    close = last.close
+    ma50 = last.indicators["price_sma50"]
+    expected_disparity = round(close / ma50 * 100, 2) if ma50 else 100.0
+    assert last.indicators["disparity_sma50"] == expected_disparity
+    # 픽스처 CSV의 breadth 값(3.0)과 이격도는 달라야 함
+    assert last.indicators["above_sma50"] != last.indicators["disparity_sma50"]
 
 def test_zero_division_robustness():
     """

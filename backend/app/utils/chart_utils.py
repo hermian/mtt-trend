@@ -9,11 +9,22 @@ from app.schemas import ChartDataPoint, ChartDataResponse
 logger = logging.getLogger(__name__)
 
 def _leverage_csv_dir() -> Path:
-    """KODEX/KOSDAQ 레버리지 CSV 디렉터리. MTT_LEVERAGE_CSV_DIR이 있으면 우선(테스트 등)."""
+    """KODEX/KOSDAQ 레버리지 CSV 디렉터리. MTT_LEVERAGE_CSV_DIR이 있으면 우선(테스트 등).
+
+    기본은 ``~/.cache/db/kodex_leverage/``. 과거 커밋 오타 경로 ``kodex_levarage``는
+    디렉터리가 존재할 때만 폴백합니다.
+    """
     override = os.environ.get("MTT_LEVERAGE_CSV_DIR")
     if override:
         return Path(override).expanduser().resolve()
-    return Path.home() / ".cache" / "db" / "kodex_levarage"
+    base = Path.home() / ".cache" / "db"
+    canonical = base / "kodex_leverage"
+    legacy_typo = base / "kodex_levarage"
+    if canonical.exists():
+        return canonical
+    if legacy_typo.exists():
+        return legacy_typo
+    return canonical
 
 SYMBOL_MAP = {
     "kodex_leverage": "kodex_leverage.csv",
@@ -64,8 +75,12 @@ def load_chart_data(
             slow_k = ((close - low_5) / stoch_range * 100).rolling_mean(window_size=3).fill_null(50.0)
             slow_d = slow_k.rolling_mean(window_size=3).fill_null(50.0)
             
-            price_sma50 = close.rolling_mean(window_size=50).fill_null(close)
+            price_sma50_raw = close.rolling_mean(window_size=50)
+            price_sma50 = price_sma50_raw.fill_null(close)
             price_sma200 = close.rolling_mean(window_size=200).fill_null(close)
+
+            # disparity_sma50: 종가 대비 50일선 이격도 (100 = 50일 이동평균과 동일)
+            disparity_sma50 = (close / price_sma50_raw.clip(1e-10, None) * 100).fill_null(100.0)
             
             # 2. 데이터 통합 및 행 단위 추출
             raw_data = df.to_dicts()
@@ -76,6 +91,7 @@ def load_chart_data(
             calculated_sd = slow_d.to_list()
             calculated_ma50 = price_sma50.to_list()
             calculated_ma200 = price_sma200.to_list()
+            calculated_disparity_sma50 = disparity_sma50.to_list()
             
             new_data_points = []
             for i, row in enumerate(raw_data):
@@ -87,10 +103,12 @@ def load_chart_data(
                     "stoch_d": calculated_sd[i],
                     "price_sma50": calculated_ma50[i],
                     "price_sma200": calculated_ma200[i],
-                    "sma10": row.get("SMA10_pct"),
-                    "sma20": row.get("SMA20_pct"),
-                    "sma50": row.get("SMA50_pct"),
-                    "sma200": row.get("SMA200_pct"),
+                    # CSV SMA*_pct: 시장 breadth (해당 이평 위 종목 비율)
+                    "above_sma10": row.get("SMA10_pct"),
+                    "above_sma20": row.get("SMA20_pct"),
+                    "above_sma50": row.get("SMA50_pct"),
+                    "above_sma200": row.get("SMA200_pct"),
+                    "disparity_sma50": calculated_disparity_sma50[i],
                     "adr14": row.get("ADR14"),
                     "adr20": row.get("ADR20"),
                 }

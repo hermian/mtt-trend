@@ -6,7 +6,7 @@ client = TestClient(app)
 
 def test_get_kodex_leverage_chart_data():
     """
-    KODEX 레버리지 CSV(~/.cache/db/kodex_levarage/kodex_leverage.csv) 데이터가 올바르게 반환되는지 테스트합니다.
+    KODEX 레버리지 CSV(~/.cache/db/kodex_leverage/kodex_leverage.csv) 데이터가 올바르게 반환되는지 테스트합니다.
     """
     response = client.get("/api/charts/data?symbol=kodex_leverage")
     assert response.status_code == 200
@@ -23,9 +23,10 @@ def test_get_kodex_leverage_chart_data():
     assert "indicators" in first_point
     
     indicators = first_point["indicators"]
-    assert "sma10" in indicators
+    assert "above_sma10" in indicators
     assert "adr14" in indicators
-    assert "sma200" in indicators
+    assert "above_sma200" in indicators
+    assert "disparity_sma50" in indicators
 
 def test_get_kodex_leverage_with_filtering():
     """

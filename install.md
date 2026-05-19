@@ -12,7 +12,7 @@
 
 ### Step 1: 백엔드 서버 실행 (FastAPI)
 
-1.  **데이터 확인**: `~/.cache/db/kodex_levarage/` 디렉토리에 `kodex_leverage.csv` 및 `kosdaq_leverage.csv` 파일이 있는지 확인합니다. (다른 경로를 쓰려면 환경 변수 `MTT_LEVERAGE_CSV_DIR`에 해당 디렉터리 절대 경로를 지정할 수 있습니다.)
+1.  **데이터 확인**: `~/.cache/db/kodex_leverage/` 디렉토리에 `kodex_leverage.csv` 및 `kosdaq_leverage.csv` 파일이 있는지 확인합니다. (다른 경로를 쓰려면 환경 변수 `MTT_LEVERAGE_CSV_DIR`에 해당 디렉터리 절대 경로를 지정할 수 있습니다.) 이전에 오타 경로 `~/.cache/db/kodex_levarage/`만 쓰고 있었다면, 새 경로가 없을 때는 그 폴더도 그대로 읽습니다.
 2.  **의존성 설치**:
     ```bash
     cd backend
@@ -41,7 +41,7 @@
 
 ## 2. Ubuntu Linux 프로덕션 환경 배포 절차
 
-백엔드가 읽는 레버리지 CSV는 배포 서버에서 **애플리케이션을 실행하는 Unix 사용자**의 `~/.cache/db/kodex_levarage/` 아래에 두면 됩니다 (`kodex_leverage.csv`, `kosdaq_leverage.csv`).
+백엔드가 읽는 레버리지 CSV는 배포 서버에서 **애플리케이션을 실행하는 Unix 사용자**의 `~/.cache/db/kodex_leverage/` 아래에 두면 됩니다 (`kodex_leverage.csv`, `kosdaq_leverage.csv`).
 
 ### Step 1: 코드 수신 및 빌드
 ```bash

@@ -2,7 +2,7 @@
 
 ## 1. Executive Summary
 - **Problem**: 현재 인터랙티브 차트 시스템은 더미 데이터를 사용하고 있어 실질적인 분석 도구로 활용할 수 없습니다. 특히 `KODEX 레버리지`와 같은 핵심 종목의 시계열 데이터와 기술 지표(SMA, ADR 등)를 시각화하는 기능이 필요합니다.
-- **Solution**: 사용자 로컬 캐시 `~/.cache/db/kodex_levarage/kodex_leverage.csv`를 백엔드가 읽어 파싱하고, API로 제공하는 전용 데이터 공급자(Data Provider)를 구축합니다.
+- **Solution**: 사용자 로컬 캐시 `~/.cache/db/kodex_leverage/kodex_leverage.csv`를 백엔드가 읽어 파싱하고, API로 제공하는 전용 데이터 공급자(Data Provider)를 구축합니다.
 - **Core Value**: 실질적인 시장 데이터 기반의 고성능 기술 분석 환경 제공.
 
 ## Context Anchor
@@ -16,7 +16,7 @@
 
 ## 2. Requirements
 - **Functional**:
-  - `~/.cache/db/kodex_levarage/kodex_leverage.csv` 파일 로드 및 캐싱 로직.
+  - `~/.cache/db/kodex_leverage/kodex_leverage.csv` 파일 로드 및 캐싱 로직.
   - API 호출 시 `symbol=kodex_leverage` 파라미터 지원.
   - CSV의 모든 컬럼(`SMA10_pct`, `ADR14` 등)을 `indicators` 맵으로 변환.
   - 프론트엔드 `CHART_CONFIGS`에 SMA 및 ADR 지표 추가.

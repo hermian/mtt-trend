@@ -44,8 +44,8 @@
 
 ### Backend Logic
 1. `backend/app/utils/chart_utils.py` 생성:
-   - `~/.cache/db/kodex_levarage/`에서 CSV 로드 및 `ChartDataResponse` 변환 함수.
-   - 컬럼명 매핑 (e.g., `SMA10_pct` -> `indicators['sma10']`).
+   - `~/.cache/db/kodex_leverage/`에서 CSV 로드 및 `ChartDataResponse` 변환 함수.
+   - 컬럼명 매핑 (e.g., `SMA10_pct` -> `indicators['above_sma10']`, 이격도 -> `disparity_sma50`).
 2. `charts.py` 라우터 수정:
    - `symbol`이 `kodex_leverage`일 경우 유틸리티 호출.
 

@@ -173,8 +173,9 @@ export function GroupActionTable({
   // @MX:NOTE: SPEC-MTT-006 F-04: 시간 윈도우/RS 임계값 변경 시 API 재호출
   const { data: stocksData, isLoading, error } = useStocksGroupAction(date, source, timeWindow, rsThreshold);
 
-  // 'kodex_leverage', 'kosdaq_leverage' 테마 소속 종목 제외 필터링 추가
-  const stocks = stocksData ? stocksData.filter(s => s.theme_name !== "kodex_leverage" && s.theme_name !== "kosdaq_leverage") : [];
+  // 'kodex_leverage', 'kosdaq_leverage' 및 신규 지수 테마 소속 종목 제외 필터링 추가
+  const EXCLUDED_THEMES = ["kodex_leverage", "kosdaq_leverage", "kospi", "kospi200", "kosdaq", "kosdaq150"];
+  const stocks = stocksData ? stocksData.filter(s => !EXCLUDED_THEMES.includes(s.theme_name)) : [];
 
   if (isLoading) {
     return (

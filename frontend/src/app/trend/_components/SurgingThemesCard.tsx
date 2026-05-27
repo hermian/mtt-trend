@@ -18,8 +18,9 @@ export function SurgingThemesCard({ date, source = "52w_high", onThemeClick, sel
   const [threshold, setThreshold] = useState(10);
   const { data: themesData, isLoading, error } = useThemesSurging(date, threshold, source);
   
-  // 'kodex_leverage', 'kosdaq_leverage' 테마 제외 필터링 추가
-  const themes = themesData ? themesData.filter(t => t.theme_name !== "kodex_leverage" && t.theme_name !== "kosdaq_leverage") : [];
+  // 'kodex_leverage', 'kosdaq_leverage' 및 신규 지수 테마 제외 필터링 추가
+  const EXCLUDED_THEMES = ["kodex_leverage", "kosdaq_leverage", "kospi", "kospi200", "kosdaq", "kosdaq150"];
+  const themes = themesData ? themesData.filter(t => !EXCLUDED_THEMES.includes(t.theme_name)) : [];
 
   // 로딩 상태 (R-03-1)
   if (isLoading) {

@@ -28,7 +28,11 @@ def _leverage_csv_dir() -> Path:
 
 SYMBOL_MAP = {
     "kodex_leverage": "kodex_leverage.csv",
-    "kosdaq_leverage": "kosdaq_leverage.csv"
+    "kosdaq_leverage": "kosdaq_leverage.csv",
+    "kospi": "kospi_mtt.csv",
+    "kospi200": "kospi200_mtt.csv",
+    "kosdaq": "kosdaq_mtt.csv",
+    "kosdaq150": "kosdaq150_mtt.csv"
 }
 
 _CHART_CACHE: Dict[str, dict] = {}

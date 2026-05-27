@@ -213,11 +213,10 @@ export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartPr
     if (!dailyThemes) return [];
     return dailyThemes
       .map((t) => t.theme_name)
-      .filter((name) =>
-        name !== "kodex_leverage" && 
-        name !== "kosdaq_leverage" && 
-        name.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      .filter((name) => {
+        const EXCLUDED_THEMES = ["kodex_leverage", "kosdaq_leverage", "kospi", "kospi200", "kosdaq", "kosdaq150"];
+        return !EXCLUDED_THEMES.includes(name) && name.toLowerCase().includes(searchQuery.toLowerCase());
+      });
   }, [dailyThemes, searchQuery]);
 
   // @MX:NOTE: SPEC-MTT-008 F-01: period를 number로 전달

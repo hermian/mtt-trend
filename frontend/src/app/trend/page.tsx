@@ -27,6 +27,15 @@ const CHART_CONFIGS: IndicatorConfig[] = [
   { id: "macd", name: "MACD (12,26,9)", type: "line", heightRatio: 2, color: "#3b82f6" },
 ];
 
+const REAL_DATA_THEMES = [
+  "kodex_leverage",
+  "kosdaq_leverage",
+  "kospi",
+  "kospi200",
+  "kosdaq",
+  "kosdaq150"
+];
+
 function TrendPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -37,17 +46,17 @@ function TrendPageContent() {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
 
-  // 오버뷰 탭(52주 트렌드)에서는 레버리지 테마가 선택되지 않도록 제어 (내비게이션 캐시 문제 해결)
+  // 오버뷰 탭(52주 트렌드)에서는 레버리지/지수 테마가 선택되지 않도록 제어 (내비게이션 캐시 문제 해결)
   useEffect(() => {
-    if (activeTab === "overview" && (selectedTheme === "kodex_leverage" || selectedTheme === "kosdaq_leverage")) {
+    if (activeTab === "overview" && selectedTheme && REAL_DATA_THEMES.includes(selectedTheme)) {
       setSelectedTheme(null);
     }
   }, [activeTab, selectedTheme]);
 
-  // 차트 탭 진입 시 테마가 선택되어 있지 않거나 KOSPI(더미)라면 기본값으로 kodex_leverage 설정
+  // 차트 탭 진입 시 테마가 선택되어 있지 않거나 실제 데이터 테마가 아니라면 기본값으로 kospi 설정
   useEffect(() => {
-    if (activeTab === "chart" && (!selectedTheme || selectedTheme === "KOSPI")) {
-      setSelectedTheme("kodex_leverage");
+    if (activeTab === "chart" && (!selectedTheme || !REAL_DATA_THEMES.includes(selectedTheme))) {
+      setSelectedTheme("kospi");
     }
   }, [activeTab, selectedTheme]);
 
@@ -191,37 +200,72 @@ function TrendPageContent() {
 
               {activeTab === "chart" && (
                 <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0">
-                  {(!selectedTheme || !["kodex_leverage", "kosdaq_leverage"].includes(selectedTheme)) && (
+                  {(!selectedTheme || !REAL_DATA_THEMES.includes(selectedTheme)) && (
                     <div className="mb-4 p-3 bg-amber-900/30 border border-amber-800/50 rounded-xl flex items-center gap-3">
                       <span className="text-amber-500 animate-pulse">⚠️</span>
                       <p className="text-[11px] text-amber-200/80 font-medium">
-                        <strong className="text-amber-400">DUMMY DATA WARNING:</strong> 현재 {selectedTheme || "KOSPI"} 데이터는 서버에서 생성된 시뮬레이션 값입니다. 실제 데이터를 보려면 <button onClick={() => setSelectedTheme("kodex_leverage")} className="underline font-bold text-amber-300 hover:text-white">KODEX</button> 또는 <button onClick={() => setSelectedTheme("kosdaq_leverage")} className="underline font-bold text-amber-300 hover:text-white">KOSDAQ 레버리지</button>를 로드하세요.
+                        <strong className="text-amber-400">DUMMY DATA WARNING:</strong> 현재 {selectedTheme || "KOSPI"} 데이터는 서버에서 생성된 시뮬레이션 값입니다. 실제 데이터를 보려면 아래의 <button onClick={() => setSelectedTheme("kospi")} className="underline font-bold text-amber-300 hover:text-white">KOSPI</button> 또는 <button onClick={() => setSelectedTheme("kodex_leverage")} className="underline font-bold text-amber-300 hover:text-white">KODEX 레버리지</button> 등 실제 지수/레버리지 버튼을 클릭하세요.
                       </p>
                     </div>
                   )}
-                  <div className="mb-6 flex justify-between items-end border-b border-gray-800 pb-6">
+                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
                     <div>
                       <h3 className="text-2xl font-extrabold text-white tracking-tight">Interactive Technical Analytics</h3>
-                      <div className="flex items-center gap-2 mt-1">
-                        <p className="text-gray-400 text-sm">실시간 가격 및 기술적 지표 심층 분석 엔진 (Beta)</p>
-                        <button 
-                          onClick={() => setSelectedTheme("kodex_leverage")}
-                          className={`text-[10px] px-2 py-0.5 rounded font-bold transition-colors ${selectedTheme === "kodex_leverage" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                        >
-                          KODEX LEVERAGE
-                        </button>
-                        <button 
-                          onClick={() => setSelectedTheme("kosdaq_leverage")}
-                          className={`text-[10px] px-2 py-0.5 rounded font-bold transition-colors ${selectedTheme === "kosdaq_leverage" ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
-                        >
-                          KOSDAQ LEVERAGE
-                        </button>
+                      <p className="text-gray-400 text-sm mt-1">실시간 가격 및 기술적 지표 심층 분석 엔진 (Beta)</p>
+                      
+                      {/* 프리미엄 인덱스 & 레버리지 분리형 칩 선택 영역 */}
+                      <div className="flex flex-wrap gap-4 mt-3 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider font-bold">Market Index</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { id: "kospi", name: "KOSPI" },
+                              { id: "kospi200", name: "KOSPI 200" },
+                              { id: "kosdaq", name: "KOSDAQ" },
+                              { id: "kosdaq150", name: "KOSDAQ 150" }
+                            ].map(item => (
+                              <button
+                                key={item.id}
+                                onClick={() => setSelectedTheme(item.id)}
+                                className={`text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all duration-200 ${
+                                  selectedTheme === item.id 
+                                    ? "bg-gradient-to-r from-emerald-500 to-teal-600 text-white shadow-lg shadow-emerald-500/20 transform scale-[1.02]" 
+                                    : "bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-white"
+                                }`}
+                              >
+                                {item.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="w-[1px] bg-gray-800 self-stretch hidden md:block"></div>
+                        <div className="flex flex-col gap-1.5">
+                          <span className="text-[9px] font-mono text-gray-500 uppercase tracking-wider font-bold">Leverage Index</span>
+                          <div className="flex flex-wrap gap-1.5">
+                            {[
+                              { id: "kodex_leverage", name: "KODEX LEVERAGE" },
+                              { id: "kosdaq_leverage", name: "KOSDAQ LEVERAGE" }
+                            ].map(item => (
+                              <button
+                                key={item.id}
+                                onClick={() => setSelectedTheme(item.id)}
+                                className={`text-[11px] px-3 py-1.5 rounded-lg font-bold transition-all duration-200 ${
+                                  selectedTheme === item.id 
+                                    ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 transform scale-[1.02]" 
+                                    : "bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-white"
+                                }`}
+                              >
+                                {item.name}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
                     </div>
                     {selectedTheme && (
                        <button 
                          onClick={() => router.push("/trend")}
-                         className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all"
+                         className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
                        >
                          ← 대시보드 요약보기
                        </button>

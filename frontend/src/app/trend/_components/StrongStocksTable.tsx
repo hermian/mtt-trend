@@ -86,9 +86,10 @@ export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource
 
   const sortedStocks = useMemo(() => {
     if (!stocks) return [];
-    // 'kodex_leverage', 'kosdaq_leverage' 테마 소속 종목 제외 필터링 추가
+    // 'kodex_leverage', 'kosdaq_leverage' 및 신규 지수 테마 소속 종목 제외 필터링 추가
+    const EXCLUDED_THEMES = ["kodex_leverage", "kosdaq_leverage", "kospi", "kospi200", "kosdaq", "kosdaq150"];
     return [...stocks]
-      .filter(s => !s.themes.includes("kodex_leverage") && !s.themes.includes("kosdaq_leverage"))
+      .filter(s => !s.themes.some(t => EXCLUDED_THEMES.includes(t)))
       .sort((a, b) => {
         const aVal = a[sortKey];
       const bVal = b[sortKey];

@@ -90,14 +90,21 @@ class SyncService:
 
         return last_record.date if last_record else None
 
-    def is_file_already_loaded(self, file_path: Path, db: Session, last_db_date: Optional[str] = None) -> bool:
+    def is_file_already_loaded(
+        self,
+        file_path: Path,
+        db: Session,
+        last_db_date: Optional[str] = None,
+        existing_set: Optional[set[tuple[str, str]]] = None,
+    ) -> bool:
         """
         파일이 이미 DB에 적재되었는지 확인
 
         Args:
             file_path: 확인할 파일 경로
             db: 데이터베이스 세션
-            last_db_date: 해당 소스의 DB 마지막 날짔 (마지막 날짜 파일 재적재용)
+            last_db_date: 해당 소스의 DB 마지막 날짜 (마지막 날짜 파일 재적재용)
+            existing_set: 이미 적재된 (date, data_source) 쌍의 세트 (성능 최적화용)
 
         Returns:
             이미 적재된 경우 True, 재적재 필요한 경우 False
@@ -112,7 +119,11 @@ class SyncService:
         if last_db_date is not None and date == last_db_date:
             return False
 
-        # 해당 날짜와 소스의 데이터가 존재하는지 확인
+        # 최적화된 세트 매칭 방식 사용
+        if existing_set is not None:
+            return (date, source) in existing_set
+
+        # 해당 날짜와 소스의 데이터가 존재하는지 확인 (Fallback)
         existing = db.query(ThemeDaily).filter(
             ThemeDaily.date == date,
             ThemeDaily.data_source == source,
@@ -176,6 +187,10 @@ class SyncService:
                 SOURCE_MTT: self.get_last_date_by_source(SOURCE_MTT, db),
             }
 
+            # N+1 쿼리 최적화: 이미 적재된 모든 (date, source) 쌍을 단 1번의 쿼리로 로드하여 세트로 보관
+            existing_records = db.query(ThemeDaily.date, ThemeDaily.data_source).distinct().all()
+            existing_set = {(r.date, r.data_source) for r in existing_records}
+
             for file_path in html_files:
                 try:
                     # 파일 소스 및 날짜 감지
@@ -184,7 +199,7 @@ class SyncService:
                     last_db_date = last_dates.get(source)
 
                     # 이미 적재된 파일인지 확인 (마지막 날짜는 재적재 허용)
-                    if self.is_file_already_loaded(file_path, db, last_db_date):
+                    if self.is_file_already_loaded(file_path, db, last_db_date, existing_set):
                         result.files_skipped += 1
                         logger.info(f"Skipped already loaded file: {file_path.name}")
                         continue

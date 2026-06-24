@@ -5,6 +5,11 @@
 
 set -e
 
+# Node.js 환경 설정 (nvm 사용 시 — pm2, pnpm PATH)
+if [ -s "$HOME/.nvm/nvm.sh" ]; then
+    . "$HOME/.nvm/nvm.sh"
+fi
+
 echo "🚀 [1/4] 최신 코드 가져오기..."
 git pull
 
@@ -15,14 +20,11 @@ if [ -d ".venv" ]; then
     source .venv/bin/activate
 fi
 uv pip install -r requirements.txt
-pm2 restart mtt-backend || pm2 start "uv run uvicorn app.main:app --host 0.0.0.0 --port 8000" --name mtt-backend
 cd ..
 
 # --- 프론트엔드 배포 ---
 echo "🏗️ [3/4] 프론트엔드 빌드 중..."
 cd frontend
-# 환경 설정 (nvm 사용 시)
-[ -s "$HOME/.nvm/nvm.sh" ] && \. "$HOME/.nvm/nvm.sh"
 
 # 빌드 잔재 및 캐시 삭제
 rm -rf .next node_modules/.cache
@@ -41,7 +43,14 @@ else
 fi
 
 echo "🔄 PM2 프로세스 재시작..."
-pm2 restart mtt-frontend || pm2 start "pnpm start" --name mtt-frontend
+chmod +x ../scripts/pm2-mtt-backend.sh ../scripts/pm2-mtt-frontend.sh
+if pm2 describe mtt-backend >/dev/null 2>&1; then
+    pm2 reload ../ecosystem.config.cjs --update-env
+else
+    pm2 start ../ecosystem.config.cjs
+fi
+pm2 save
+cd ..
 
 echo "✅ 배포가 완료되었습니다!"
 pm2 status

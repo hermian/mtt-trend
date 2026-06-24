@@ -9,6 +9,7 @@ import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
 import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
+import { AboveMaChart } from "./_components/AboveMaChart";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -36,10 +37,18 @@ const REAL_DATA_THEMES = [
   "kosdaq150"
 ];
 
+const ABOVE_MA_MARKETS = [
+  "kospi",
+  "kospi200",
+  "kosdaq",
+  "kosdaq150"
+];
+
 function TrendPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
-  const activeTab = searchParams.get("tab") === "chart" ? "chart" : "overview";
+  const rawTab = searchParams.get("tab");
+  const activeTab = rawTab === "chart" ? "chart" : rawTab === "above_ma" ? "above_ma" : "overview";
   
   const [source, setSource] = useState<DataSource>("52w_high");
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
@@ -56,6 +65,13 @@ function TrendPageContent() {
   // 차트 탭 진입 시 테마가 선택되어 있지 않거나 실제 데이터 테마가 아니라면 기본값으로 kospi 설정
   useEffect(() => {
     if (activeTab === "chart" && (!selectedTheme || !REAL_DATA_THEMES.includes(selectedTheme))) {
+      setSelectedTheme("kospi");
+    }
+  }, [activeTab, selectedTheme]);
+
+  // Above MA 탭 진입 시 시장 인덱스가 선택되어 있지 않거나 Above MA 시장이 아니라면 기본값으로 kospi 설정
+  useEffect(() => {
+    if (activeTab === "above_ma" && (!selectedTheme || !ABOVE_MA_MARKETS.includes(selectedTheme.toLowerCase()))) {
       setSelectedTheme("kospi");
     }
   }, [activeTab, selectedTheme]);
@@ -79,8 +95,8 @@ function TrendPageContent() {
     <div className="flex flex-col min-h-screen bg-gray-950 text-white">
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header Bar - 차트 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && (
+        {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
+        {activeTab !== "chart" && activeTab !== "above_ma" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
@@ -286,6 +302,60 @@ function TrendPageContent() {
                        <p>Target Symbol: <span className="text-gray-300 font-bold">{selectedTheme || "KOSPI (Default)"}</span></p>
                        <p>Indicators: <span className="text-gray-300 font-bold">{CHART_CONFIGS.map(c => c.name).join(", ")}</span></p>
                        <p>Engine: <span className="text-gray-300 font-bold">Lightweight Charts 60fps Canvas</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "above_ma" && (
+                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
+                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
+                    <div>
+                      <h3 className="text-2xl font-extrabold text-white tracking-tight">Above MA Realtime Trends</h3>
+                      <p className="text-gray-400 text-sm mt-1">이동평균선(10/20/50 MA) 상회 종목 비율 실시간 추이 분석 (정전 시 보간 지원)</p>
+                      
+                      {/* 시장 인덱스 선택 영역 */}
+                      <div className="flex flex-wrap gap-2 mt-4 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                        {[
+                          { id: "kospi", name: "KOSPI" },
+                          { id: "kospi200", name: "KOSPI 200" },
+                          { id: "kosdaq", name: "KOSDAQ" },
+                          { id: "kosdaq150", name: "KOSDAQ 150" }
+                        ].map(item => (
+                          <button
+                            key={item.id}
+                            onClick={() => setSelectedTheme(item.id)}
+                            className={`text-xs px-4 py-2 rounded-lg font-bold transition-all duration-200 ${
+                              (selectedTheme?.toLowerCase() || "kospi") === item.id 
+                                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 transform scale-[1.02]" 
+                                : "bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-white"
+                            }`}
+                          >
+                            {item.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  
+                  <div className="flex-1 min-h-[690px]">
+                    <AboveMaChart 
+                      market={selectedTheme?.toUpperCase() || "KOSPI"} 
+                    />
+                  </div>
+                  
+                  <div className="mt-8 p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
+                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Above MA System Status</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                       <p>Target Index: <span className="text-gray-300 font-bold">{selectedTheme?.toUpperCase() || "KOSPI"}</span></p>
+                       <p>DB Source: <span className="text-gray-300 font-bold">realtime_above_ma.db (SQLite)</span></p>
+                       <p>Interpolation Status: <span className="text-emerald-400 font-bold">Active (Linear 15m grid)</span></p>
                     </div>
                   </div>
                 </div>

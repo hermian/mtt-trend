@@ -121,6 +121,17 @@ export const api = {
     });
     return data;
   },
+  // GET /api/charts/above-ma?market= → ChartDataResponse
+  getAboveMaData: async (
+    market: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<ChartDataResponse> => {
+    const { data } = await apiClient.get<ChartDataResponse>("/api/charts/above-ma", {
+      params: { market, start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
   // GET /api/dates → { dates: string[] }
   getDates: async (source: DataSource = "52w_high"): Promise<string[]> => {
     const { data } = await apiClient.get<{ dates: string[] }>("/api/dates", { params: { source } });

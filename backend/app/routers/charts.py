@@ -2,6 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from app.schemas import ChartDataResponse
 from app.utils.chart_utils import load_chart_data
+from app.utils.above_ma_utils import load_above_ma_data
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
@@ -21,3 +22,21 @@ async def get_chart_data(
     
     # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
     return ChartDataResponse(symbol=symbol.upper(), data=[])
+
+@router.get("/above-ma", response_model=ChartDataResponse)
+async def get_above_ma_chart_data(
+    market: str = Query("KOSPI", description="시장 구분 (KOSPI, KOSPI200, KOSDAQ, KOSDAQ150)"),
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None
+):
+    """
+    Above MA 실시간 지표 데이터를 반환합니다 (정전 시 누락 데이터 보간 포함).
+    """
+    data = load_above_ma_data(market, start_date, end_date)
+    
+    if data:
+        return data
+    
+    # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
+    return ChartDataResponse(symbol=market.upper(), data=[])
+

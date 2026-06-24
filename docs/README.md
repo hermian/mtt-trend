@@ -28,6 +28,14 @@
 - **설계서**: [KODEX Leverage Integration Design](./02-design/features/kodex-leverage-chart.design.md)
 - **상태**: 🚧 **구현 단계 (Do Phase)** 진입
 
+### 3. Above MA 실시간 지표 인터랙티브 차트 연동 (Above MA Chart)
+실시간 이동평균선 상회 종목 비율 SQLite DB를 파싱하고 정전 시 데이터를 선형 보간하여 이중 동기화 차트로 시각화하는 기능입니다.
+- **기획서**: [Above MA Integration Plan](./01-plan/features/above-ma.plan.md)
+- **설계서**: [Above MA Integration Design](./02-design/features/above-ma.design.md)
+- **보고서**: [Above MA Integration Report](./03-report/features/above-ma.report.md)
+- **상태**: ✅ **완료 (Reported)**
+
+
 ---
 
 ## 🛠 문서 작성 원칙

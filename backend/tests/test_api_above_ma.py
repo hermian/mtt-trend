@@ -108,3 +108,49 @@ def test_above_ma_filtering(temp_above_ma_db):
     
     for p in data["data"]:
         assert p["time"] >= "2026-06-25 14:15:00"
+
+
+def test_above_ma_power_outage_interpolation(temp_above_ma_db):
+    """
+    정전 상황(장 시작 09:05에 데이터가 없고 12:00에 첫 데이터가 들어온 상황)에서
+    09:05 가상 포인트가 생성되고 보간이 일어나는지 검증합니다.
+    """
+    # 임시 DB에 정전 상황 데이터 적재
+    conn = sqlite3.connect(temp_above_ma_db)
+    cursor = conn.cursor()
+    # 기존 데이터 삭제 후 새로 적재
+    cursor.execute("DELETE FROM realtime_above_ma")
+    
+    test_data = [
+        # 전날 종가 데이터
+        ("2026-06-24 15:30:00", "KOSPI", 900.0, 8.0, 18.0, 28.0, 100),
+        # 오늘 첫 데이터 (정전으로 12:00에 처음 시작)
+        ("2026-06-25 12:00:00", "KOSPI", 1000.0, 10.0, 20.0, 30.0, 100),
+        ("2026-06-25 12:15:00", "KOSPI", 1010.0, 11.0, 21.0, 31.0, 100),
+    ]
+    cursor.executemany("""
+        INSERT INTO realtime_above_ma (Date, Market, Close, Above10ma, Above20ma, Above50ma, naver_length)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, test_data)
+    conn.commit()
+    conn.close()
+    
+    response = client.get("/api/charts/above-ma?market=KOSPI")
+    assert response.status_code == 200
+    data = response.json()
+    points = data["data"]
+    
+    # 생성된 2026-06-25 09:05:00 가상 포인트 검증
+    p_0905 = [p for p in points if p["time"] == "2026-06-25 09:05:00"]
+    assert len(p_0905) == 1
+    assert p_0905[0]["close"] == 900.0  # 전날 종가 값
+    assert p_0905[0]["indicators"]["above_sma10"] == 8.0
+    
+    # 09:15:00 보간 포인트 검증
+    p_0915 = [p for p in points if p["time"] == "2026-06-25 09:15:00"]
+    assert len(p_0915) == 1
+    # 09:05(900.0)와 12:00(1000.0) 사이의 선형 보간 값
+    # total_seconds = 175분, delta = 10분 -> weight = 10/175 = 0.0571428
+    # Close = 900 + 100 * 0.0571428 = 905.71
+    assert p_0915[0]["close"] == 905.71
+

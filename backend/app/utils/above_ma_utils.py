@@ -87,6 +87,67 @@ def load_above_ma_data(
             "above50": float(a50) if a50 is not None else 0.0
         })
 
+    # 1.5단계: 각 거래일의 첫 데이터가 09:05 이후인 경우, 09:05 가상 시작점 추가 (장 시작 시간 누락 대응)
+    # start_date와 end_date를 datetime 객체로 파싱하여 조회 범위 검증에 활용
+    start_dt = None
+    if start_date:
+        start_str = start_date if " " in start_date else f"{start_date} 00:00:00"
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                start_dt = datetime.datetime.strptime(start_str, fmt)
+                break
+            except ValueError:
+                continue
+
+    end_dt = None
+    if end_date:
+        end_str = end_date if " " in end_date else f"{end_date} 23:59:59"
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%d %H:%M"):
+            try:
+                end_dt = datetime.datetime.strptime(end_str, fmt)
+                break
+            except ValueError:
+                continue
+
+    adjusted_raw_points = []
+    for j in range(len(raw_points)):
+        curr_p = raw_points[j]
+        
+        # 첫 번째 포인트이거나 이전 포인트와 날짜가 다른 경우 -> 오늘 하루의 첫 데이터 포인트
+        is_first_of_day = (j == 0) or (raw_points[j-1]["dt"].date() != curr_p["dt"].date())
+        
+        if is_first_of_day and curr_p["dt"].time() > datetime.time(9, 5):
+            # 09:05 가상 포인트 생성
+            virtual_dt = curr_p["dt"].replace(hour=9, minute=5, second=0, microsecond=0)
+            
+            # 조회 범위 필터에 부합하는 경우에만 생성
+            if (not start_dt or virtual_dt >= start_dt) and (not end_dt or virtual_dt <= end_dt):
+                if j > 0:
+                    # 전날 마지막 데이터 복사
+                    prev_p = raw_points[j-1]
+                    virtual_close = prev_p["close"]
+                    virtual_a10 = prev_p["above10"]
+                    virtual_a20 = prev_p["above20"]
+                    virtual_a50 = prev_p["above50"]
+                else:
+                    # 전날 데이터가 없으면 오늘 첫 데이터 값 복사 (Backfill)
+                    virtual_close = curr_p["close"]
+                    virtual_a10 = curr_p["above10"]
+                    virtual_a20 = curr_p["above20"]
+                    virtual_a50 = curr_p["above50"]
+                    
+                adjusted_raw_points.append({
+                    "dt": virtual_dt,
+                    "close": virtual_close,
+                    "above10": virtual_a10,
+                    "above20": virtual_a20,
+                    "above50": virtual_a50
+                })
+            
+        adjusted_raw_points.append(curr_p)
+        
+    raw_points = adjusted_raw_points
+
     # 2단계: 보간(Interpolation) 적용
     interpolated_points = []
     

@@ -198,7 +198,11 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
             autoScale: true,
             minimumWidth: 100,
           },
-          handleScale: isMobile ? false : {
+          handleScale: isMobile ? {
+            pinch: true,                  // 모바일 핀치 줌 허용 (가로 시간축 줌인/줌아웃)
+            mouseWheel: false,            // 모바일 휠 미지원
+            axisPressedMouseMove: false,  // Y축 터치 드래그 조작 차단 (높이 고정)
+          } : {
             axisPressedMouseMove: panel.id === "close",
             pinch: panel.id === "close",
             mouseWheel: true,

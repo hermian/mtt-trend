@@ -34,6 +34,15 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
   const isSyncingRef = useRef<boolean>(false);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      setIsMobile(mobile);
+    };
+    checkMobile();
+  }, []);
 
   const { data: chartData, isLoading, error } = useAboveMaData(market);
 
@@ -99,27 +108,30 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       const data = chartDataRef.current;
       const lastIndex = data.length - 1;
       if (lastIndex >= 0) {
-        // 실거래일 기준 최근 5일치 시작 지점 찾기
-        const uniqueDates: string[] = [];
-        for (let i = lastIndex; i >= 0; i--) {
-          const dateStr = data[i].originalTime.split(" ")[0];
-          if (!uniqueDates.includes(dateStr)) {
-            uniqueDates.push(dateStr);
-          }
-          if (uniqueDates.length === 6) { // 6번째 날짜 발견 시 중단
-            break;
-          }
-        }
-        
         let startIndex = 0;
-        if (uniqueDates.length >= 5) {
-          // 최근 5개 날짜 중 가장 오래된 날짜 (uniqueDates[4])
-          const cutoffDate = uniqueDates.length === 6 ? uniqueDates[4] : uniqueDates[uniqueDates.length - 1];
-          for (let i = 0; i <= lastIndex; i++) {
+
+        if (isMobile) {
+          // 실거래일 기준 최근 5일치 시작 지점 찾기
+          const uniqueDates: string[] = [];
+          for (let i = lastIndex; i >= 0; i--) {
             const dateStr = data[i].originalTime.split(" ")[0];
-            if (dateStr >= cutoffDate) {
-              startIndex = i;
+            if (!uniqueDates.includes(dateStr)) {
+              uniqueDates.push(dateStr);
+            }
+            if (uniqueDates.length === 6) { // 6번째 날짜 발견 시 중단
               break;
+            }
+          }
+          
+          if (uniqueDates.length >= 5) {
+            // 최근 5개 날짜 중 가장 오래된 날짜 (uniqueDates[4])
+            const cutoffDate = uniqueDates.length === 6 ? uniqueDates[4] : uniqueDates[uniqueDates.length - 1];
+            for (let i = 0; i <= lastIndex; i++) {
+              const dateStr = data[i].originalTime.split(" ")[0];
+              if (dateStr >= cutoffDate) {
+                startIndex = i;
+                break;
+              }
             }
           }
         }
@@ -128,7 +140,9 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         isSyncingRef.current = true;
         chartsRef.current.forEach(c => {
           c.timeScale().setVisibleRange(range);
-          c.timeScale().scrollToPosition(8, false);
+          if (isMobile) {
+            c.timeScale().scrollToPosition(8, false);
+          }
         });
         setTimeout(() => { isSyncingRef.current = false; }, 200);
       }
@@ -149,12 +163,10 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
       if (!scrollArea) return;
 
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-
       // We have two subcharts: "close" and "above_ma"
       const panels = [
-        { id: "close", name: `${market} Index Close`, height: 350 },
-        { id: "above_ma", name: "Above 10/20/50 MA Percentage (%)", height: 250 }
+        { id: "close", name: `${market} Index Close`, height: isMobile ? 200 : 350 },
+        { id: "above_ma", name: "Above 10/20/50 MA Percentage (%)", height: isMobile ? 150 : 250 }
       ];
 
       panels.forEach((panel, index) => {
@@ -281,7 +293,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
     }
 
     return cleanup;
-  }, [market]);
+  }, [market, isMobile]);
 
   // Push data into charts
   useEffect(() => {
@@ -334,7 +346,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
   }, []);
 
   return (
-    <div ref={containerRef} className="relative flex flex-col w-full h-[690px] bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl">
+    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[450px]" : "h-[690px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
       <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between gap-4 shrink-0 h-11">
         <div className="flex items-center gap-3">
@@ -391,7 +403,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
               {market} Index Close Price
             </span>
           </div>
-          <div data-chart-id="close" className="w-full relative" style={{ height: "350px" }}>
+          <div data-chart-id="close" className="w-full relative" style={{ height: isMobile ? "200px" : "350px" }}>
             {/* Vertical lines overlay */}
             <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
               {verticalLineXs.map((x, idx) => (
@@ -412,7 +424,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
               Above 10/20/50 MA Percentage (%)
             </span>
           </div>
-          <div data-chart-id="above_ma" className="w-full relative" style={{ height: "250px" }}>
+          <div data-chart-id="above_ma" className="w-full relative" style={{ height: isMobile ? "150px" : "250px" }}>
             {/* Vertical lines overlay */}
             <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
               {verticalLineXs.map((x, idx) => (

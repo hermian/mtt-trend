@@ -61,6 +61,8 @@ export function Sidebar() {
     pathname.startsWith("/trend") && searchParams.get("tab") === "chart";
   const isAboveMaActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "above_ma";
+  const isMacroActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "macro";
 
   return (
     <aside
@@ -177,6 +179,33 @@ export function Sidebar() {
             <line x1="6" y1="20" x2="6" y2="14" />
           </svg>
           {!collapsed && <span className="truncate">Above MA</span>}
+        </Link>
+        {/* 매크로 지표 Button-styled Link */}
+        <Link
+          href="/trend?tab=macro"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isMacroActive
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "매크로 지표" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <circle cx="12" cy="12" r="10" />
+            <line x1="2" y1="12" x2="22" y2="12" />
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+          </svg>
+          {!collapsed && <span className="truncate">매크로 지표</span>}
         </Link>
 
         {/* Sync Button */}

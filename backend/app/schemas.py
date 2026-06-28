@@ -19,6 +19,16 @@ class ChartDataResponse(BaseModel):
     symbol: str
     data: List[ChartDataPoint]
 
+# --- Macro Schemas ---
+class MacroDataPoint(BaseModel):
+    date: str
+    sp500: Optional[float] = None
+    high_yield: Optional[float] = None
+    cnn_fgi: Optional[float] = None
+
+class MacroDataResponse(BaseModel):
+    data: List[MacroDataPoint]
+
 # --- Theme Schemas ---
 class ThemeDailyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

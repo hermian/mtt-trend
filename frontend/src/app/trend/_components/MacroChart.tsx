@@ -10,6 +10,7 @@ import {
   IChartApi,
   ISeriesApi,
   SeriesType,
+  LineStyle,
 } from "lightweight-charts";
 import { useMacroData } from "@/hooks/useMacroData";
 
@@ -94,9 +95,9 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
       const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
       if (!scrollArea) return;
 
+      // 단일 통합 차트로 구성
       const panels = [
-        { id: "sp500_fgi", name: "S&P 500 (Right) & CNN Fear & Greed Index (Left)", height: isMobile ? 220 : 350 },
-        { id: "high_yield", name: "ICE BofA US High Yield Spread (%)", height: isMobile ? 130 : 220 }
+        { id: "sp500_fgi_hy", name: "S&P 500 & High Yield Spread & CNN FGI", height: isMobile ? 320 : 520 }
       ];
 
       panels.forEach((panel, index) => {
@@ -117,7 +118,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
             horzLines: { color: "#1e293b" },
           },
           timeScale: {
-            visible: index === panels.length - 1,
+            visible: true,
             borderColor: "#334155",
             rightOffset: 20,
             barSpacing: 6,
@@ -132,7 +133,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
             borderColor: "#334155",
             scaleMargins: { top: 0.1, bottom: 0.1 },
             autoScale: true,
-            visible: panel.id === "sp500_fgi", // Only show left scale on top panel for CNN FGI
+            visible: true,
           },
           handleScale: isMobile ? {
             pinch: true,
@@ -150,7 +151,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
           crosshair: {
             mode: CrosshairMode.Normal,
             vertLine: {
-              labelVisible: index === panels.length - 1,
+              labelVisible: true,
               color: "#64748b",
               width: 1,
               style: 1,
@@ -164,31 +165,74 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
         });
 
         const activeSeries: ISeriesApi<SeriesType>[] = [];
-        if (panel.id === "sp500_fgi") {
-          // SP500 on right scale
+        if (panel.id === "sp500_fgi_hy") {
+          // 1. S&P 500 on right scale
           activeSeries.push(chart.addSeries(AreaSeries, {
             lineColor: "#38bdf8",
             topColor: "rgba(56, 189, 248, 0.4)",
             bottomColor: "rgba(56, 189, 248, 0.0)",
             lineWidth: 2,
             priceScaleId: "right",
-            title: "S&P 500",
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `SPX ${price.toFixed(0)}`,
+            },
           }));
-          // CNN FGI on left scale
-          activeSeries.push(chart.addSeries(LineSeries, {
+          
+          // 2. CNN FGI on left scale
+          const fgiSeries = chart.addSeries(LineSeries, {
             color: "#eab308", // Yellow/Gold
             lineWidth: 2,
             priceScaleId: "left",
-            title: "CNN FGI",
-          }));
-        } else if (panel.id === "high_yield") {
-          // High Yield spread on right scale
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `FGI ${price.toFixed(0)}`,
+            },
+            autoscaleInfoProvider: () => ({
+              priceRange: {
+                minValue: 0,
+                maxValue: 100,
+              },
+            }),
+          });
+          // Add 75 and 25 threshold horizontal lines for FGI
+          fgiSeries.createPriceLine({
+            price: 75,
+            color: "#ef4444",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "75",
+          });
+          fgiSeries.createPriceLine({
+            price: 25,
+            color: "#3b82f6",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "25",
+          });
+          activeSeries.push(fgiSeries);
+
+          // 3. High Yield Spread on custom overlay scale 'high_yield'
           activeSeries.push(chart.addSeries(LineSeries, {
             color: "#f43f5e", // Rose/Red-orange
             lineWidth: 2,
-            priceScaleId: "right",
-            title: "High Yield Spread",
+            priceScaleId: "high_yield",
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `HY ${price.toFixed(2)}%`,
+            },
           }));
+
+          // Apply margins for 'high_yield' scale to look nice
+          chart.priceScale("high_yield").applyOptions({
+            autoScale: true,
+            scaleMargins: {
+              top: 0.15,
+              bottom: 0.15,
+            },
+          });
         }
 
         // Crosshair synchronization
@@ -245,37 +289,35 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
     if (formattedData.length === 0) return;
     if (seriesRef.current.size === 0) return;
 
-    // S&P 500 & CNN FGI top panel
-    const sp500FgiSeries = seriesRef.current.get("sp500_fgi");
-    if (sp500FgiSeries && sp500FgiSeries.length >= 2) {
-      // S&P 500 Area series - filters out null values to prevent line breaks, or sets them
+    // S&P 500, CNN FGI & High Yield unified panel
+    const unifiedSeries = seriesRef.current.get("sp500_fgi_hy");
+    if (unifiedSeries && unifiedSeries.length >= 3) {
+      // 1. S&P 500 Area series
       const sp500Data = formattedData
         .filter(p => p.sp500 !== null && p.sp500 !== undefined)
         .map(p => ({
           time: p.time as any,
           value: p.sp500 as number,
         }));
-      sp500FgiSeries[0].setData(sp500Data);
+      unifiedSeries[0].setData(sp500Data);
 
+      // 2. CNN FGI Line series
       const fgiData = formattedData
         .filter(p => p.cnn_fgi !== null && p.cnn_fgi !== undefined)
         .map(p => ({
           time: p.time as any,
           value: p.cnn_fgi as number,
         }));
-      sp500FgiSeries[1].setData(fgiData);
-    }
+      unifiedSeries[1].setData(fgiData);
 
-    // High Yield Spread bottom panel
-    const highYieldSeries = seriesRef.current.get("high_yield");
-    if (highYieldSeries && highYieldSeries[0]) {
+      // 3. High Yield Spread Line series
       const hyData = formattedData
         .filter(p => p.high_yield !== null && p.high_yield !== undefined)
         .map(p => ({
           time: p.time as any,
           value: p.high_yield as number,
         }));
-      highYieldSeries[0].setData(hyData);
+      unifiedSeries[2].setData(hyData);
     }
 
     setTimeout(() => { scrollToLatest(); }, 500);
@@ -295,9 +337,9 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[450px]" : "h-[690px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
+    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[400px]" : "h-[620px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
-      <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between gap-4 shrink-0 h-11">
+      <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-11 md:py-0">
         <div className="flex items-center gap-3">
           <div className={`w-2.5 h-2.5 rounded-full ${isLoading ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
           <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
@@ -313,21 +355,21 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
 
         {/* Hover legend */}
         {hoveredData && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-mono text-slate-300">
-            <span className="text-slate-400">{hoveredData.time}</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+            <span className="text-slate-400 mr-1">{hoveredData.time}</span>
             {hoveredData.sp500 !== undefined && (
               <span className="text-[#38bdf8] font-bold">
-                S&P 500: <span className="text-slate-100">{hoveredData.sp500.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
+                SPX: <span className="text-slate-100">{hoveredData.sp500.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
               </span>
             )}
             {hoveredData.cnn_fgi !== undefined && (
               <span className="text-[#eab308] font-bold">
-                CNN FGI: <span className="text-slate-100">{hoveredData.cnn_fgi.toFixed(1)}</span>
+                FGI: <span className="text-slate-100">{hoveredData.cnn_fgi.toFixed(0)}</span>
               </span>
             )}
             {hoveredData.high_yield !== undefined && (
               <span className="text-[#f43f5e] font-bold">
-                High Yield Spread: <span className="text-slate-100">{hoveredData.high_yield.toFixed(2)}%</span>
+                HY: <span className="text-slate-100">{hoveredData.high_yield.toFixed(2)}%</span>
               </span>
             )}
           </div>
@@ -348,24 +390,14 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
           </div>
         )}
 
-        {/* S&P 500 & CNN FGI Panel */}
+        {/* S&P 500, High Yield Spread & CNN FGI Unified Panel */}
         <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
           <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              S&P 500 (Right Price Scale) & CNN Fear & Greed Index (Left Price Scale)
+              S&P 500 (Right Price Scale) & CNN Fear & Greed Index (Left Price Scale) & ICE BofA High Yield Spread (Overlay Scale)
             </span>
           </div>
-          <div data-chart-id="sp500_fgi" className="w-full relative" style={{ height: isMobile ? "220px" : "350px" }}></div>
-        </div>
-
-        {/* High Yield Spread Panel */}
-        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
-          <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              ICE BofA US High Yield Index Option-Adjusted Spread (%)
-            </span>
-          </div>
-          <div data-chart-id="high_yield" className="w-full relative" style={{ height: isMobile ? "130px" : "220px" }}></div>
+          <div data-chart-id="sp500_fgi_hy" className="w-full relative" style={{ height: isMobile ? "320px" : "550px" }}></div>
         </div>
       </div>
     </div>

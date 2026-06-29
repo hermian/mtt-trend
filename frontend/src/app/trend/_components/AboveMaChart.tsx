@@ -163,7 +163,6 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
       if (!scrollArea) return;
 
-      // We have two subcharts: "close" and "above_ma"
       const panels = [
         { id: "close", name: `${market} Index Close`, height: isMobile ? 200 : 350 },
         { id: "above_ma", name: "Above 10/20/50 MA Percentage (%)", height: isMobile ? 150 : 250 }
@@ -179,8 +178,8 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
           height: panel.height,
           layout: {
             background: { type: ColorType.Solid, color: "#0f172a" },
-            textColor: "#cbd5e1", // 높은 시인성을 위해 더 밝은 텍스트 컬러 사용 (slate-300)
-            fontFamily: "Inter, system-ui, -apple-system, sans-serif", // 볼드체 뭉침을 방지하고 깔끔하게 렌더링하기 위한 폰트 지정
+            textColor: "#cbd5e1",
+            fontFamily: "Inter, system-ui, -apple-system, sans-serif",
           },
           grid: {
             vertLines: { color: "#1e293b" },
@@ -196,12 +195,12 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
             borderColor: "#334155",
             scaleMargins: { top: 0.1, bottom: 0.1 },
             autoScale: true,
-            minimumWidth: 100,
+            minimumWidth: 80,
           },
           handleScale: isMobile ? {
-            pinch: true,                  // 모바일 핀치 줌 허용 (가로 시간축 줌인/줌아웃)
-            mouseWheel: false,            // 모바일 휠 미지원
-            axisPressedMouseMove: false,  // Y축 터치 드래그 조작 차단 (높이 고정)
+            pinch: true,
+            mouseWheel: false,
+            axisPressedMouseMove: false,
           } : {
             axisPressedMouseMove: panel.id === "close",
             pinch: panel.id === "close",
@@ -229,20 +228,42 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
 
         const activeSeries: ISeriesApi<SeriesType>[] = [];
         if (panel.id === "close") {
-          // Index close price as AreaSeries with a beautiful gradient
           activeSeries.push(chart.addSeries(AreaSeries, {
             lineColor: "#38bdf8",
             topColor: "rgba(56, 189, 248, 0.4)",
             bottomColor: "rgba(56, 189, 248, 0.0)",
             lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`,
+            },
           }));
         } else if (panel.id === "above_ma") {
-          // Above 10MA (Red), Above 20MA (Green), Above 50MA (Blue)
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#ff3b30", lineWidth: 2, title: "10MA" }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#4cd964", lineWidth: 2, title: "20MA" }));
-          activeSeries.push(chart.addSeries(LineSeries, { color: "#2f80ed", lineWidth: 2, title: "50MA" }));
+          activeSeries.push(chart.addSeries(LineSeries, { 
+            color: "#ff3b30", 
+            lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toFixed(0)}%`,
+            },
+          }));
+          activeSeries.push(chart.addSeries(LineSeries, { 
+            color: "#4cd964", 
+            lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toFixed(0)}%`,
+            },
+          }));
+          activeSeries.push(chart.addSeries(LineSeries, { 
+            color: "#2f80ed", 
+            lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toFixed(0)}%`,
+            },
+          }));
           
-          // Configure price scale options for percentage (0 to 100)
           chart.priceScale("right").applyOptions({
             scaleMargins: { top: 0.05, bottom: 0.05 },
             visible: true,
@@ -262,7 +283,18 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
           });
 
           if (!param.time || !param.point || param.point.x < 0) {
-            setHoveredData(null);
+            const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
+            if (latestPoint) {
+              setHoveredData({
+                time: latestPoint.originalTime,
+                close: latestPoint.close || 0,
+                above_sma10: latestPoint.indicators?.above_sma10 || 0,
+                above_sma20: latestPoint.indicators?.above_sma20 || 0,
+                above_sma50: latestPoint.indicators?.above_sma50 || 0,
+              });
+            } else {
+              setHoveredData(null);
+            }
           } else {
             const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
             if (currentPoint) {
@@ -321,6 +353,18 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       aboveMaSeriesList[2].setData(formattedData.map(p => ({ time: p.time as any, value: p.indicators?.above_sma50 || 0 })));
     }
 
+    // Set default hoveredData to the latest point
+    const latestPoint = formattedData[formattedData.length - 1];
+    if (latestPoint) {
+      setHoveredData({
+        time: latestPoint.originalTime,
+        close: latestPoint.close || 0,
+        above_sma10: latestPoint.indicators?.above_sma10 || 0,
+        above_sma20: latestPoint.indicators?.above_sma20 || 0,
+        above_sma50: latestPoint.indicators?.above_sma50 || 0,
+      });
+    }
+
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [formattedData]);
 
@@ -352,7 +396,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
   return (
     <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[450px]" : "h-[690px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
-      <div className="px-4 py-2.5 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between gap-4 shrink-0 h-11">
+      <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-11 md:py-0">
         <div className="flex items-center gap-3">
           <div className={`w-2.5 h-2.5 rounded-full ${isLoading ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
           <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
@@ -368,10 +412,10 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
 
         {/* Hover legend */}
         {hoveredData && (
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] font-mono text-slate-300">
-            <span className="text-slate-400">{hoveredData.time}</span>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+            <span className="text-slate-400 mr-1">{hoveredData.time}</span>
             <span className="text-[#38bdf8] font-bold">
-              Index: <span className="text-slate-100">{hoveredData.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+              IDX: <span className="text-slate-100">{hoveredData.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
             </span>
             <span className="text-[#ff3b30] font-bold">
               10MA: <span className="text-slate-100">{hoveredData.above_sma10.toFixed(1)}%</span>
@@ -422,7 +466,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         </div>
 
         {/* Above MA percentages Panel */}
-        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
+        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner pb-1.5">
           <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
               Above 10/20/50 MA Percentage (%)

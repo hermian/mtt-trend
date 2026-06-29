@@ -6,6 +6,11 @@ import { LayoutClient } from "./_components/LayoutClient";
 export const metadata: Metadata = {
   title: "52주 트렌드 대시보드",
   description: "52주 고점 기반 테마 트렌드 분석 대시보드",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "MTT Trend",
+  },
 };
 
 export const viewport: Viewport = {

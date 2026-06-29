@@ -248,7 +248,17 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
           });
 
           if (!param.time || !param.point || param.point.x < 0) {
-            setHoveredData(null);
+            const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
+            if (latestPoint) {
+              setHoveredData({
+                time: latestPoint.date,
+                sp500: latestPoint.sp500 ?? undefined,
+                high_yield: latestPoint.high_yield ?? undefined,
+                cnn_fgi: latestPoint.cnn_fgi ?? undefined,
+              });
+            } else {
+              setHoveredData(null);
+            }
           } else {
             const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
             if (currentPoint) {
@@ -320,6 +330,17 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
       unifiedSeries[2].setData(hyData);
     }
 
+    // Set default hoveredData to the latest point
+    const latestPoint = formattedData[formattedData.length - 1];
+    if (latestPoint) {
+      setHoveredData({
+        time: latestPoint.date,
+        sp500: latestPoint.sp500 ?? undefined,
+        high_yield: latestPoint.high_yield ?? undefined,
+        cnn_fgi: latestPoint.cnn_fgi ?? undefined,
+      });
+    }
+
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [formattedData]);
 
@@ -337,7 +358,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[400px]" : "h-[620px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
+    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[430px]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
       <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-11 md:py-0">
         <div className="flex items-center gap-3">
@@ -391,7 +412,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
         )}
 
         {/* S&P 500, High Yield Spread & CNN FGI Unified Panel */}
-        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
+        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner pb-1.5">
           <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
               S&P 500 (Right Price Scale) & CNN Fear & Greed Index (Left Price Scale) & ICE BofA High Yield Spread (Overlay Scale)

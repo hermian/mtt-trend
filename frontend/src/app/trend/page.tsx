@@ -10,6 +10,7 @@ import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
 import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
 import { AboveMaChart } from "./_components/AboveMaChart";
+import { MacroChart } from "./_components/MacroChart";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -48,7 +49,14 @@ function TrendPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const rawTab = searchParams.get("tab");
-  const activeTab = rawTab === "chart" ? "chart" : rawTab === "above_ma" ? "above_ma" : "overview";
+  const activeTab =
+    rawTab === "chart"
+      ? "chart"
+      : rawTab === "above_ma"
+      ? "above_ma"
+      : rawTab === "macro"
+      ? "macro"
+      : "overview";
   
   const [source, setSource] = useState<DataSource>("52w_high");
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
@@ -96,7 +104,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && (
+        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
@@ -356,6 +364,35 @@ function TrendPageContent() {
                        <p>Target Index: <span className="text-gray-300 font-bold">{selectedTheme?.toUpperCase() || "KOSPI"}</span></p>
                        <p>DB Source: <span className="text-gray-300 font-bold">realtime_above_ma.db (SQLite)</span></p>
                        <p>Interpolation Status: <span className="text-emerald-400 font-bold">Active (Linear 15m grid)</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {activeTab === "macro" && (
+                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
+                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
+                    <div>
+                      <h3 className="text-2xl font-extrabold text-white tracking-tight">Macro & Sentiment Metrics</h3>
+                      <p className="text-gray-400 text-sm mt-1">S&P 500, High Yield Spread, 그리고 CNN Fear & Greed Index 추이 분석</p>
+                    </div>
+                    <button 
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  
+                  <div className="flex-1 min-h-[690px]">
+                    <MacroChart />
+                  </div>
+                  
+                  <div className="mt-8 p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
+                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Macro Database Status</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                       <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db</span></p>
+                       <p>Series Included: <span className="text-gray-300 font-bold">SP500 Index, BAMLH0A0HYM2 (High Yield), CNN FGI</span></p>
+                       <p>Integration: <span className="text-emerald-400 font-bold">Full Outer Join (Daily Aligned)</span></p>
                     </div>
                   </div>
                 </div>

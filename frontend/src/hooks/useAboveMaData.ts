@@ -10,5 +10,6 @@ export const useAboveMaData = (
     queryKey: ["aboveMaData", market, startDate, endDate],
     queryFn: () => api.getAboveMaData(market, startDate, endDate),
     enabled: !!market,
+    refetchInterval: 60 * 1000, // Auto-refresh every 1 minute
   });
 };

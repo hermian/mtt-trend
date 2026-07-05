@@ -6,6 +6,16 @@ import { LayoutClient } from "./_components/LayoutClient";
 export const metadata: Metadata = {
   title: "52주 트렌드 대시보드",
   description: "52주 고점 기반 테마 트렌드 분석 대시보드",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icon-192x192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512x512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/apple-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

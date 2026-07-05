@@ -104,6 +104,16 @@ export interface ChartDataResponse {
   symbol: string;
   data: ChartDataPoint[];
 }
+export interface MacroDataPoint {
+  date: string;
+  sp500?: number;
+  high_yield?: number;
+  cnn_fgi?: number;
+}
+
+export interface MacroDataResponse {
+  data: MacroDataPoint[];
+}
 
 export type DataSource = "52w_high" | "mtt";
 
@@ -129,6 +139,16 @@ export const api = {
   ): Promise<ChartDataResponse> => {
     const { data } = await apiClient.get<ChartDataResponse>("/api/charts/above-ma", {
       params: { market, start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
+  // GET /api/charts/macro → MacroDataResponse
+  getMacroData: async (
+    startDate?: string,
+    endDate?: string
+  ): Promise<MacroDataResponse> => {
+    const { data } = await apiClient.get<MacroDataResponse>("/api/charts/macro", {
+      params: { start_date: startDate, end_date: endDate },
     });
     return data;
   },

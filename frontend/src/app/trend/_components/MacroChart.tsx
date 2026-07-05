@@ -10,23 +10,22 @@ import {
   IChartApi,
   ISeriesApi,
   SeriesType,
+  LineStyle,
 } from "lightweight-charts";
-import { useAboveMaData } from "@/hooks/useAboveMaData";
+import { useMacroData } from "@/hooks/useMacroData";
 
-interface AboveMaChartProps {
-  market: string;
+interface MacroChartProps {
   height?: number;
 }
 
 interface HoveredData {
   time: string;
-  close: number;
-  above_sma10: number;
-  above_sma20: number;
-  above_sma50: number;
+  sp500?: number;
+  high_yield?: number;
+  cnn_fgi?: number;
 }
 
-export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700 }) => {
+export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
@@ -44,16 +43,15 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
     checkMobile();
   }, []);
 
-  const { data: chartData, isLoading, error } = useAboveMaData(market);
+  const { data: chartData, isLoading, error } = useMacroData();
 
   const formattedData = useMemo(() => {
     if (!chartData || !chartData.data) return [];
     return [...chartData.data]
-      .sort((a, b) => (a.time > b.time ? 1 : -1))
+      .sort((a, b) => (a.date > b.date ? 1 : -1))
       .map(p => ({
         ...p,
-        time: Math.floor(new Date(p.time.replace(" ", "T")).getTime() / 1000),
-        originalTime: p.time
+        time: p.date, // YYYY-MM-DD string is natively supported as time in lightweight-charts
       }));
   }, [chartData]);
 
@@ -61,88 +59,22 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
     if (formattedData.length > 0) chartDataRef.current = formattedData;
   }, [formattedData]);
 
-  const [verticalLineXs, setVerticalLineXs] = useState<number[]>([]);
-
-  const dayBoundaries = useMemo(() => {
-    if (formattedData.length === 0) return [];
-    const boundaries: number[] = [];
-    let lastDate = "";
-    formattedData.forEach(p => {
-      const dateStr = p.originalTime.split(" ")[0];
-      if (dateStr !== lastDate) {
-        boundaries.push(p.time);
-        lastDate = dateStr;
-      }
-    });
-    return boundaries;
-  }, [formattedData]);
-
-  const dayBoundariesRef = useRef<number[]>([]);
-  useEffect(() => {
-    dayBoundariesRef.current = dayBoundaries;
-  }, [dayBoundaries]);
-
-  const updateLinePositions = () => {
-    const closeChart = chartsRef.current.get("close");
-    if (!closeChart) return;
-    
-    const xs: number[] = [];
-    dayBoundariesRef.current.forEach(time => {
-      const x = closeChart.timeScale().timeToCoordinate(time as any);
-      if (x !== null && x >= 0) {
-        xs.push(x);
-      }
-    });
-    setVerticalLineXs(xs);
-  };
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      updateLinePositions();
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [dayBoundaries]);
-
   const scrollToLatest = () => {
     if (chartDataRef.current && chartsRef.current.size > 0) {
       const data = chartDataRef.current;
       const lastIndex = data.length - 1;
       if (lastIndex >= 0) {
         let startIndex = 0;
-
-        if (isMobile) {
-          // 실거래일 기준 최근 5일치 시작 지점 찾기
-          const uniqueDates: string[] = [];
-          for (let i = lastIndex; i >= 0; i--) {
-            const dateStr = data[i].originalTime.split(" ")[0];
-            if (!uniqueDates.includes(dateStr)) {
-              uniqueDates.push(dateStr);
-            }
-            if (uniqueDates.length === 6) { // 6번째 날짜 발견 시 중단
-              break;
-            }
-          }
-          
-          if (uniqueDates.length >= 5) {
-            // 최근 5개 날짜 중 가장 오래된 날짜 (uniqueDates[4])
-            const cutoffDate = uniqueDates.length === 6 ? uniqueDates[4] : uniqueDates[uniqueDates.length - 1];
-            for (let i = 0; i <= lastIndex; i++) {
-              const dateStr = data[i].originalTime.split(" ")[0];
-              if (dateStr >= cutoffDate) {
-                startIndex = i;
-                break;
-              }
-            }
-          }
+        if (isMobile && data.length > 120) {
+          startIndex = data.length - 120; // 최근 약 6개월치 데이터 표시
+        } else if (data.length > 250) {
+          startIndex = data.length - 250; // 최근 약 1년치 데이터 표시
         }
 
         const range = { from: data[startIndex].time as any, to: data[lastIndex].time as any };
         isSyncingRef.current = true;
         chartsRef.current.forEach(c => {
           c.timeScale().setVisibleRange(range);
-          if (isMobile) {
-            c.timeScale().scrollToPosition(8, false);
-          }
         });
         setTimeout(() => { isSyncingRef.current = false; }, 200);
       }
@@ -163,9 +95,9 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
       if (!scrollArea) return;
 
+      // 단일 통합 차트로 구성
       const panels = [
-        { id: "close", name: `${market} Index Close`, height: isMobile ? 200 : 350 },
-        { id: "above_ma", name: "Above 10/20/50 MA Percentage (%)", height: isMobile ? 150 : 250 }
+        { id: "sp500_fgi_hy", name: "S&P 500 & High Yield Spread & CNN FGI", height: isMobile ? 320 : 520 }
       ];
 
       panels.forEach((panel, index) => {
@@ -186,34 +118,40 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
             horzLines: { color: "#1e293b" },
           },
           timeScale: {
-            visible: index === panels.length - 1,
+            visible: true,
             borderColor: "#334155",
             rightOffset: 20,
-            barSpacing: 10,
+            barSpacing: 6,
           },
           rightPriceScale: {
             borderColor: "#334155",
             scaleMargins: { top: 0.1, bottom: 0.1 },
             autoScale: true,
-            minimumWidth: 80,
+            visible: true,
+          },
+          leftPriceScale: {
+            borderColor: "#334155",
+            scaleMargins: { top: 0.1, bottom: 0.1 },
+            autoScale: true,
+            visible: true,
           },
           handleScale: isMobile ? {
             pinch: true,
             mouseWheel: false,
             axisPressedMouseMove: false,
           } : {
-            axisPressedMouseMove: panel.id === "close",
-            pinch: panel.id === "close",
+            axisPressedMouseMove: true,
+            pinch: true,
             mouseWheel: true,
           },
           handleScroll: isMobile ? {
-            horzTouchDrag: panel.id === "close",
+            horzTouchDrag: true,
             vertTouchDrag: false,
           } : true,
           crosshair: {
             mode: CrosshairMode.Normal,
             vertLine: {
-              labelVisible: index === panels.length - 1,
+              labelVisible: true,
               color: "#64748b",
               width: 1,
               style: 1,
@@ -227,46 +165,73 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         });
 
         const activeSeries: ISeriesApi<SeriesType>[] = [];
-        if (panel.id === "close") {
+        if (panel.id === "sp500_fgi_hy") {
+          // 1. S&P 500 on right scale
           activeSeries.push(chart.addSeries(AreaSeries, {
             lineColor: "#38bdf8",
             topColor: "rgba(56, 189, 248, 0.4)",
             bottomColor: "rgba(56, 189, 248, 0.0)",
             lineWidth: 2,
+            priceScaleId: "right",
             priceFormat: {
               type: "custom",
-              formatter: (price: number) => `${price.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`,
-            },
-          }));
-        } else if (panel.id === "above_ma") {
-          activeSeries.push(chart.addSeries(LineSeries, { 
-            color: "#ff3b30", 
-            lineWidth: 2,
-            priceFormat: {
-              type: "custom",
-              formatter: (price: number) => `${price.toFixed(0)}%`,
-            },
-          }));
-          activeSeries.push(chart.addSeries(LineSeries, { 
-            color: "#4cd964", 
-            lineWidth: 2,
-            priceFormat: {
-              type: "custom",
-              formatter: (price: number) => `${price.toFixed(0)}%`,
-            },
-          }));
-          activeSeries.push(chart.addSeries(LineSeries, { 
-            color: "#2f80ed", 
-            lineWidth: 2,
-            priceFormat: {
-              type: "custom",
-              formatter: (price: number) => `${price.toFixed(0)}%`,
+              formatter: (price: number) => `SPX ${price.toFixed(0)}`,
             },
           }));
           
-          chart.priceScale("right").applyOptions({
-            scaleMargins: { top: 0.05, bottom: 0.05 },
-            visible: true,
+          // 2. CNN FGI on left scale
+          const fgiSeries = chart.addSeries(LineSeries, {
+            color: "#eab308", // Yellow/Gold
+            lineWidth: 2,
+            priceScaleId: "left",
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `FGI ${price.toFixed(0)}`,
+            },
+            autoscaleInfoProvider: () => ({
+              priceRange: {
+                minValue: 0,
+                maxValue: 100,
+              },
+            }),
+          });
+          // Add 75 and 25 threshold horizontal lines for FGI
+          fgiSeries.createPriceLine({
+            price: 75,
+            color: "#ef4444",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "75",
+          });
+          fgiSeries.createPriceLine({
+            price: 25,
+            color: "#3b82f6",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "25",
+          });
+          activeSeries.push(fgiSeries);
+
+          // 3. High Yield Spread on custom overlay scale 'high_yield'
+          activeSeries.push(chart.addSeries(LineSeries, {
+            color: "#f43f5e", // Rose/Red-orange
+            lineWidth: 2,
+            priceScaleId: "high_yield",
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `HY ${price.toFixed(2)}%`,
+            },
+          }));
+
+          // Apply margins for 'high_yield' scale to look nice
+          chart.priceScale("high_yield").applyOptions({
+            autoScale: true,
+            scaleMargins: {
+              top: 0.15,
+              bottom: 0.15,
+            },
           });
         }
 
@@ -286,11 +251,10 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
             const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
             if (latestPoint) {
               setHoveredData({
-                time: latestPoint.originalTime,
-                close: latestPoint.close || 0,
-                above_sma10: latestPoint.indicators?.above_sma10 || 0,
-                above_sma20: latestPoint.indicators?.above_sma20 || 0,
-                above_sma50: latestPoint.indicators?.above_sma50 || 0,
+                time: latestPoint.date,
+                sp500: latestPoint.sp500 ?? undefined,
+                high_yield: latestPoint.high_yield ?? undefined,
+                cnn_fgi: latestPoint.cnn_fgi ?? undefined,
               });
             } else {
               setHoveredData(null);
@@ -299,11 +263,10 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
             const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
             if (currentPoint) {
               setHoveredData({
-                time: currentPoint.originalTime,
-                close: currentPoint.close || 0,
-                above_sma10: currentPoint.indicators?.above_sma10 || 0,
-                above_sma20: currentPoint.indicators?.above_sma20 || 0,
-                above_sma50: currentPoint.indicators?.above_sma50 || 0,
+                time: currentPoint.date,
+                sp500: currentPoint.sp500 ?? undefined,
+                high_yield: currentPoint.high_yield ?? undefined,
+                cnn_fgi: currentPoint.cnn_fgi ?? undefined,
               });
             }
           }
@@ -311,7 +274,6 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
 
         // Visible range synchronization
         chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          updateLinePositions();
           if (isSyncingRef.current || !range) return;
           isSyncingRef.current = true;
           chartsRef.current.forEach(c => {
@@ -325,50 +287,64 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       });
       setStatus("Ready");
     } catch (e: any) {
+      console.error(e);
       setStatus("Error");
     }
 
     return cleanup;
-  }, [market, isMobile]);
+  }, [isMobile]);
 
   // Push data into charts
   useEffect(() => {
     if (formattedData.length === 0) return;
     if (seriesRef.current.size === 0) return;
 
-    // Close price chart
-    const closeSeriesList = seriesRef.current.get("close");
-    if (closeSeriesList && closeSeriesList[0]) {
-      closeSeriesList[0].setData(formattedData.map(p => ({
-        time: p.time as any,
-        value: p.close || 0
-      })));
-    }
+    // S&P 500, CNN FGI & High Yield unified panel
+    const unifiedSeries = seriesRef.current.get("sp500_fgi_hy");
+    if (unifiedSeries && unifiedSeries.length >= 3) {
+      // 1. S&P 500 Area series
+      const sp500Data = formattedData
+        .filter(p => p.sp500 !== null && p.sp500 !== undefined)
+        .map(p => ({
+          time: p.time as any,
+          value: p.sp500 as number,
+        }));
+      unifiedSeries[0].setData(sp500Data);
 
-    // Above MA indicators chart
-    const aboveMaSeriesList = seriesRef.current.get("above_ma");
-    if (aboveMaSeriesList && aboveMaSeriesList.length >= 3) {
-      aboveMaSeriesList[0].setData(formattedData.map(p => ({ time: p.time as any, value: p.indicators?.above_sma10 || 0 })));
-      aboveMaSeriesList[1].setData(formattedData.map(p => ({ time: p.time as any, value: p.indicators?.above_sma20 || 0 })));
-      aboveMaSeriesList[2].setData(formattedData.map(p => ({ time: p.time as any, value: p.indicators?.above_sma50 || 0 })));
+      // 2. CNN FGI Line series
+      const fgiData = formattedData
+        .filter(p => p.cnn_fgi !== null && p.cnn_fgi !== undefined)
+        .map(p => ({
+          time: p.time as any,
+          value: p.cnn_fgi as number,
+        }));
+      unifiedSeries[1].setData(fgiData);
+
+      // 3. High Yield Spread Line series
+      const hyData = formattedData
+        .filter(p => p.high_yield !== null && p.high_yield !== undefined)
+        .map(p => ({
+          time: p.time as any,
+          value: p.high_yield as number,
+        }));
+      unifiedSeries[2].setData(hyData);
     }
 
     // Set default hoveredData to the latest point
     const latestPoint = formattedData[formattedData.length - 1];
     if (latestPoint) {
       setHoveredData({
-        time: latestPoint.originalTime,
-        close: latestPoint.close || 0,
-        above_sma10: latestPoint.indicators?.above_sma10 || 0,
-        above_sma20: latestPoint.indicators?.above_sma20 || 0,
-        above_sma50: latestPoint.indicators?.above_sma50 || 0,
+        time: latestPoint.date,
+        sp500: latestPoint.sp500 ?? undefined,
+        high_yield: latestPoint.high_yield ?? undefined,
+        cnn_fgi: latestPoint.cnn_fgi ?? undefined,
       });
     }
 
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [formattedData]);
 
-  // Clean resize listener
+  // Handle Resize
   useEffect(() => {
     const handleResize = () => {
       if (!containerRef.current) return;
@@ -376,31 +352,19 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`);
         if (el) chart.applyOptions({ width: el.clientWidth });
       });
-      setTimeout(() => {
-        const closeChart = chartsRef.current.get("close");
-        if (!closeChart) return;
-        const xs: number[] = [];
-        dayBoundariesRef.current.forEach(time => {
-          const x = closeChart.timeScale().timeToCoordinate(time as any);
-          if (x !== null && x >= 0) {
-            xs.push(x);
-          }
-        });
-        setVerticalLineXs(xs);
-      }, 50);
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   return (
-    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[450px]" : "h-[690px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
+    <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[430px]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
       <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-11 md:py-0">
         <div className="flex items-center gap-3">
           <div className={`w-2.5 h-2.5 rounded-full ${isLoading ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
           <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
-            {market} Above MA Trend
+            Macro & Sentiment Analytics
           </h3>
           <button
             onClick={scrollToLatest}
@@ -414,18 +378,21 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         {hoveredData && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
             <span className="text-slate-400 mr-1">{hoveredData.time}</span>
-            <span className="text-[#38bdf8] font-bold">
-              IDX: <span className="text-slate-100">{hoveredData.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-            </span>
-            <span className="text-[#ff3b30] font-bold">
-              10MA: <span className="text-slate-100">{hoveredData.above_sma10.toFixed(1)}%</span>
-            </span>
-            <span className="text-[#4cd964] font-bold">
-              20MA: <span className="text-slate-100">{hoveredData.above_sma20.toFixed(1)}%</span>
-            </span>
-            <span className="text-[#2f80ed] font-bold">
-              50MA: <span className="text-slate-100">{hoveredData.above_sma50.toFixed(1)}%</span>
-            </span>
+            {hoveredData.sp500 !== undefined && (
+              <span className="text-[#38bdf8] font-bold">
+                SPX: <span className="text-slate-100">{hoveredData.sp500.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+              </span>
+            )}
+            {hoveredData.cnn_fgi !== undefined && (
+              <span className="text-[#eab308] font-bold">
+                FGI: <span className="text-slate-100">{hoveredData.cnn_fgi.toFixed(0)}</span>
+              </span>
+            )}
+            {hoveredData.high_yield !== undefined && (
+              <span className="text-[#f43f5e] font-bold">
+                HY: <span className="text-slate-100">{hoveredData.high_yield.toFixed(2)}%</span>
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -444,46 +411,14 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
           </div>
         )}
 
-        {/* Close Price Panel */}
-        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
-          <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              {market} Index Close Price
-            </span>
-          </div>
-          <div data-chart-id="close" className="w-full relative" style={{ height: isMobile ? "200px" : "350px" }}>
-            {/* Vertical lines overlay */}
-            <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-              {verticalLineXs.map((x, idx) => (
-                <div
-                  key={idx}
-                  className="absolute top-0 bottom-0 border-l border-dashed border-sky-500/30"
-                  style={{ left: `${x}px` }}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Above MA percentages Panel */}
+        {/* S&P 500, High Yield Spread & CNN FGI Unified Panel */}
         <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner pb-1.5">
           <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
             <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-              Above 10/20/50 MA Percentage (%)
+              S&P 500 (Right Price Scale) & CNN Fear & Greed Index (Left Price Scale) & ICE BofA High Yield Spread (Overlay Scale)
             </span>
           </div>
-          <div data-chart-id="above_ma" className="w-full relative" style={{ height: isMobile ? "150px" : "250px" }}>
-            {/* Vertical lines overlay */}
-            <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden">
-              {verticalLineXs.map((x, idx) => (
-                <div
-                  key={idx}
-                  className="absolute top-0 bottom-0 border-l border-dashed border-sky-500/30"
-                  style={{ left: `${x}px` }}
-                />
-              ))}
-            </div>
-          </div>
+          <div data-chart-id="sp500_fgi_hy" className="w-full relative" style={{ height: isMobile ? "320px" : "550px" }}></div>
         </div>
       </div>
     </div>

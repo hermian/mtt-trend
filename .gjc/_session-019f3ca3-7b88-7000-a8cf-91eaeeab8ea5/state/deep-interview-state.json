@@ -1,0 +1,30 @@
+{
+  "skill": "deep-interview",
+  "active": false,
+  "version": 2,
+  "current_phase": "complete",
+  "cwd": "/Users/hosung/workspace/git/mtt-trend",
+  "updated_at": "2026-07-07T13:01:42.535Z",
+  "session_id": "019f3ca3-7b88-7000-a8cf-91eaeeab8ea5",
+  "threshold": 0.05,
+  "threshold_source": "default",
+  "receipt": {
+    "version": 1,
+    "skill": "deep-interview",
+    "owner": "gjc-state-cli",
+    "command": "gjc state deep-interview clear",
+    "state_path": "/Users/hosung/workspace/git/mtt-trend/.gjc/state/sessions/019f3ca3-7b88-7000-a8cf-91eaeeab8ea5/skill-active-state.json",
+    "storage_path": "/Users/hosung/workspace/git/mtt-trend/.gjc/state/sessions/019f3ca3-7b88-7000-a8cf-91eaeeab8ea5/deep-interview-state.json",
+    "mutated_at": "2026-07-07T13:01:42.535Z",
+    "fresh_until": "2026-07-07T13:31:42.535Z",
+    "status": "fresh",
+    "mutation_id": "deep-interview:clear:2026-07-07T13:01:42.535Z",
+    "content_sha256": {
+      "algorithm": "sha256",
+      "value": "c6a570ab8117c12189bdfc65ea0c19c21d6dad99ddeb26c397a003e63552de18",
+      "covered_path": "/Users/hosung/workspace/git/mtt-trend/.gjc/_session-019f3ca3-7b88-7000-a8cf-91eaeeab8ea5/state/deep-interview-state.json",
+      "computed_at": "2026-07-07T13:01:42.536Z"
+    }
+  },
+  "state_revision": 2
+}

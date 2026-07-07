@@ -200,20 +200,61 @@ export const WicsRankingPanel: React.FC = () => {
     });
   }, [rankingsData, rankType]);
 
-  // Identify WICS sectors with 3 consecutive months of rising return ending in the latest month
-  const risingSectors = useMemo(() => {
+  // Identify WICS sectors with 3 consecutive monthly increases (3M) ending in the latest month
+  const risingSectors3M = useMemo(() => {
     const sectors = new Set<string>();
-    if (!processedMonths || processedMonths.length < 3) return sectors;
+    if (!processedMonths || processedMonths.length < 4) return sectors;
 
-    // Get the latest month rankings to identify active sectors
     const latestMonthObj = processedMonths[processedMonths.length - 1];
     if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
 
-    // Check exactly the last 3 months (e.g. Month N-2, N-1, N) for consecutive rising returns
+    // 3 consecutive increases require 4 months of data (e.g. N-3 -> N-2 -> N-1 -> N)
+    const targetMonths = processedMonths.slice(-4);
+
+    for (const item of latestMonthObj.rankings) {
+      const wicsName = item.WICS;
+      const rets: number[] = [];
+      let valid = true;
+
+      for (const m of targetMonths) {
+        const rItem = m.rankings.find((r) => r.WICS === wicsName);
+        if (!rItem) {
+          valid = false;
+          break;
+        }
+        const ret = rankType === "MC" ? rItem.MC_12m_Return : rItem.EW_12m_Return;
+        if (ret === undefined || ret === null) {
+          valid = false;
+          break;
+        }
+        rets.push(ret);
+      }
+
+      if (valid && rets.length === 4) {
+        if (rets[3] > rets[2] && rets[2] > rets[1] && rets[1] > rets[0]) {
+          sectors.add(wicsName);
+        }
+      }
+    }
+
+    return sectors;
+  }, [processedMonths, rankType]);
+
+  // Identify WICS sectors with 2 consecutive monthly increases (2M) ending in the latest month
+  const risingSectors2M = useMemo(() => {
+    const sectors = new Set<string>();
+    if (!processedMonths || processedMonths.length < 3) return sectors;
+
+    const latestMonthObj = processedMonths[processedMonths.length - 1];
+    if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
+
+    // 2 consecutive increases require 3 months of data (e.g. N-2 -> N-1 -> N)
     const targetMonths = processedMonths.slice(-3);
 
     for (const item of latestMonthObj.rankings) {
       const wicsName = item.WICS;
+      if (risingSectors3M.has(wicsName)) continue; // Skip if already in 3M
+
       const rets: number[] = [];
       let valid = true;
 
@@ -239,7 +280,7 @@ export const WicsRankingPanel: React.FC = () => {
     }
 
     return sectors;
-  }, [processedMonths, rankType]);
+  }, [processedMonths, rankType, risingSectors3M]);
   // Auto-scroll to the far right on load or when data changes
   useEffect(() => {
     if (containerRef.current && processedMonths.length > 0) {
@@ -492,7 +533,8 @@ export const WicsRankingPanel: React.FC = () => {
                         const colorClass = hasColor ? wicsColorMap.get(item.WICS) : "bg-gray-900/30 border border-gray-800/50 text-gray-300 hover:border-gray-700";
                         const isMatch = activeWics === item.WICS;
                         const hasActiveSelection = activeWics !== null;
-                        const isRising = risingSectors.has(item.WICS);
+                        const isRising3M = risingSectors3M.has(item.WICS);
+                        const isRising2M = risingSectors2M.has(item.WICS);
 
                         return (
                           <div
@@ -505,7 +547,8 @@ export const WicsRankingPanel: React.FC = () => {
                               "h-[35px] px-2 py-0.5 flex flex-col justify-center border-b border-gray-800/30 cursor-pointer select-none transition-all duration-200",
                               colorClass,
                               isMatch && "ring-2 ring-yellow-400 border-yellow-400 scale-[1.02] shadow-lg shadow-yellow-400/20 z-10 opacity-100",
-                              isRising && !hasActiveSelection && "ring-2 ring-emerald-500/80 border-emerald-500 scale-[1.01] shadow-md shadow-emerald-500/10 z-10",
+                              isRising3M && !hasActiveSelection && "ring-2 ring-emerald-500 border-emerald-500 scale-[1.01] shadow-md shadow-emerald-500/10 z-10",
+                              isRising2M && !hasActiveSelection && "ring-2 ring-blue-500/80 border-blue-500 scale-[1.01] shadow-md shadow-blue-500/10 z-10",
                               hasActiveSelection && !isMatch && "opacity-25"
                             )}
                             title={`${item.WICS} - 12M Return: ${
@@ -517,9 +560,14 @@ export const WicsRankingPanel: React.FC = () => {
                                 <span className="font-bold text-[10px] md:text-xs truncate" title={item.WICS}>
                                   {item.WICS}
                                 </span>
-                                {isRising && (
+                                {isRising3M && (
                                   <span className="ml-1 text-[7px] md:text-[8px] bg-emerald-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title="3달 연속 수익률 상승">
                                     3M▲
+                                  </span>
+                                )}
+                                {isRising2M && (
+                                  <span className="ml-1 text-[7px] md:text-[8px] bg-blue-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title="2달 연속 수익률 상승">
+                                    2M▲
                                   </span>
                                 )}
                               </div>
@@ -562,7 +610,10 @@ export const WicsRankingPanel: React.FC = () => {
         <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">WICS Ranking Guide</h4>
         <div className="space-y-2 text-xs text-gray-400">
           <p>
-            • <strong className="text-emerald-400">3달 연속 상승 하이라이트 (3M▲):</strong> 최근 3달 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 테두리(초록색)와 배지가 표시되어 직관적으로 확인할 수 있습니다.
+            • <strong className="text-emerald-400">3달 연속 상승 하이라이트 (3M▲):</strong> 최근 3달(4개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 초록색 테두리와 `3M▲` 배지가 표시됩니다.
+          </p>
+          <p>
+            • <strong className="text-blue-400">2달 연속 상승 하이라이트 (2M▲):</strong> 최근 2달(3개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 파란색 테두리와 `2M▲` 배지가 표시됩니다.
           </p>
           <p>
             • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 월(종료월)의 상위 10개 WICS 섹터는 각각 서로 다른 10가지 색상을 가집니다. 이전 월의 동일 WICS 섹터에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 쉽게 추적할 수 있습니다.

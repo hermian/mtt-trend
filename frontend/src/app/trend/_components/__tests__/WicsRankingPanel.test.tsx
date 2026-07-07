@@ -152,4 +152,60 @@ describe("WicsRankingPanel Component - Unit Tests", () => {
     expect(container).toHaveClass("ring-2");
     expect(container).toHaveClass("ring-yellow-400");
   });
+
+  it("should calculate and render 3M and 2M rising badges correctly", () => {
+    vi.spyOn(useWicsData, "useWicsMonths").mockReturnValue({
+      data: ["2026-04", "2026-05", "2026-06", "2026-07"],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.spyOn(useWicsData, "useWicsRankings").mockReturnValue({
+      data: {
+        months: [
+          {
+            YearMonth: "2026-04",
+            rankings: [
+              { WICS: "A", Rank_EW: 1, Rank_MC: 1, MC_12m_Return: 0.1 },
+              { WICS: "B", Rank_EW: 2, Rank_MC: 2, MC_12m_Return: 0.5 },
+            ],
+          },
+          {
+            YearMonth: "2026-05",
+            rankings: [
+              { WICS: "A", Rank_EW: 1, Rank_MC: 1, MC_12m_Return: 0.2 },
+              { WICS: "B", Rank_EW: 2, Rank_MC: 2, MC_12m_Return: 0.4 },
+            ],
+          },
+          {
+            YearMonth: "2026-06",
+            rankings: [
+              { WICS: "A", Rank_EW: 1, Rank_MC: 1, MC_12m_Return: 0.3 },
+              { WICS: "B", Rank_EW: 2, Rank_MC: 2, MC_12m_Return: 0.5 },
+            ],
+          },
+          {
+            YearMonth: "2026-07",
+            rankings: [
+              { WICS: "A", Rank_EW: 1, Rank_MC: 1, MC_12m_Return: 0.4 },
+              { WICS: "B", Rank_EW: 2, Rank_MC: 2, MC_12m_Return: 0.6 },
+            ],
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(
+      <TestWrapper>
+        <WicsRankingPanel />
+      </TestWrapper>
+    );
+
+    // WICS "A" return: 0.1 -> 0.2 -> 0.3 -> 0.4 (3 consecutive increases, 4 months). Should render 3M▲ badge.
+    // WICS "B" return: 0.5 -> 0.4 (fell) -> 0.5 -> 0.6 (2 consecutive increases, 3 months). Should render 2M▲ badge.
+    expect(screen.getAllByText("3M▲")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("2M▲")[0]).toBeInTheDocument();
+  });
 });

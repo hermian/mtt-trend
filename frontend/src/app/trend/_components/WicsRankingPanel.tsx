@@ -124,8 +124,20 @@ export const WicsRankingPanel: React.FC = () => {
     }
   }, [months]);
 
+  // We fetch starting at min(startMonth, endMonth - 2 months) to ensure we always have 3 months ending in endMonth for 3M streak calculation
+  const fetchStartMonth = useMemo(() => {
+    if (!months || !startMonth || !endMonth) return startMonth;
+    const startIdx = months.indexOf(startMonth);
+    const endIdx = months.indexOf(endMonth);
+    if (startIdx === -1 || endIdx === -1) return startMonth;
+
+    const neededStartIdx = Math.max(0, endIdx - 2);
+    const actualStartIdx = Math.min(startIdx, neededStartIdx);
+    return months[actualStartIdx];
+  }, [months, startMonth, endMonth]);
+
   const { data: rankingsData, isLoading: rankingsLoading, error: rankingsError } = useWicsRankings(
-    startMonth || undefined,
+    fetchStartMonth || undefined,
     endMonth || undefined
   );
 
@@ -200,61 +212,25 @@ export const WicsRankingPanel: React.FC = () => {
     });
   }, [rankingsData, rankType]);
 
-  // Identify WICS sectors with 3 consecutive monthly increases (3M) ending in the latest month
+  // Filter processedMonths to only show the user's selected range in the UI
+  const visibleMonths = useMemo(() => {
+    if (!processedMonths || !startMonth || !endMonth) return processedMonths;
+    return processedMonths.filter((m) => m.YearMonth >= startMonth && m.YearMonth <= endMonth);
+  }, [processedMonths, startMonth, endMonth]);
+
+  // Identify WICS sectors with 3 consecutive monthly increases (3M) ending in the latest month (spans 3 months of data)
   const risingSectors3M = useMemo(() => {
-    const sectors = new Set<string>();
-    if (!processedMonths || processedMonths.length < 4) return sectors;
-
-    const latestMonthObj = processedMonths[processedMonths.length - 1];
-    if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
-
-    // 3 consecutive increases require 4 months of data (e.g. N-3 -> N-2 -> N-1 -> N)
-    const targetMonths = processedMonths.slice(-4);
-
-    for (const item of latestMonthObj.rankings) {
-      const wicsName = item.WICS;
-      const rets: number[] = [];
-      let valid = true;
-
-      for (const m of targetMonths) {
-        const rItem = m.rankings.find((r) => r.WICS === wicsName);
-        if (!rItem) {
-          valid = false;
-          break;
-        }
-        const ret = rankType === "MC" ? rItem.MC_12m_Return : rItem.EW_12m_Return;
-        if (ret === undefined || ret === null) {
-          valid = false;
-          break;
-        }
-        rets.push(ret);
-      }
-
-      if (valid && rets.length === 4) {
-        if (rets[3] > rets[2] && rets[2] > rets[1] && rets[1] > rets[0]) {
-          sectors.add(wicsName);
-        }
-      }
-    }
-
-    return sectors;
-  }, [processedMonths, rankType]);
-
-  // Identify WICS sectors with 2 consecutive monthly increases (2M) ending in the latest month
-  const risingSectors2M = useMemo(() => {
     const sectors = new Set<string>();
     if (!processedMonths || processedMonths.length < 3) return sectors;
 
     const latestMonthObj = processedMonths[processedMonths.length - 1];
     if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
 
-    // 2 consecutive increases require 3 months of data (e.g. N-2 -> N-1 -> N)
+    // 3M streak requires 3 months of data (e.g. N-2 -> N-1 -> N)
     const targetMonths = processedMonths.slice(-3);
 
     for (const item of latestMonthObj.rankings) {
       const wicsName = item.WICS;
-      if (risingSectors3M.has(wicsName)) continue; // Skip if already in 3M
-
       const rets: number[] = [];
       let valid = true;
 
@@ -280,17 +256,59 @@ export const WicsRankingPanel: React.FC = () => {
     }
 
     return sectors;
+  }, [processedMonths, rankType]);
+
+  // Identify WICS sectors with 2 consecutive monthly increases (2M) ending in the latest month (spans 2 months of data)
+  const risingSectors2M = useMemo(() => {
+    const sectors = new Set<string>();
+    if (!processedMonths || processedMonths.length < 2) return sectors;
+
+    const latestMonthObj = processedMonths[processedMonths.length - 1];
+    if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
+
+    // 2M streak requires 2 months of data (e.g. N-1 -> N)
+    const targetMonths = processedMonths.slice(-2);
+
+    for (const item of latestMonthObj.rankings) {
+      const wicsName = item.WICS;
+      if (risingSectors3M.has(wicsName)) continue; // Skip if already in 3M
+
+      const rets: number[] = [];
+      let valid = true;
+
+      for (const m of targetMonths) {
+        const rItem = m.rankings.find((r) => r.WICS === wicsName);
+        if (!rItem) {
+          valid = false;
+          break;
+        }
+        const ret = rankType === "MC" ? rItem.MC_12m_Return : rItem.EW_12m_Return;
+        if (ret === undefined || ret === null) {
+          valid = false;
+          break;
+        }
+        rets.push(ret);
+      }
+
+      if (valid && rets.length === 2) {
+        if (rets[1] > rets[0]) {
+          sectors.add(wicsName);
+        }
+      }
+    }
+
+    return sectors;
   }, [processedMonths, rankType, risingSectors3M]);
   // Auto-scroll to the far right on load or when data changes
   useEffect(() => {
-    if (containerRef.current && processedMonths.length > 0) {
+    if (containerRef.current && visibleMonths.length > 0) {
       const container = containerRef.current;
       const timer = setTimeout(() => {
         container.scrollLeft = container.scrollWidth - container.clientWidth;
       }, 100);
       return () => clearTimeout(timer);
     }
-  }, [processedMonths]);
+  }, [visibleMonths]);
 
   const handleCellClick = (wics: string) => {
     if (activeWics === wics) {
@@ -455,7 +473,7 @@ export const WicsRankingPanel: React.FC = () => {
           <div className="flex-1 flex items-center justify-center text-gray-500 animate-pulse font-medium">
             WICS 랭킹 데이터를 로드하고 있습니다...
           </div>
-        ) : processedMonths.length === 0 ? (
+        ) : visibleMonths.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-gray-500 font-medium">
             표시할 데이터가 없습니다. 다른 월 범위를 선택해 보세요.
           </div>
@@ -496,7 +514,7 @@ export const WicsRankingPanel: React.FC = () => {
 
             {/* Monthly Columns */}
             <div className="flex flex-1">
-              {processedMonths.map((monthObj) => {
+              {visibleMonths.map((monthObj) => {
                 const isLastMonth = monthObj.YearMonth === endMonth;
                 return (
                   <div
@@ -610,10 +628,10 @@ export const WicsRankingPanel: React.FC = () => {
         <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">WICS Ranking Guide</h4>
         <div className="space-y-2 text-xs text-gray-400">
           <p>
-            • <strong className="text-emerald-400">3달 연속 상승 하이라이트 (3M▲):</strong> 최근 3달(4개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 초록색 테두리와 `3M▲` 배지가 표시됩니다.
+            • <strong className="text-emerald-400">3달 연속 상승 하이라이트 (3M▲):</strong> 최근 3달(3개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 초록색 테두리와 `3M▲` 배지가 표시됩니다.
           </p>
           <p>
-            • <strong className="text-blue-400">2달 연속 상승 하이라이트 (2M▲):</strong> 최근 2달(3개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 파란색 테두리와 `2M▲` 배지가 표시됩니다.
+            • <strong className="text-blue-400">2달 연속 상승 하이라이트 (2M▲):</strong> 최근 2달(2개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 파란색 테두리와 `2M▲` 배지가 표시됩니다.
           </p>
           <p>
             • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 월(종료월)의 상위 10개 WICS 섹터는 각각 서로 다른 10가지 색상을 가집니다. 이전 월의 동일 WICS 섹터에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 쉽게 추적할 수 있습니다.

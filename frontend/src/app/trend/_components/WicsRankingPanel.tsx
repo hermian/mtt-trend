@@ -43,7 +43,35 @@ export const WicsRankingPanel: React.FC = () => {
     y: number;
     month: string;
   } | null>(null);
+  // Constrain tooltip X coordinate within the outer container boundaries
+  const constrainedX = useMemo(() => {
+    if (!hoveredCell || !outerRef.current) return 0;
+    const outerWidth = outerRef.current.getBoundingClientRect().width;
+    const tooltipHalfWidth = 128; // w-64 is 256px, so half is 128px
+    const padding = 8; // Margin from edges
 
+    let x = hoveredCell.x;
+    
+    // Left edge constraint
+    if (x - tooltipHalfWidth < padding) {
+      x = tooltipHalfWidth + padding;
+    }
+    // Right edge constraint
+    if (x + tooltipHalfWidth > outerWidth - padding) {
+      x = outerWidth - tooltipHalfWidth - padding;
+    }
+    
+    return x;
+  }, [hoveredCell]);
+
+  const arrowLeft = useMemo(() => {
+    if (!hoveredCell) return "50%";
+    const shift = constrainedX - hoveredCell.x;
+    const arrowX = 128 - shift;
+    // Clamp arrow position to prevent it from going off the tooltip rounded corners
+    const clampedArrowX = Math.max(16, Math.min(240, arrowX));
+    return `${clampedArrowX}px`;
+  }, [hoveredCell, constrainedX]);
   const handleCellMouseEnter = (item: WicsRankingItem, month: string, e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const outerRect = outerRef.current?.getBoundingClientRect();
@@ -684,7 +712,7 @@ export const WicsRankingPanel: React.FC = () => {
         <div
           style={{
             position: "absolute",
-            left: `${hoveredCell.x}px`,
+            left: `${constrainedX}px`,
             top: `${hoveredCell.y}px`,
             transform: "translate(-50%, -105%)",
           }}
@@ -774,7 +802,10 @@ export const WicsRankingPanel: React.FC = () => {
           </div>
 
           {/* Little arrow at the bottom */}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900/95" />
+          <div
+            style={{ left: arrowLeft }}
+            className="absolute top-full -translate-x-1/2 border-8 border-transparent border-t-gray-900/95"
+          />
         </div>
       )}
     </div>

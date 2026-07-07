@@ -30,6 +30,20 @@ def temp_stock_master_db(monkeypatch):
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE wics_monthly_rankings_top_stocks (
+            date TEXT,
+            YearMonth TEXT,
+            WICS TEXT,
+            stock_code TEXT,
+            stock_name TEXT,
+            stock_12m_return REAL,
+            sector_weight REAL,
+            marcap REAL,
+            rank_in_sector INTEGER
+        )
+    """)
+
     # Insert dummy data
     dummy_data = [
         ("2026-06-30", "2026-06", "IT서비스", 0.1, 0.2, 2, 1, 0.5, "IT서비스 (10%)", "IT서비스 (20%)"),
@@ -41,6 +55,15 @@ def temp_stock_master_db(monkeypatch):
         INSERT INTO wics_monthly_rankings (date, YearMonth, WICS, EW_12m_Return, MC_12m_Return, Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, dummy_data)
+
+    dummy_top_stocks = [
+        ("2026-06-30", "2026-06", "IT서비스", "005930", "삼성전자", 0.05, 0.4, 300000.0, 1),
+        ("2026-06-30", "2026-06", "IT서비스", "000660", "SK하이닉스", 0.1, 0.1, 80000.0, 2)
+    ]
+    cursor.executemany("""
+        INSERT INTO wics_monthly_rankings_top_stocks (date, YearMonth, WICS, stock_code, stock_name, stock_12m_return, sector_weight, marcap, rank_in_sector)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, dummy_top_stocks)
 
     conn.commit()
     conn.close()
@@ -74,8 +97,17 @@ def test_get_wics_rankings(temp_stock_master_db):
     m1 = data["months"][0]
     assert m1["YearMonth"] == "2026-06"
     assert len(m1["rankings"]) == 2
-    # By default it is ordered by YearMonth ASC, inside it's appended in query order.
-    # WICS elements:
+    
+    # Check that top_stocks are attached for IT서비스
+    it_service = [r for r in m1["rankings"] if r["WICS"] == "IT서비스"][0]
+    assert "top_stocks" in it_service
+    assert len(it_service["top_stocks"]) == 2
+    assert it_service["top_stocks"][0]["stock_name"] == "삼성전자"
+    assert it_service["top_stocks"][0]["stock_code"] == "005930"
+    assert it_service["top_stocks"][0]["stock_12m_return"] == 0.05
+    assert it_service["top_stocks"][0]["sector_weight"] == 0.4
+    assert it_service["top_stocks"][0]["marcap"] == 300000.0
+
     wics_names = [r["WICS"] for r in m1["rankings"]]
     assert "IT서비스" in wics_names
     assert "가구" in wics_names

@@ -115,6 +115,15 @@ export interface MacroDataResponse {
   data: MacroDataPoint[];
 }
 
+export interface WicsTopStockItem {
+  stock_name: string;
+  stock_code: string;
+  stock_12m_return?: number;
+  sector_weight?: number;
+  marcap?: number;
+  rank_in_sector: number;
+}
+
 export interface WicsRankingItem {
   WICS: string;
   Rank_EW: number;
@@ -124,6 +133,7 @@ export interface WicsRankingItem {
   Top2_Share?: number;
   Display_EW?: string;
   Display_MC?: string;
+  top_stocks?: WicsTopStockItem[];
 }
 
 export interface WicsMonthRankings {

@@ -178,21 +178,55 @@ async def get_wics_rankings(
         cursor.execute(query, params)
         rows = cursor.fetchall()
 
-        # Group by YearMonth
+        # Query top stocks for the same range
+        top_stocks_query = """
+            SELECT YearMonth, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
+            FROM wics_monthly_rankings_top_stocks
+            WHERE 1=1
+        """
+        top_params = []
+        if start_month:
+            top_stocks_query += " AND YearMonth >= ?"
+            top_params.append(start_month)
+        if end_month:
+            top_stocks_query += " AND YearMonth <= ?"
+            top_params.append(end_month)
+        
+        top_stocks_query += " ORDER BY YearMonth ASC, WICS ASC, rank_in_sector ASC"
+        cursor.execute(top_stocks_query, top_params)
+        top_rows = cursor.fetchall()
+
         from collections import defaultdict
+        top_stocks_map = defaultdict(list)
+        for r in top_rows:
+            key = (r["YearMonth"], r["WICS"])
+            top_stocks_map[key].append({
+                "stock_name": r["stock_name"],
+                "stock_code": r["stock_code"],
+                "stock_12m_return": r["stock_12m_return"],
+                "sector_weight": r["sector_weight"],
+                "marcap": r["marcap"],
+                "rank_in_sector": r["rank_in_sector"]
+            })
+
+        # Group by YearMonth
         grouped = defaultdict(list)
 
         for row in rows:
             ym = row["YearMonth"]
+            wics_name = row["WICS"]
+            t_stocks = top_stocks_map.get((ym, wics_name))
+
             item = WicsRankingItem(
-                WICS=row["WICS"],
+                WICS=wics_name,
                 Rank_EW=row["Rank_EW"],
                 Rank_MC=row["Rank_MC"],
                 EW_12m_Return=row["EW_12m_Return"],
                 MC_12m_Return=row["MC_12m_Return"],
                 Top2_Share=row["Top2_Share"],
                 Display_EW=row["Display_EW"],
-                Display_MC=row["Display_MC"]
+                Display_MC=row["Display_MC"],
+                top_stocks=t_stocks
             )
             grouped[ym].append(item)
 

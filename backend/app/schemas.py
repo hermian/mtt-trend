@@ -33,6 +33,14 @@ class MacroDataResponse(BaseModel):
 class WicsMonthResponse(BaseModel):
     months: List[str]
 
+class WicsTopStockItem(BaseModel):
+    stock_name: str
+    stock_code: str
+    stock_12m_return: Optional[float] = None
+    sector_weight: Optional[float] = None
+    marcap: Optional[float] = None
+    rank_in_sector: int
+
 class WicsRankingItem(BaseModel):
     WICS: str
     Rank_EW: int
@@ -42,6 +50,7 @@ class WicsRankingItem(BaseModel):
     Top2_Share: Optional[float] = None
     Display_EW: Optional[str] = None
     Display_MC: Optional[str] = None
+    top_stocks: Optional[List[WicsTopStockItem]] = None
 
 class WicsMonthRankings(BaseModel):
     YearMonth: str

@@ -29,12 +29,47 @@ export const WicsRankingPanel: React.FC = () => {
   const [baseColumnWidth, setBaseColumnWidth] = useState<number>(150);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const outerRef = useRef<HTMLDivElement>(null);
   const isDownRef = useRef(false);
   const startXRef = useRef(0);
   const scrollLeftRef = useRef(0);
   const hasDraggedRef = useRef(false);
   const clickStartCoord = useRef({ x: 0, y: 0 });
   const isResizingRef = useRef(false);
+
+  const [hoveredCell, setHoveredCell] = useState<{
+    item: WicsRankingItem;
+    x: number;
+    y: number;
+    month: string;
+  } | null>(null);
+
+  const handleCellMouseEnter = (item: WicsRankingItem, month: string, e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const outerRect = outerRef.current?.getBoundingClientRect();
+    if (!outerRect) return;
+
+    setHoveredCell({
+      item,
+      month,
+      x: rect.left - outerRect.left + rect.width / 2,
+      y: rect.top - outerRect.top,
+    });
+  };
+
+  const handleCellMouseLeave = () => {
+    setHoveredCell(null);
+  };
+
+  const formatMarcap = (val?: number) => {
+    if (!val) return "";
+    const trillion = val / 1_000_000_000_000;
+    if (trillion >= 1) {
+      return `${trillion.toFixed(1)}조원`;
+    }
+    const billion = val / 100_000_000;
+    return `${billion.toLocaleString(undefined, { maximumFractionDigits: 0 })}억원`;
+  };
 
 
 
@@ -346,7 +381,7 @@ export const WicsRankingPanel: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-full space-y-6">
+    <div ref={outerRef} className="flex flex-col h-full space-y-6 relative">
       {/* Filters & Header Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-gray-900/60 p-4 rounded-xl border border-gray-800 gap-4">
         <div className="flex flex-wrap items-center gap-4">
@@ -561,6 +596,8 @@ export const WicsRankingPanel: React.FC = () => {
                               if (hasDraggedRef.current) return;
                               handleCellClick(item.WICS);
                             }}
+                            onMouseEnter={(e) => handleCellMouseEnter(item, monthObj.YearMonth, e)}
+                            onMouseLeave={handleCellMouseLeave}
                             className={clsx(
                               "h-[35px] px-2 py-0.5 flex flex-col justify-center border-b border-gray-800/30 cursor-pointer select-none transition-all duration-200",
                               colorClass,
@@ -569,9 +606,6 @@ export const WicsRankingPanel: React.FC = () => {
                               isRising2M && !hasActiveSelection && "ring-2 ring-blue-500/80 border-blue-500 scale-[1.01] shadow-md shadow-blue-500/10 z-10",
                               hasActiveSelection && !isMatch && "opacity-25"
                             )}
-                            title={`${item.WICS} - 12M Return: ${
-                              rankType === "MC" ? (item.MC_12m_Return ? (item.MC_12m_Return * 100).toFixed(2) + "%" : "-") : (item.EW_12m_Return ? (item.EW_12m_Return * 100).toFixed(2) + "%" : "-")
-                            }`}
                           >
                             <div className="flex items-center justify-between w-full">
                               <div className="flex items-center min-w-0 flex-1 mr-1">
@@ -644,6 +678,105 @@ export const WicsRankingPanel: React.FC = () => {
           </p>
         </div>
       </div>
+
+      {/* Dynamic Hover Tooltip */}
+      {hoveredCell && (
+        <div
+          style={{
+            position: "absolute",
+            left: `${hoveredCell.x}px`,
+            top: `${hoveredCell.y}px`,
+            transform: "translate(-50%, -105%)",
+          }}
+          className="z-50 w-64 bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-xs pointer-events-none transition-all duration-150 animate-fade-in"
+        >
+          <div className="flex items-center justify-between border-b border-gray-800/80 pb-2 mb-2">
+            <span className="font-bold text-gray-250 text-[11px]">{hoveredCell.item.WICS}</span>
+            <span className="text-[10px] text-gray-500 font-mono">{hoveredCell.month}</span>
+          </div>
+
+          <div className="space-y-2.5">
+            <div className="flex justify-between items-center text-[11px]">
+              <span className="text-gray-400 font-medium">섹터 12M 수익률</span>
+              <span className={clsx(
+                "font-bold font-mono",
+                ((rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return) ?? 0) > 0 
+                  ? "text-red-400" 
+                  : ((rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return) ?? 0) < 0 
+                    ? "text-blue-400" 
+                    : "text-gray-400"
+              )}>
+                {(() => {
+                  const ret = rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return;
+                  if (ret === undefined || ret === null) return "-";
+                  const pct = ret * 100;
+                  return pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
+                })()}
+              </span>
+            </div>
+
+            {hoveredCell.item.Top2_Share !== undefined && hoveredCell.item.Top2_Share !== null && (
+              <div className="flex justify-between items-center text-[11px] border-b border-gray-800/40 pb-2">
+                <span className="text-gray-400 font-medium">Top 2 시총 비중</span>
+                <span className="font-bold text-gray-300 font-mono">
+                  {(hoveredCell.item.Top2_Share * 100).toFixed(1)}%
+                </span>
+              </div>
+            )}
+
+            {hoveredCell.item.top_stocks && hoveredCell.item.top_stocks.length > 0 ? (
+              <div className="space-y-2 mt-1">
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Top 2 종목 상세</p>
+                {hoveredCell.item.top_stocks.map((stock) => {
+                  const retPct = stock.stock_12m_return !== undefined ? stock.stock_12m_return * 100 : null;
+                  const weightPct = stock.sector_weight !== undefined ? stock.sector_weight * 100 : null;
+                  
+                  return (
+                    <div key={stock.stock_code} className="bg-black/35 p-2 rounded-lg border border-gray-800/40">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="font-bold text-gray-350 truncate max-w-[120px] text-[11px]">
+                          {stock.rank_in_sector}. {stock.stock_name}
+                        </span>
+                        <span className="text-[8px] text-gray-500 font-mono">
+                          {stock.stock_code}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] text-gray-400 font-mono">
+                        <div className="flex justify-between">
+                          <span>수익률:</span>
+                          <span className={clsx(
+                            "font-bold",
+                            retPct && retPct > 0 ? "text-red-400" : retPct && retPct < 0 ? "text-blue-400" : "text-gray-400"
+                          )}>
+                            {retPct !== null ? (retPct > 0 ? `+${retPct.toFixed(1)}%` : `${retPct.toFixed(1)}%`) : "-"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>비중:</span>
+                          <span className="font-bold text-gray-300">
+                            {weightPct !== null ? `${weightPct.toFixed(1)}%` : "-"}
+                          </span>
+                        </div>
+                        {stock.marcap !== undefined && (
+                          <div className="col-span-2 flex justify-between mt-0.5 text-[8px] text-gray-500">
+                            <span>시가총액:</span>
+                            <span>{formatMarcap(stock.marcap)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-[10px] text-gray-500 italic mt-1">상세 종목 정보 없음</p>
+            )}
+          </div>
+
+          {/* Little arrow at the bottom */}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 border-8 border-transparent border-t-gray-900/95" />
+        </div>
+      )}
     </div>
   );
 };

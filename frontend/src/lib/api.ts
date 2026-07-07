@@ -115,6 +115,26 @@ export interface MacroDataResponse {
   data: MacroDataPoint[];
 }
 
+export interface WicsRankingItem {
+  WICS: string;
+  Rank_EW: number;
+  Rank_MC: number;
+  EW_12m_Return?: number;
+  MC_12m_Return?: number;
+  Top2_Share?: number;
+  Display_EW?: string;
+  Display_MC?: string;
+}
+
+export interface WicsMonthRankings {
+  YearMonth: string;
+  rankings: WicsRankingItem[];
+}
+
+export interface WicsRankingsResponse {
+  months: WicsMonthRankings[];
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -149,6 +169,22 @@ export const api = {
   ): Promise<MacroDataResponse> => {
     const { data } = await apiClient.get<MacroDataResponse>("/api/charts/macro", {
       params: { start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
+  // GET /api/charts/wics-months → { months: string[] }
+  getWicsMonths: async (): Promise<string[]> => {
+    const { data } = await apiClient.get<{ months: string[] }>("/api/charts/wics-months");
+    return data.months;
+  },
+
+  // GET /api/charts/wics-rankings?start_month=&end_month= → WicsRankingsResponse
+  getWicsRankings: async (
+    startMonth?: string,
+    endMonth?: string
+  ): Promise<WicsRankingsResponse> => {
+    const { data } = await apiClient.get<WicsRankingsResponse>("/api/charts/wics-rankings", {
+      params: { start_month: startMonth, end_month: endMonth },
     });
     return data;
   },

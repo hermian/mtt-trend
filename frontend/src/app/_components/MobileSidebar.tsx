@@ -68,7 +68,8 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     pathname.startsWith("/trend") && searchParams.get("tab") === "above_ma";
   const isMacroActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "macro";
-
+  const isWicsRankingActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "wics_ranking";
   return (
     <div
       className={clsx(
@@ -222,6 +223,36 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
             </svg>
             <span className="truncate">매크로 지표</span>
+          </Link>
+          {/* WICS 랭킹 Button-styled Link */}
+          <Link
+            href="/trend?tab=wics_ranking"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+              isWicsRankingActive
+                ? "bg-blue-600 text-white shadow-lg"
+                : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+            )}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 flex-shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <line x1="10" y1="6" x2="21" y2="6" />
+              <line x1="10" y1="12" x2="21" y2="12" />
+              <line x1="10" y1="18" x2="21" y2="18" />
+              <polyline points="3 6 4 7 6 5" />
+              <polyline points="3 12 4 13 6 11" />
+              <polyline points="3 18 4 19 6 17" />
+            </svg>
+            <span className="truncate">WICS 랭킹</span>
           </Link>
 
           {/* Sync Button */}

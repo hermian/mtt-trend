@@ -1,0 +1,88 @@
+import os
+import sqlite3
+import tempfile
+import pytest
+from fastapi.testclient import TestClient
+from app.main import app
+
+client = TestClient(app)
+
+@pytest.fixture
+def temp_stock_master_db(monkeypatch):
+    # Create temp DB file
+    fd, db_path_str = tempfile.mkstemp(suffix=".db")
+    conn = sqlite3.connect(db_path_str)
+    cursor = conn.cursor()
+
+    # Create table
+    cursor.execute("""
+        CREATE TABLE wics_monthly_rankings (
+            date TEXT,
+            YearMonth TEXT,
+            WICS TEXT,
+            EW_12m_Return REAL,
+            MC_12m_Return REAL,
+            Rank_EW INTEGER,
+            Rank_MC INTEGER,
+            Top2_Share REAL,
+            Display_EW TEXT,
+            Display_MC TEXT
+        )
+    """)
+
+    # Insert dummy data
+    dummy_data = [
+        ("2026-06-30", "2026-06", "IT서비스", 0.1, 0.2, 2, 1, 0.5, "IT서비스 (10%)", "IT서비스 (20%)"),
+        ("2026-06-30", "2026-06", "가구", -0.1, -0.2, 1, 2, 0.6, "가구 (-10%)", "가구 (-20%)"),
+        ("2026-07-06", "2026-07", "IT서비스", 0.15, 0.25, 1, 2, 0.5, "IT서비스 (15%)", "IT서비스 (25%)"),
+        ("2026-07-06", "2026-07", "가구", 0.2, 0.3, 2, 1, 0.6, "가구 (20%)", "가구 (30%)")
+    ]
+    cursor.executemany("""
+        INSERT INTO wics_monthly_rankings (date, YearMonth, WICS, EW_12m_Return, MC_12m_Return, Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, dummy_data)
+
+    conn.commit()
+    conn.close()
+    os.close(fd)
+
+    # Mock environment variable or helper method
+    monkeypatch.setenv("STOCK_MASTER_DB_PATH", db_path_str)
+
+    yield db_path_str
+
+    try:
+        os.remove(db_path_str)
+    except OSError:
+        pass
+
+def test_get_wics_months(temp_stock_master_db):
+    response = client.get("/api/charts/wics-months")
+    assert response.status_code == 200
+    data = response.json()
+    assert "months" in data
+    assert data["months"] == ["2026-06", "2026-07"]
+
+def test_get_wics_rankings(temp_stock_master_db):
+    response = client.get("/api/charts/wics-rankings")
+    assert response.status_code == 200
+    data = response.json()
+    assert "months" in data
+    assert len(data["months"]) == 2
+
+    # Check first month
+    m1 = data["months"][0]
+    assert m1["YearMonth"] == "2026-06"
+    assert len(m1["rankings"]) == 2
+    # By default it is ordered by YearMonth ASC, inside it's appended in query order.
+    # WICS elements:
+    wics_names = [r["WICS"] for r in m1["rankings"]]
+    assert "IT서비스" in wics_names
+    assert "가구" in wics_names
+
+    # Check filter
+    response_filtered = client.get("/api/charts/wics-rankings?start_month=2026-07&end_month=2026-07")
+    assert response_filtered.status_code == 200
+    data_filtered = response_filtered.json()
+    assert len(data_filtered["months"]) == 1
+    assert data_filtered["months"][0]["YearMonth"] == "2026-07"

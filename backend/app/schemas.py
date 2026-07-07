@@ -29,6 +29,27 @@ class MacroDataPoint(BaseModel):
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]
 
+# --- WICS Ranking Schemas ---
+class WicsMonthResponse(BaseModel):
+    months: List[str]
+
+class WicsRankingItem(BaseModel):
+    WICS: str
+    Rank_EW: int
+    Rank_MC: int
+    EW_12m_Return: Optional[float] = None
+    MC_12m_Return: Optional[float] = None
+    Top2_Share: Optional[float] = None
+    Display_EW: Optional[str] = None
+    Display_MC: Optional[str] = None
+
+class WicsMonthRankings(BaseModel):
+    YearMonth: str
+    rankings: List[WicsRankingItem]
+
+class WicsRankingsResponse(BaseModel):
+    months: List[WicsMonthRankings]
+
 # --- Theme Schemas ---
 class ThemeDailyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

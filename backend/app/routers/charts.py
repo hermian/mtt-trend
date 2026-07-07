@@ -2,7 +2,15 @@ import os
 import sqlite3
 from typing import Optional
 from fastapi import APIRouter, Query
-from app.schemas import ChartDataResponse, MacroDataResponse, MacroDataPoint
+from app.schemas import (
+    ChartDataResponse,
+    MacroDataResponse,
+    MacroDataPoint,
+    WicsMonthResponse,
+    WicsRankingsResponse,
+    WicsMonthRankings,
+    WicsRankingItem,
+)
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 
@@ -100,5 +108,105 @@ async def get_macro_chart_data(
     except Exception as e:
         print(f"Error loading macro data: {e}")
         return MacroDataResponse(data=[])
+    finally:
+        conn.close()
+
+def get_stock_master_db_path() -> str:
+    override = os.environ.get("STOCK_MASTER_DB_PATH")
+    if override:
+        return os.path.expanduser(override)
+    return os.path.expanduser("~/.cache/db/stock_master.db")
+
+@router.get("/wics-months", response_model=WicsMonthResponse)
+async def get_wics_months():
+    """
+    wics_monthly_rankings 테이블에서 고유한 YearMonth 목록을 시간 오름차순으로 반환합니다.
+    """
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsMonthResponse(months=[])
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT DISTINCT YearMonth FROM wics_monthly_rankings ORDER BY YearMonth ASC")
+        rows = cursor.fetchall()
+        months = [row[0] for row in rows if row[0]]
+        return WicsMonthResponse(months=months)
+    except Exception as e:
+        print(f"Error loading WICS months: {e}")
+        return WicsMonthResponse(months=[])
+    finally:
+        conn.close()
+
+@router.get("/wics-rankings", response_model=WicsRankingsResponse)
+async def get_wics_rankings(
+    start_month: Optional[str] = Query(None, description="시작월 (YYYY-MM)"),
+    end_month: Optional[str] = Query(None, description="종료월 (YYYY-MM)")
+):
+    """
+    wics_monthly_rankings 테이블에서 시작월과 종료월 사이의 데이터를 조회하여
+    월별로 그룹화된 랭킹 데이터를 반환합니다.
+    """
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsRankingsResponse(months=[])
+
+    conn = sqlite3.connect(db_path)
+    # Row factory to easily access columns by name
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT date, YearMonth, WICS, EW_12m_Return, MC_12m_Return, 
+               Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
+        FROM wics_monthly_rankings
+        WHERE 1=1
+    """
+    params = []
+    if start_month:
+        query += " AND YearMonth >= ?"
+        params.append(start_month)
+    if end_month:
+        query += " AND YearMonth <= ?"
+        params.append(end_month)
+
+    # Note: Sorting here is just for retrieving items, we will sort rankings inside each month's list later if needed.
+    query += " ORDER BY YearMonth ASC"
+
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        # Group by YearMonth
+        from collections import defaultdict
+        grouped = defaultdict(list)
+
+        for row in rows:
+            ym = row["YearMonth"]
+            item = WicsRankingItem(
+                WICS=row["WICS"],
+                Rank_EW=row["Rank_EW"],
+                Rank_MC=row["Rank_MC"],
+                EW_12m_Return=row["EW_12m_Return"],
+                MC_12m_Return=row["MC_12m_Return"],
+                Top2_Share=row["Top2_Share"],
+                Display_EW=row["Display_EW"],
+                Display_MC=row["Display_MC"]
+            )
+            grouped[ym].append(item)
+
+        months_list = []
+        for ym in sorted(grouped.keys()):
+            # rankings inside a month will be sorted by frontend depending on active rank type (EW or MC)
+            months_list.append(WicsMonthRankings(
+                YearMonth=ym,
+                rankings=grouped[ym]
+            ))
+
+        return WicsRankingsResponse(months=months_list)
+    except Exception as e:
+        print(f"Error loading WICS rankings: {e}")
+        return WicsRankingsResponse(months=[])
     finally:
         conn.close()

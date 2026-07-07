@@ -11,6 +11,7 @@ import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
 import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
 import { AboveMaChart } from "./_components/AboveMaChart";
 import { MacroChart } from "./_components/MacroChart";
+import { WicsRankingPanel } from "./_components/WicsRankingPanel";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -56,6 +57,8 @@ function TrendPageContent() {
       ? "above_ma"
       : rawTab === "macro"
       ? "macro"
+      : rawTab === "wics_ranking"
+      ? "wics_ranking"
       : "overview";
   
   const [source, setSource] = useState<DataSource>("52w_high");
@@ -104,7 +107,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && (
+        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
@@ -154,8 +157,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "wics_ranking" ? (
             <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
               데이터를 로드하고 있습니다...
             </div>
@@ -171,7 +174,7 @@ function TrendPageContent() {
                         테마별 RS 점수
                       </h3>
                       <TopThemesBar
-                        date={selectedDate}
+                        date={selectedDate || ""}
                         source={source}
                         onThemeClick={handleThemeClick}
                         selectedTheme={selectedTheme}
@@ -184,7 +187,7 @@ function TrendPageContent() {
                         신규 급등 테마 탐지
                       </h3>
                       <SurgingThemesCard
-                        date={selectedDate}
+                        date={selectedDate || ""}
                         source={source}
                         onThemeClick={handleThemeClick}
                         selectedTheme={selectedTheme}
@@ -196,7 +199,7 @@ function TrendPageContent() {
                   {selectedTheme && (
                     <ThemeStocksPanel
                       themeName={selectedTheme}
-                      date={selectedDate}
+                      date={selectedDate || ""}
                       source={source}
                       onClose={() => setSelectedTheme(null)}
                     />
@@ -208,7 +211,7 @@ function TrendPageContent() {
                       <span className="w-1.5 h-6 bg-amber-500 rounded-full"></span>
                       테마 RS 추이
                     </h3>
-                    <ThemeTrendChart date={selectedDate} source={source} />
+                    <ThemeTrendChart date={selectedDate || ""} source={source} />
                   </section>
 
                   {/* Stock Analysis Tabs */}
@@ -217,7 +220,7 @@ function TrendPageContent() {
                       <span className="w-1.5 h-6 bg-purple-500 rounded-full"></span>
                       상세 종목 분석
                     </h3>
-                    <StockAnalysisTabs date={selectedDate} source={source} />
+                    <StockAnalysisTabs date={selectedDate || ""} source={source} />
                   </section>
                 </div>
               )}
@@ -395,6 +398,24 @@ function TrendPageContent() {
                        <p>Integration: <span className="text-emerald-400 font-bold">Full Outer Join (Daily Aligned)</span></p>
                     </div>
                   </div>
+                </div>
+              )}
+              {activeTab === "wics_ranking" && (
+                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
+                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
+                    <div>
+                      <h3 className="text-2xl font-extrabold text-white tracking-tight">WICS Industry Rankings</h3>
+                      <p className="text-gray-400 text-sm mt-1">각 월별 WICS 섹터 랭킹 및 상위 섹터 추이 시각화</p>
+                    </div>
+                    <button 
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  
+                  <WicsRankingPanel />
                 </div>
               )}
             </>

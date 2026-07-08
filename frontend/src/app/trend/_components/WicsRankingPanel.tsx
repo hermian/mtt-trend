@@ -716,11 +716,22 @@ export const WicsRankingPanel: React.FC = () => {
             top: `${hoveredCell.y}px`,
             transform: "translate(-50%, -105%)",
           }}
-          className="z-50 w-64 bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-xs pointer-events-none transition-all duration-150 animate-fade-in"
+          className="z-50 w-64 bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-xs pointer-events-auto transition-all duration-150 animate-fade-in"
         >
           <div className="flex items-center justify-between border-b border-gray-800/80 pb-2 mb-2">
-            <span className="font-bold text-gray-250 text-[11px]">{hoveredCell.item.WICS}</span>
-            <span className="text-[10px] text-gray-500 font-mono">{hoveredCell.month}</span>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="font-bold text-gray-250 text-[11px] truncate">{hoveredCell.item.WICS}</span>
+              <span className="text-[10px] text-gray-500 font-mono shrink-0">{hoveredCell.month}</span>
+            </div>
+            <button
+              onClick={() => setHoveredCell(null)}
+              className="text-gray-500 hover:text-gray-300 p-0.5 rounded hover:bg-gray-800 transition-colors shrink-0 ml-2"
+              title="닫기"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
           </div>
 
           <div className="space-y-2.5">

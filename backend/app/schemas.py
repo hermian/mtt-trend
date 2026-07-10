@@ -32,6 +32,8 @@ class MacroDataResponse(BaseModel):
 # --- WICS Ranking Schemas ---
 class WicsMonthResponse(BaseModel):
     months: List[str]
+class WicsWeekResponse(BaseModel):
+    weeks: List[str]
 
 class WicsTopStockItem(BaseModel):
     stock_name: str

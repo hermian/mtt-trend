@@ -198,6 +198,22 @@ export const api = {
     });
     return data;
   },
+  // GET /api/charts/wics-weeks → { weeks: string[] }
+  getWicsWeeks: async (): Promise<string[]> => {
+    const { data } = await apiClient.get<{ weeks: string[] }>("/api/charts/wics-weeks");
+    return data.weeks;
+  },
+
+  // GET /api/charts/wics-rankings/weekly?start_week=&end_week= → WicsRankingsResponse
+  getWicsWeeklyRankings: async (
+    startWeek?: string,
+    endWeek?: string
+  ): Promise<WicsRankingsResponse> => {
+    const { data } = await apiClient.get<WicsRankingsResponse>("/api/charts/wics-rankings/weekly", {
+      params: { start_week: startWeek, end_week: endWeek },
+    });
+    return data;
+  },
   // GET /api/dates → { dates: string[] }
   getDates: async (source: DataSource = "52w_high"): Promise<string[]> => {
     const { data } = await apiClient.get<{ dates: string[] }>("/api/dates", { params: { source } });

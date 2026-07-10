@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useWicsMonths, useWicsRankings } from "@/hooks/useWicsData";
+import { useWicsMonths, useWicsRankings, useWicsWeeks, useWicsWeeklyRankings } from "@/hooks/useWicsData";
 import { WicsRankingItem } from "@/lib/api";
 import clsx from "clsx";
 
@@ -20,9 +20,14 @@ const TOP_10_COLORS = [
 
 export const WicsRankingPanel: React.FC = () => {
   const { data: months, isLoading: monthsLoading, error: monthsError } = useWicsMonths();
-
   const [startMonth, setStartMonth] = useState<string>("");
   const [endMonth, setEndMonth] = useState<string>("");
+
+  const { data: weeks, isLoading: weeksLoading, error: weeksError } = useWicsWeeks();
+  const [startWeek, setStartWeek] = useState<string>("");
+  const [endWeek, setEndWeek] = useState<string>("");
+
+  const [viewMode, setViewMode] = useState<"monthly" | "weekly">("monthly");
   const [rankType, setRankType] = useState<"MC" | "EW">("MC");
   const [activeWics, setActiveWics] = useState<string | null>(null);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
@@ -178,77 +183,135 @@ export const WicsRankingPanel: React.FC = () => {
   useEffect(() => {
     if (months && months.length > 0) {
       const latest = months[months.length - 1];
-      // Default range: latest 12 months if available
       const defaultStartIdx = Math.max(0, months.length - 12);
       const defaultStart = months[defaultStartIdx];
-
       setStartMonth(defaultStart);
       setEndMonth(latest);
     }
   }, [months]);
 
-  // We fetch starting at min(startMonth, endMonth - 2 months) to ensure we always have 3 months ending in endMonth for 3M streak calculation
+  // Set default weeks once weeks are loaded
+  useEffect(() => {
+    if (weeks && weeks.length > 0) {
+      const latest = weeks[weeks.length - 1];
+      const defaultStartIdx = Math.max(0, weeks.length - 24);
+      const defaultStart = weeks[defaultStartIdx];
+      setStartWeek(defaultStart);
+      setEndWeek(latest);
+    }
+  }, [weeks]);
+
+  // Column width transition on mode change
+  useEffect(() => {
+    if (viewMode === "weekly") {
+      setBaseColumnWidth(90);
+      setColumnWidths({});
+    } else {
+      setBaseColumnWidth(150);
+      setColumnWidths({});
+    }
+  }, [viewMode]);
+
+  // API fetch start months
   const fetchStartMonth = useMemo(() => {
     if (!months || !startMonth || !endMonth) return startMonth;
     const startIdx = months.indexOf(startMonth);
     const endIdx = months.indexOf(endMonth);
     if (startIdx === -1 || endIdx === -1) return startMonth;
-
     const neededStartIdx = Math.max(0, endIdx - 2);
     const actualStartIdx = Math.min(startIdx, neededStartIdx);
     return months[actualStartIdx];
   }, [months, startMonth, endMonth]);
 
+  // API fetch start weeks
+  const fetchStartWeek = useMemo(() => {
+    if (!weeks || !startWeek || !endWeek) return startWeek;
+    const startIdx = weeks.indexOf(startWeek);
+    const endIdx = weeks.indexOf(endWeek);
+    if (startIdx === -1 || endIdx === -1) return startWeek;
+    const neededStartIdx = Math.max(0, endIdx - 2);
+    const actualStartIdx = Math.min(startIdx, neededStartIdx);
+    return weeks[actualStartIdx];
+  }, [weeks, startWeek, endWeek]);
+
+  // Data fetching
   const { data: rankingsData, isLoading: rankingsLoading, error: rankingsError } = useWicsRankings(
     fetchStartMonth || undefined,
     endMonth || undefined
   );
 
-  // Filter months to keep startMonth <= month <= endMonth
-  const selectableEndMonths = useMemo(() => {
-    if (!months || !startMonth) return months || [];
-    return months.filter((m) => m >= startMonth);
-  }, [months, startMonth]);
+  const { data: weeklyRankingsData, isLoading: weeklyRankingsLoading, error: weeklyRankingsError } = useWicsWeeklyRankings(
+    fetchStartWeek || undefined,
+    endWeek || undefined
+  );
 
-  const selectableStartMonths = useMemo(() => {
-    if (!months || !endMonth) return months || [];
-    return months.filter((m) => m <= endMonth);
-  }, [months, endMonth]);
+  // Active view abstraction
+  const activeData = useMemo(() => {
+    return viewMode === "monthly" ? rankingsData : weeklyRankingsData;
+  }, [viewMode, rankingsData, weeklyRankingsData]);
 
-  // Adjust endMonth if startMonth becomes greater
-  const handleStartMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const activeStart = useMemo(() => {
+    return viewMode === "monthly" ? startMonth : startWeek;
+  }, [viewMode, startMonth, startWeek]);
+
+  const activeEnd = useMemo(() => {
+    return viewMode === "monthly" ? endMonth : endWeek;
+  }, [viewMode, endMonth, endWeek]);
+
+  const activePeriodsList = useMemo(() => {
+    return viewMode === "monthly" ? months : weeks;
+  }, [viewMode, months, weeks]);
+
+  // Selectable drop down lists
+  const selectableEndPeriods = useMemo(() => {
+    const list = activePeriodsList || [];
+    if (!activeStart) return list;
+    return list.filter((m) => m >= activeStart);
+  }, [activePeriodsList, activeStart]);
+
+  const selectableStartPeriods = useMemo(() => {
+    const list = activePeriodsList || [];
+    if (!activeEnd) return list;
+    return list.filter((m) => m <= activeEnd);
+  }, [activePeriodsList, activeEnd]);
+
+  // Handle select changes
+  const handleStartPeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    setStartMonth(val);
-    if (endMonth && val > endMonth) {
-      setEndMonth(val);
-    }
-  };
-
-  const handleEndMonthChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setEndMonth(val);
-    if (startMonth && val < startMonth) {
+    if (viewMode === "monthly") {
       setStartMonth(val);
+      if (endMonth && val > endMonth) setEndMonth(val);
+    } else {
+      setStartWeek(val);
+      if (endWeek && val > endWeek) setEndWeek(val);
     }
   };
 
-  // Determine top 10 WICS sectors of the last month to assign colors
+  const handleEndPeriodChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    if (viewMode === "monthly") {
+      setEndMonth(val);
+      if (startMonth && val < startMonth) setStartMonth(val);
+    } else {
+      setEndWeek(val);
+      if (startWeek && val < startWeek) setStartWeek(val);
+    }
+  };
+
+  // Determine top 10 WICS sectors of the last period to assign colors
   const wicsColorMap = useMemo(() => {
     const colorMap = new Map<string, string>();
-    if (!rankingsData || rankingsData.months.length === 0) return colorMap;
+    if (!activeData || activeData.months.length === 0) return colorMap;
 
-    // Get the last month's rankings (which is the last element because backend queries chronological ascending)
-    const lastMonthObj = rankingsData.months[rankingsData.months.length - 1];
-    if (!lastMonthObj || !lastMonthObj.rankings) return colorMap;
+    const lastPeriodObj = activeData.months[activeData.months.length - 1];
+    if (!lastPeriodObj || !lastPeriodObj.rankings) return colorMap;
 
-    // Sort rankings of the last month by the active rank type
-    const sortedLastRankings = [...lastMonthObj.rankings].sort((a, b) => {
+    const sortedLastRankings = [...lastPeriodObj.rankings].sort((a, b) => {
       const rA = rankType === "MC" ? a.Rank_MC : a.Rank_EW;
       const rB = rankType === "MC" ? b.Rank_MC : b.Rank_EW;
       return rA - rB;
     });
 
-    // Assign a unique color from TOP_10_COLORS to the top 10 WICS
     const top10 = sortedLastRankings.slice(0, 10);
     top10.forEach((item, index) => {
       if (item.WICS) {
@@ -257,47 +320,46 @@ export const WicsRankingPanel: React.FC = () => {
     });
 
     return colorMap;
-  }, [rankingsData, rankType]);
+  }, [activeData, rankType]);
 
-  // Sorted rankings for all months in range
+  // Sorted rankings for all periods in range
   const processedMonths = useMemo(() => {
-    if (!rankingsData) return [];
-    return rankingsData.months.map((mObj) => {
+    if (!activeData) return [];
+    return activeData.months.map((mObj) => {
       const sorted = [...mObj.rankings].sort((a, b) => {
         const rA = rankType === "MC" ? a.Rank_MC : a.Rank_EW;
         const rB = rankType === "MC" ? b.Rank_MC : b.Rank_EW;
         return rA - rB;
       });
       return {
-        YearMonth: mObj.YearMonth,
+        YearMonth: mObj.YearMonth, // 'YearMonth' field contains YearWeek if weekly view
         rankings: sorted,
       };
     });
-  }, [rankingsData, rankType]);
+  }, [activeData, rankType]);
 
   // Filter processedMonths to only show the user's selected range in the UI
   const visibleMonths = useMemo(() => {
-    if (!processedMonths || !startMonth || !endMonth) return processedMonths;
-    return processedMonths.filter((m) => m.YearMonth >= startMonth && m.YearMonth <= endMonth);
-  }, [processedMonths, startMonth, endMonth]);
+    if (!processedMonths || !activeStart || !activeEnd) return processedMonths;
+    return processedMonths.filter((m) => m.YearMonth >= activeStart && m.YearMonth <= activeEnd);
+  }, [processedMonths, activeStart, activeEnd]);
 
-  // Identify WICS sectors with 3 consecutive monthly increases (3M) ending in the latest month (spans 3 months of data)
+  // Identify WICS sectors with 3 consecutive increases (3M / 3W) ending in the latest period
   const risingSectors3M = useMemo(() => {
     const sectors = new Set<string>();
     if (!processedMonths || processedMonths.length < 3) return sectors;
 
-    const latestMonthObj = processedMonths[processedMonths.length - 1];
-    if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
+    const latestPeriodObj = processedMonths[processedMonths.length - 1];
+    if (!latestPeriodObj || !latestPeriodObj.rankings) return sectors;
 
-    // 3M streak requires 3 months of data (e.g. N-2 -> N-1 -> N)
-    const targetMonths = processedMonths.slice(-3);
+    const targetPeriods = processedMonths.slice(-3);
 
-    for (const item of latestMonthObj.rankings) {
+    for (const item of latestPeriodObj.rankings) {
       const wicsName = item.WICS;
       const rets: number[] = [];
       let valid = true;
 
-      for (const m of targetMonths) {
+      for (const m of targetPeriods) {
         const rItem = m.rankings.find((r) => r.WICS === wicsName);
         if (!rItem) {
           valid = false;
@@ -321,25 +383,24 @@ export const WicsRankingPanel: React.FC = () => {
     return sectors;
   }, [processedMonths, rankType]);
 
-  // Identify WICS sectors with 2 consecutive monthly increases (2M) ending in the latest month (spans 2 months of data)
+  // Identify WICS sectors with 2 consecutive increases (2M / 2W) ending in the latest period
   const risingSectors2M = useMemo(() => {
     const sectors = new Set<string>();
     if (!processedMonths || processedMonths.length < 2) return sectors;
 
-    const latestMonthObj = processedMonths[processedMonths.length - 1];
-    if (!latestMonthObj || !latestMonthObj.rankings) return sectors;
+    const latestPeriodObj = processedMonths[processedMonths.length - 1];
+    if (!latestPeriodObj || !latestPeriodObj.rankings) return sectors;
 
-    // 2M streak requires 2 months of data (e.g. N-1 -> N)
-    const targetMonths = processedMonths.slice(-2);
+    const targetPeriods = processedMonths.slice(-2);
 
-    for (const item of latestMonthObj.rankings) {
+    for (const item of latestPeriodObj.rankings) {
       const wicsName = item.WICS;
-      if (risingSectors3M.has(wicsName)) continue; // Skip if already in 3M
+      if (risingSectors3M.has(wicsName)) continue;
 
       const rets: number[] = [];
       let valid = true;
 
-      for (const m of targetMonths) {
+      for (const m of targetPeriods) {
         const rItem = m.rankings.find((r) => r.WICS === wicsName);
         if (!rItem) {
           valid = false;
@@ -362,6 +423,7 @@ export const WicsRankingPanel: React.FC = () => {
 
     return sectors;
   }, [processedMonths, rankType, risingSectors3M]);
+
   // Auto-scroll to the far right on load or when data changes
   useEffect(() => {
     if (containerRef.current && visibleMonths.length > 0) {
@@ -398,34 +460,63 @@ export const WicsRankingPanel: React.FC = () => {
     return <span className="text-gray-500 text-[8px] md:text-[9px] ml-1">top2={percent.toFixed(0)}%</span>;
   };
 
-  if (monthsError || rankingsError) {
+  if (monthsError || rankingsError || weeksError || weeklyRankingsError) {
     return (
       <div className="flex flex-col items-center justify-center p-8 bg-gray-900/40 border border-red-900/30 rounded-2xl">
         <span className="text-red-500 text-3xl mb-2">⚠️</span>
         <p className="text-gray-300 font-medium">데이터 로드 중 에러가 발생했습니다.</p>
-        <p className="text-gray-500 text-xs mt-1">{(monthsError || rankingsError)?.toString()}</p>
+        <p className="text-gray-500 text-xs mt-1">
+          {(monthsError || rankingsError || weeksError || weeklyRankingsError)?.toString()}
+        </p>
       </div>
     );
   }
+
+  const activeLoading = viewMode === "monthly" ? monthsLoading : weeksLoading;
+  const activeRankingsLoading = viewMode === "monthly" ? rankingsLoading : weeklyRankingsLoading;
 
   return (
     <div ref={outerRef} className="flex flex-col h-full space-y-6 relative">
       {/* Filters & Header Controls */}
       <div className="flex flex-col md:flex-row md:items-center justify-between bg-gray-900/60 p-4 rounded-xl border border-gray-800 gap-4">
         <div className="flex flex-wrap items-center gap-4">
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-black/30 p-1 rounded-lg border border-gray-800 self-start md:self-auto shrink-0">
+            <button
+              onClick={() => setViewMode("monthly")}
+              className={clsx(
+                "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                viewMode === "monthly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              월간 랭킹
+            </button>
+            <button
+              onClick={() => setViewMode("weekly")}
+              className={clsx(
+                "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                viewMode === "weekly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              주간 랭킹
+            </button>
+          </div>
+
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">시작월</span>
-            {monthsLoading ? (
+            <span className="text-xs text-gray-400 font-medium">
+              {viewMode === "monthly" ? "시작월" : "시작주"}
+            </span>
+            {activeLoading ? (
               <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
             ) : (
               <select
-                value={startMonth}
-                onChange={handleStartMonthChange}
-                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white"
+                value={viewMode === "monthly" ? startMonth : startWeek}
+                onChange={handleStartPeriodChange}
+                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
               >
-                {selectableStartMonths.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {selectableStartPeriods.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
                   </option>
                 ))}
               </select>
@@ -433,18 +524,20 @@ export const WicsRankingPanel: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">종료월</span>
-            {monthsLoading ? (
+            <span className="text-xs text-gray-400 font-medium">
+              {viewMode === "monthly" ? "종료월" : "종료주"}
+            </span>
+            {activeLoading ? (
               <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
             ) : (
               <select
-                value={endMonth}
-                onChange={handleEndMonthChange}
-                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white"
+                value={viewMode === "monthly" ? endMonth : endWeek}
+                onChange={handleEndPeriodChange}
+                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
               >
-                {selectableEndMonths.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
+                {selectableEndPeriods.map((p) => (
+                  <option key={p} value={p}>
+                    {p}
                   </option>
                 ))}
               </select>
@@ -532,13 +625,13 @@ export const WicsRankingPanel: React.FC = () => {
 
       {/* Main Ranking Grid */}
       <div className="flex-1 bg-gray-900/40 border border-gray-800 rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
-        {rankingsLoading ? (
+        {activeRankingsLoading ? (
           <div className="flex-1 flex items-center justify-center text-gray-500 animate-pulse font-medium">
             WICS 랭킹 데이터를 로드하고 있습니다...
           </div>
         ) : visibleMonths.length === 0 ? (
           <div className="flex-1 flex items-center justify-center text-gray-500 font-medium">
-            표시할 데이터가 없습니다. 다른 월 범위를 선택해 보세요.
+            표시할 데이터가 없습니다. {viewMode === "monthly" ? "다른 월 범위를 선택해 보세요." : "다른 주 범위를 선택해 보세요."}
           </div>
         ) : (
           <div
@@ -578,7 +671,7 @@ export const WicsRankingPanel: React.FC = () => {
             {/* Monthly Columns */}
             <div className="flex flex-1">
               {visibleMonths.map((monthObj) => {
-                const isLastMonth = monthObj.YearMonth === endMonth;
+                const isLastMonth = monthObj.YearMonth === activeEnd;
                 return (
                   <div
                     key={monthObj.YearMonth}
@@ -588,7 +681,7 @@ export const WicsRankingPanel: React.FC = () => {
                       isLastMonth && "bg-blue-950/5"
                     )}
                   >
-                    {/* Month Header */}
+                    {/* Period Header */}
                     <div
                       onClick={() => {
                         if (hasDraggedRef.current) return;
@@ -602,7 +695,7 @@ export const WicsRankingPanel: React.FC = () => {
                       <span>{monthObj.YearMonth}</span>
                       {isLastMonth && (
                         <span className="text-[9px] text-blue-500 font-mono tracking-tighter uppercase">
-                          (기준월 / 색상 지정)
+                          {viewMode === "monthly" ? "(기준월 / 색상 지정)" : "(기준주 / 색상 지정)"}
                         </span>
                       )}
                     </div>
@@ -641,13 +734,13 @@ export const WicsRankingPanel: React.FC = () => {
                                   {item.WICS}
                                 </span>
                                 {isRising3M && (
-                                  <span className="ml-1 text-[7px] md:text-[8px] bg-emerald-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title="3달 연속 수익률 상승">
-                                    3M▲
+                                  <span className="ml-1 text-[7px] md:text-[8px] bg-emerald-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title={viewMode === "monthly" ? "3달 연속 수익률 상승" : "3주 연속 수익률 상승"}>
+                                    {viewMode === "monthly" ? "3M▲" : "3W▲"}
                                   </span>
                                 )}
                                 {isRising2M && (
-                                  <span className="ml-1 text-[7px] md:text-[8px] bg-blue-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title="2달 연속 수익률 상승">
-                                    2M▲
+                                  <span className="ml-1 text-[7px] md:text-[8px] bg-blue-500 text-white px-0.5 py-0.2 rounded font-bold whitespace-nowrap leading-none shrink-0" title={viewMode === "monthly" ? "2달 연속 수익률 상승" : "2주 연속 수익률 상승"}>
+                                    {viewMode === "monthly" ? "2M▲" : "2W▲"}
                                   </span>
                                 )}
                               </div>
@@ -690,16 +783,22 @@ export const WicsRankingPanel: React.FC = () => {
         <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">WICS Ranking Guide</h4>
         <div className="space-y-2 text-xs text-gray-400">
           <p>
-            • <strong className="text-emerald-400">3달 연속 상승 하이라이트 (3M▲):</strong> 최근 3달(3개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 초록색 테두리와 `3M▲` 배지가 표시됩니다.
+            • <strong className="text-emerald-400">
+              {viewMode === "monthly" ? "3달 연속 상승 하이라이트 (3M▲)" : "3주 연속 상승 하이라이트 (3W▲)"}:
+            </strong>{" "}
+            최근 {viewMode === "monthly" ? "3달(3개월 데이터 기준)" : "3주(3주 데이터 기준)"} 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 초록색 테두리와 `{viewMode === "monthly" ? "3M▲" : "3W▲"}` 배지가 표시됩니다.
           </p>
           <p>
-            • <strong className="text-blue-400">2달 연속 상승 하이라이트 (2M▲):</strong> 최근 2달(2개월 데이터 기준) 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 파란색 테두리와 `2M▲` 배지가 표시됩니다.
+            • <strong className="text-blue-400">
+              {viewMode === "monthly" ? "2달 연속 상승 하이라이트 (2M▲)" : "2주 연속 상승 하이라이트 (2W▲)"}:
+            </strong>{" "}
+            최근 {viewMode === "monthly" ? "2달(2개월 데이터 기준)" : "2주(2주 데이터 기준)"} 동안 수익률이 연속으로 상승한 종목은 초기 로딩 시 파란색 테두리와 `{viewMode === "monthly" ? "2M▲" : "2W▲"}` 배지가 표시됩니다.
           </p>
           <p>
-            • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 월(종료월)의 상위 10개 WICS 섹터는 각각 서로 다른 10가지 색상을 가집니다. 이전 월의 동일 WICS 섹터에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 쉽게 추적할 수 있습니다.
+            • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 {viewMode === "monthly" ? "월(종료월)" : "주(종료주)"}의 상위 10개 WICS 섹터는 각각 서로 다른 10가지 색상을 가집니다. 이전 {viewMode === "monthly" ? "월" : "주"}의 동일 WICS 섹터에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 쉽게 추적할 수 있습니다.
           </p>
           <p>
-            • <strong className="text-gray-200">하이라이트 기능:</strong> 특정 Cell을 클릭하면 선택한 WICS 섹터가 전체 월에서 하이라이트 되며, 다른 섹터들은 흐려져 해당 섹터의 순위 흐름에만 집중할 수 있습니다. 다시 클릭하면 하이라이트가 해제됩니다.
+            • <strong className="text-gray-200">하이라이트 기능:</strong> 특정 Cell을 클릭하면 선택한 WICS 섹터가 전체 {viewMode === "monthly" ? "월" : "주"}에서 하이라이트 되며, 다른 섹터들은 흐려져 해당 섹터의 순위 흐름에만 집중할 수 있습니다. 다시 클릭하면 하이라이트가 해제됩니다.
           </p>
           <p>
             • <strong className="text-gray-200">가중치 유형:</strong> <strong className="text-gray-300">시가총액 가중(MC)</strong>은 각 섹터 내 대형주 위주 성과를 반영하고, <strong className="text-gray-300">동등 가중(EW)</strong>은 섹터 내 개별 종목들의 평균 성과를 균등하게 반영합니다.

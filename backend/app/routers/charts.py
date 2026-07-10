@@ -7,6 +7,7 @@ from app.schemas import (
     MacroDataResponse,
     MacroDataPoint,
     WicsMonthResponse,
+    WicsWeekResponse,
     WicsRankingsResponse,
     WicsMonthRankings,
     WicsRankingItem,
@@ -241,6 +242,143 @@ async def get_wics_rankings(
         return WicsRankingsResponse(months=months_list)
     except Exception as e:
         print(f"Error loading WICS rankings: {e}")
+        return WicsRankingsResponse(months=[])
+    finally:
+        conn.close()
+
+@router.get("/wics-weeks", response_model=WicsWeekResponse)
+async def get_wics_weeks():
+    """
+    wics_weekly_rankings 테이블에서 고유한 YearWeek 목록을 시간 오름차순으로 반환합니다.
+    """
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsWeekResponse(weeks=[])
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek ASC")
+        rows = cursor.fetchall()
+        weeks = [row[0] for row in rows if row[0]]
+        return WicsWeekResponse(weeks=weeks)
+    except Exception as e:
+        print(f"Error loading WICS weeks: {e}")
+        return WicsWeekResponse(weeks=[])
+    finally:
+        conn.close()
+
+
+@router.get("/wics-rankings/weekly", response_model=WicsRankingsResponse)
+async def get_wics_weekly_rankings(
+    start_week: Optional[str] = Query(None, description="시작주차 (YYYY-Www)"),
+    end_week: Optional[str] = Query(None, description="종료주차 (YYYY-Www)")
+):
+    """
+    wics_weekly_rankings 테이블에서 시작주차와 종료주차 사이의 데이터를 조회하여
+    주간별로 그룹화된 랭킹 데이터를 반환합니다.
+    """
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsRankingsResponse(months=[])
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # 기본값 처리 (최근 26주치 범위 추출)
+    if not start_week and not end_week:
+        try:
+            cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek DESC LIMIT 26")
+            latest_weeks = [r[0] for r in cursor.fetchall() if r[0]]
+            if latest_weeks:
+                latest_weeks.reverse()
+                start_week = latest_weeks[0]
+                end_week = latest_weeks[-1]
+        except Exception as e:
+            print(f"Error resolving default weeks: {e}")
+
+    query = """
+        SELECT date, YearWeek, WICS, EW_12m_Return, MC_12m_Return, 
+               Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
+        FROM wics_weekly_rankings
+        WHERE 1=1
+    """
+    params = []
+    if start_week:
+        query += " AND YearWeek >= ?"
+        params.append(start_week)
+    if end_week:
+        query += " AND YearWeek <= ?"
+        params.append(end_week)
+
+    query += " ORDER BY YearWeek ASC"
+
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+
+        # Query top stocks for the same range
+        top_stocks_query = """
+            SELECT YearWeek, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
+            FROM wics_weekly_rankings_top_stocks
+            WHERE 1=1
+        """
+        top_params = []
+        if start_week:
+            top_stocks_query += " AND YearWeek >= ?"
+            top_params.append(start_week)
+        if end_week:
+            top_stocks_query += " AND YearWeek <= ?"
+            top_params.append(end_week)
+        
+        top_stocks_query += " ORDER BY YearWeek ASC, WICS ASC, rank_in_sector ASC"
+        cursor.execute(top_stocks_query, top_params)
+        top_rows = cursor.fetchall()
+
+        from collections import defaultdict
+        top_stocks_map = defaultdict(list)
+        for r in top_rows:
+            key = (r["YearWeek"], r["WICS"])
+            top_stocks_map[key].append({
+                "stock_name": r["stock_name"],
+                "stock_code": r["stock_code"],
+                "stock_12m_return": r["stock_12m_return"],
+                "sector_weight": r["sector_weight"],
+                "marcap": r["marcap"],
+                "rank_in_sector": r["rank_in_sector"]
+            })
+
+        grouped = defaultdict(list)
+
+        for row in rows:
+            yw = row["YearWeek"]
+            wics_name = row["WICS"]
+            t_stocks = top_stocks_map.get((yw, wics_name))
+
+            item = WicsRankingItem(
+                WICS=wics_name,
+                Rank_EW=row["Rank_EW"],
+                Rank_MC=row["Rank_MC"],
+                EW_12m_Return=row["EW_12m_Return"],
+                MC_12m_Return=row["MC_12m_Return"],
+                Top2_Share=row["Top2_Share"],
+                Display_EW=row["Display_EW"],
+                Display_MC=row["Display_MC"],
+                top_stocks=t_stocks
+            )
+            grouped[yw].append(item)
+
+        months_list = []
+        for yw in sorted(grouped.keys()):
+            months_list.append(WicsMonthRankings(
+                YearMonth=yw,  # Option A: 필드명 호환 (YearWeek 값이 들어감)
+                rankings=grouped[yw]
+            ))
+
+        return WicsRankingsResponse(months=months_list)
+    except Exception as e:
+        print(f"Error loading WICS weekly rankings: {e}")
         return WicsRankingsResponse(months=[])
     finally:
         conn.close()

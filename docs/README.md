@@ -35,6 +35,13 @@
 - **보고서**: [Above MA Integration Report](./03-report/features/above-ma.report.md)
 - **상태**: ✅ **완료 (Reported)**
 
+### 4. WICS Index Explorer (주도섹터 탐색 탭)
+전 WICS 지수 오버레이 + visible-range 좌단=100 rebase로 구간 주도섹터를 탐색하는 전용 탭입니다. 기존 WICS 랭킹 탭 단건 차트는 유지합니다.
+- **기획서**: [WICS Index Explorer Plan](./01-plan/features/wics-index-explorer.plan.md)
+- **설계서**: [WICS Index Explorer Design](./02-design/features/wics-index-explorer.design.md)
+- **상태**: 📋 **Plan/Design (스펙 확정)** — 구현 대기
+- **이슈**: [#9](https://github.com/hermian/mtt-trend/issues/9)
+
 
 ---
 

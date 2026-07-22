@@ -76,32 +76,45 @@ async def get_macro_chart_data(
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    query = """
+    # 날짜 필터를 서브쿼리에 먼저 적용해 FULL OUTER JOIN 입력 크기를 줄임
+    sp_filters = ["index_name = 'sp500'"]
+    hy_filters = ["series_id = 'BAMLH0A0HYM2'"]
+    fgi_filters: list[str] = []
+    params: list[str] = []
+
+    def append_date_filters(filters: list[str]) -> None:
+        if start_date:
+            filters.append("date >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("date <= ?")
+            params.append(end_date)
+
+    append_date_filters(sp_filters)
+    append_date_filters(hy_filters)
+    append_date_filters(fgi_filters)
+
+    sp_where = " AND ".join(sp_filters)
+    hy_where = " AND ".join(hy_filters)
+    fgi_where = (" WHERE " + " AND ".join(fgi_filters)) if fgi_filters else ""
+
+    query = f"""
         SELECT 
             COALESCE(s.date, h.date, f.date) as date,
             s.close as sp500,
             h.value as high_yield,
             f.value as cnn_fgi
         FROM (
-            SELECT date, close FROM index_ohlcv WHERE index_name = 'sp500'
+            SELECT date, close FROM index_ohlcv WHERE {sp_where}
         ) s
         FULL OUTER JOIN (
-            SELECT date, value FROM fred_macro WHERE series_id = 'BAMLH0A0HYM2'
+            SELECT date, value FROM fred_macro WHERE {hy_where}
         ) h ON s.date = h.date
         FULL OUTER JOIN (
-            SELECT date, value FROM cnn_fear_greed
+            SELECT date, value FROM cnn_fear_greed{fgi_where}
         ) f ON COALESCE(s.date, h.date) = f.date
-        WHERE 1=1
+        ORDER BY date ASC
     """
-    params = []
-    if start_date:
-        query += " AND COALESCE(s.date, h.date, f.date) >= ?"
-        params.append(start_date)
-    if end_date:
-        query += " AND COALESCE(s.date, h.date, f.date) <= ?"
-        params.append(end_date)
-
-    query += " ORDER BY date ASC"
 
     try:
         cursor.execute(query, params)

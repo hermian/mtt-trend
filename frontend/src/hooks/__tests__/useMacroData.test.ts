@@ -45,5 +45,18 @@ describe("useMacroData Hook", () => {
 
     expect(result.current.data).toEqual(mockData);
     expect(api.getMacroData).toHaveBeenCalledTimes(1);
+    expect(api.getMacroData).toHaveBeenCalledWith(undefined, undefined);
+  });
+
+  it("should pass startDate to the API", async () => {
+    vi.mocked(api.getMacroData).mockResolvedValueOnce({ data: [] });
+
+    const { result } = renderHook(() => useMacroData("2024-07-22"), {
+      wrapper: createWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+
+    expect(api.getMacroData).toHaveBeenCalledWith("2024-07-22", undefined);
   });
 });

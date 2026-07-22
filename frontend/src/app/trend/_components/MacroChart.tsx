@@ -25,6 +25,25 @@ interface HoveredData {
   cnn_fgi?: number;
 }
 
+/** 기간 프리셋: years=null 은 전기간 */
+type MacroPeriod = { label: string; years: number | null };
+
+const MACRO_PERIODS: MacroPeriod[] = [
+  { label: "1Y", years: 1 },
+  { label: "2Y", years: 2 },
+  { label: "5Y", years: 5 },
+  { label: "All", years: null },
+];
+
+const DEFAULT_PERIOD: MacroPeriod = MACRO_PERIODS[1]; // 2Y — 초기 뷰포트(~1Y) + 패닝 여유
+
+function startDateFromYears(years: number | null): string | undefined {
+  if (years == null) return undefined;
+  const d = new Date();
+  d.setFullYear(d.getFullYear() - years);
+  return d.toISOString().slice(0, 10);
+}
+
 export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
@@ -34,6 +53,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(false);
+  const [period, setPeriod] = useState<MacroPeriod>(DEFAULT_PERIOD);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -43,7 +63,8 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
     checkMobile();
   }, []);
 
-  const { data: chartData, isLoading, error } = useMacroData();
+  const startDate = useMemo(() => startDateFromYears(period.years), [period]);
+  const { data: chartData, isLoading, error, isFetching } = useMacroData(startDate);
 
   const formattedData = useMemo(() => {
     if (!chartData || !chartData.data) return [];
@@ -361,11 +382,27 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
     <div ref={containerRef} className={`relative flex flex-col w-full ${isMobile ? "h-[430px]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}>
       {/* Control bar */}
       <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-11 md:py-0">
-        <div className="flex items-center gap-3">
-          <div className={`w-2.5 h-2.5 rounded-full ${isLoading ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className={`w-2.5 h-2.5 rounded-full ${isLoading || isFetching ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
           <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
             Macro & Sentiment Analytics
           </h3>
+          <div className="flex items-center gap-1" role="group" aria-label="Period">
+            {MACRO_PERIODS.map((p) => (
+              <button
+                key={p.label}
+                type="button"
+                onClick={() => setPeriod(p)}
+                className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
+                  period.label === p.label
+                    ? "bg-blue-600 text-white border-blue-500"
+                    : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
           <button
             onClick={scrollToLatest}
             className="text-[9px] bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-600 transition-all font-bold tracking-tighter uppercase"
@@ -399,13 +436,13 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
 
       {/* Main charts area */}
       <div data-scroll-area className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 flex flex-col p-4 gap-4 relative">
-        {isLoading && (
+        {(isLoading || (isFetching && formattedData.length === 0)) && (
           <div className="absolute inset-0 z-30 bg-slate-950/70 flex items-center justify-center text-slate-400 font-medium animate-pulse">
             차트 데이터를 불러오는 중입니다...
           </div>
         )}
         
-        {error && !isLoading && (
+        {error && !isLoading && !isFetching && (
           <div className="absolute inset-0 z-30 bg-slate-950/90 flex items-center justify-center text-red-400 font-medium">
             데이터를 불러오는 데 실패했습니다.
           </div>

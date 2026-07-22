@@ -13,6 +13,14 @@ from app.schemas import (
     WicsRankingItem,
     WicsIndexResponse,
     WicsIndexPoint,
+    WicsIndexAllResponse,
+    WicsIndexSectorSeries,
+    WicsIndexOhlcPoint,
+    WicsIndexMetaResponse,
+)
+from app.utils.wics_index_utils import (
+    aggregate_closes_to_ohlc,
+    default_lookback_start,
 )
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
@@ -441,5 +449,124 @@ async def get_wics_index(
     except Exception as e:
         print(f"Error loading WICS index: {e}")
         return WicsIndexResponse(WICS=wics, data=[])
+    finally:
+        conn.close()
+
+
+@router.get("/wics-index/meta", response_model=WicsIndexMetaResponse)
+async def get_wics_index_meta():
+    """wics_daily_index 섹터 목록 및 날짜 범위."""
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='wics_daily_index'"
+        )
+        if cursor.fetchone() is None:
+            return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
+
+        cursor.execute("SELECT DISTINCT WICS FROM wics_daily_index ORDER BY WICS ASC")
+        sectors = [r[0] for r in cursor.fetchall() if r[0]]
+        cursor.execute("SELECT MIN(date), MAX(date) FROM wics_daily_index")
+        row = cursor.fetchone()
+        min_date = row[0] if row else None
+        max_date = row[1] if row else None
+        return WicsIndexMetaResponse(sectors=sectors, min_date=min_date, max_date=max_date)
+    except Exception as e:
+        print(f"Error loading WICS index meta: {e}")
+        return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
+    finally:
+        conn.close()
+
+
+@router.get("/wics-index/all", response_model=WicsIndexAllResponse)
+async def get_wics_index_all(
+    start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
+    tf: str = Query("D", description="D | W | M"),
+    weight: str = Query("MC", description="MC | EW"),
+):
+    """
+    전 WICS 섹터 지수 시계열(절대 레벨). rebase는 클라이언트 책임.
+    tf=W|M 이면 일별 close를 OHLC로 집계한다.
+    """
+    tf_u = (tf or "D").upper()
+    if tf_u not in ("D", "W", "M"):
+        tf_u = "D"
+    weight_u = (weight or "MC").upper()
+    if weight_u not in ("MC", "EW"):
+        weight_u = "MC"
+    col = "MC_Index" if weight_u == "MC" else "EW_Index"
+
+    db_path = get_stock_master_db_path()
+    empty = WicsIndexAllResponse(tf=tf_u, weight=weight_u, sectors=[])
+    if not os.path.exists(db_path):
+        return empty
+
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='wics_daily_index'"
+        )
+        if cursor.fetchone() is None:
+            return empty
+
+        # Default window from max date when start omitted
+        eff_start = start_date
+        eff_end = end_date
+        if not eff_start or not eff_end:
+            cursor.execute("SELECT MIN(date), MAX(date) FROM wics_daily_index")
+            mn, mx = cursor.fetchone()
+            if not eff_end:
+                eff_end = mx
+            if not eff_start:
+                eff_start = default_lookback_start(eff_end or mx, tf_u) or mn
+
+        clauses = []
+        params: list = []
+        if eff_start:
+            clauses.append("date >= ?")
+            params.append(eff_start)
+        if eff_end:
+            clauses.append("date <= ?")
+            params.append(eff_end)
+        where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
+
+        cursor.execute(
+            f"""
+            SELECT WICS, date, {col}
+            FROM wics_daily_index
+            {where}
+            ORDER BY WICS ASC, date ASC
+            """,
+            params,
+        )
+        rows = cursor.fetchall()
+
+        by_sector: dict[str, list[tuple[str, float]]] = {}
+        for wics_name, d, val in rows:
+            if wics_name is None or val is None:
+                continue
+            by_sector.setdefault(wics_name, []).append((d, float(val)))
+
+        sectors: list[WicsIndexSectorSeries] = []
+        for wics_name, series in by_sector.items():
+            points = aggregate_closes_to_ohlc(series, tf_u)  # type: ignore[arg-type]
+            sectors.append(
+                WicsIndexSectorSeries(
+                    WICS=wics_name,
+                    points=[WicsIndexOhlcPoint(**p) for p in points],
+                )
+            )
+
+        return WicsIndexAllResponse(tf=tf_u, weight=weight_u, sectors=sectors)
+    except Exception as e:
+        print(f"Error loading WICS index all: {e}")
+        return empty
     finally:
         conn.close()

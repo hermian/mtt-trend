@@ -40,3 +40,30 @@ export const useWicsIndex = (
     enabled: !!wics,
   });
 };
+
+export const useWicsIndexAll = (opts: {
+  tf: string;
+  weight: string;
+  startDate?: string;
+  endDate?: string;
+  enabled?: boolean;
+}) => {
+  return useQuery({
+    queryKey: ["wicsIndexAll", opts.tf, opts.weight, opts.startDate, opts.endDate],
+    queryFn: () =>
+      api.getWicsIndexAll({
+        tf: opts.tf,
+        weight: opts.weight,
+        startDate: opts.startDate,
+        endDate: opts.endDate,
+      }),
+    enabled: opts.enabled !== false,
+  });
+};
+
+export const useWicsIndexMeta = () => {
+  return useQuery({
+    queryKey: ["wicsIndexMeta"],
+    queryFn: () => api.getWicsIndexMeta(),
+  });
+};

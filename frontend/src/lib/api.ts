@@ -156,6 +156,31 @@ export interface WicsIndexResponse {
   data: WicsIndexPoint[];
 }
 
+export interface WicsIndexOhlcPoint {
+  time: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close?: number;
+}
+
+export interface WicsIndexSectorSeries {
+  WICS: string;
+  points: WicsIndexOhlcPoint[];
+}
+
+export interface WicsIndexAllResponse {
+  tf: string;
+  weight: string;
+  sectors: WicsIndexSectorSeries[];
+}
+
+export interface WicsIndexMetaResponse {
+  sectors: string[];
+  min_date?: string;
+  max_date?: string;
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -235,6 +260,29 @@ export const api = {
     const { data } = await apiClient.get<WicsIndexResponse>("/api/charts/wics-index", {
       params: { wics, start_date: startDate, end_date: endDate },
     });
+    return data;
+  },
+
+  // GET /api/charts/wics-index/all?tf=&weight=&start_date=&end_date=
+  getWicsIndexAll: async (params?: {
+    tf?: string;
+    weight?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<WicsIndexAllResponse> => {
+    const { data } = await apiClient.get<WicsIndexAllResponse>("/api/charts/wics-index/all", {
+      params: {
+        tf: params?.tf,
+        weight: params?.weight,
+        start_date: params?.startDate,
+        end_date: params?.endDate,
+      },
+    });
+    return data;
+  },
+
+  getWicsIndexMeta: async (): Promise<WicsIndexMetaResponse> => {
+    const { data } = await apiClient.get<WicsIndexMetaResponse>("/api/charts/wics-index/meta");
     return data;
   },
   // GET /api/dates → { dates: string[] }

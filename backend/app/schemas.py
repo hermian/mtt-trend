@@ -70,6 +70,32 @@ class WicsIndexResponse(BaseModel):
     WICS: str
     data: List[WicsIndexPoint]
 
+
+class WicsIndexOhlcPoint(BaseModel):
+    time: str
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    close: Optional[float] = None
+
+
+class WicsIndexSectorSeries(BaseModel):
+    WICS: str
+    points: List[WicsIndexOhlcPoint]
+
+
+class WicsIndexAllResponse(BaseModel):
+    tf: str
+    weight: str
+    sectors: List[WicsIndexSectorSeries]
+
+
+class WicsIndexMetaResponse(BaseModel):
+    sectors: List[str]
+    min_date: Optional[str] = None
+    max_date: Optional[str] = None
+
+
 # --- Theme Schemas ---
 class ThemeDailyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -65,6 +65,8 @@ export function Sidebar() {
     pathname.startsWith("/trend") && searchParams.get("tab") === "macro";
   const isWicsRankingActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "wics_ranking";
+  const isWicsIndexActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "wics_index";
   return (
     <aside
       className={clsx(
@@ -237,6 +239,31 @@ export function Sidebar() {
             <polyline points="3 18 4 19 6 17" />
           </svg>
           {!collapsed && <span className="truncate">WICS 랭킹</span>}
+        </Link>
+        {/* WICS Index Explorer */}
+        <Link
+          href="/trend?tab=wics_index"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isWicsIndexActive
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "WICS Index" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+          {!collapsed && <span className="truncate">WICS Index</span>}
         </Link>
 
         {/* Sync Button */}

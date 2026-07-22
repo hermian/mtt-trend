@@ -12,6 +12,7 @@ import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChar
 import { AboveMaChart } from "./_components/AboveMaChart";
 import { MacroChart } from "./_components/MacroChart";
 import { WicsRankingPanel } from "./_components/WicsRankingPanel";
+import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -59,6 +60,8 @@ function TrendPageContent() {
       ? "macro"
       : rawTab === "wics_ranking"
       ? "wics_ranking"
+      : rawTab === "wics_index"
+      ? "wics_index"
       : "overview";
   
   const [source, setSource] = useState<DataSource>("52w_high");
@@ -107,7 +110,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && (
+        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
@@ -157,8 +160,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" ? (
             <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
               데이터를 로드하고 있습니다...
             </div>
@@ -416,6 +419,27 @@ function TrendPageContent() {
                   </div>
                   
                   <WicsRankingPanel />
+                </div>
+              )}
+              {activeTab === "wics_index" && (
+                <div className="h-full flex flex-col pr-[20px] md:pr-0">
+                  <div className="px-3 md:px-4 pt-3 md:pt-4 flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2 border-b border-gray-800 pb-3">
+                    <div>
+                      <h3 className="text-xl font-extrabold text-white tracking-tight">WICS Index Explorer</h3>
+                      <p className="text-gray-400 text-xs mt-0.5">
+                        전 섹터 오버레이 · 보이는 구간 왼쪽=100 · 주도섹터 탐색
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => router.push("/trend?tab=wics_ranking")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-900/30 self-start"
+                    >
+                      WICS 랭킹 →
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0">
+                    <WicsIndexExplorer />
+                  </div>
                 </div>
               )}
             </>

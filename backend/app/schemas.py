@@ -61,6 +61,15 @@ class WicsMonthRankings(BaseModel):
 class WicsRankingsResponse(BaseModel):
     months: List[WicsMonthRankings]
 
+class WicsIndexPoint(BaseModel):
+    date: str
+    EW_Index: Optional[float] = None
+    MC_Index: Optional[float] = None
+
+class WicsIndexResponse(BaseModel):
+    WICS: str
+    data: List[WicsIndexPoint]
+
 # --- Theme Schemas ---
 class ThemeDailyItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)

@@ -11,6 +11,8 @@ from app.schemas import (
     WicsRankingsResponse,
     WicsMonthRankings,
     WicsRankingItem,
+    WicsIndexResponse,
+    WicsIndexPoint,
 )
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
@@ -380,5 +382,64 @@ async def get_wics_weekly_rankings(
     except Exception as e:
         print(f"Error loading WICS weekly rankings: {e}")
         return WicsRankingsResponse(months=[])
+    finally:
+        conn.close()
+
+
+@router.get("/wics-index", response_model=WicsIndexResponse)
+async def get_wics_index(
+    wics: str = Query(..., description="WICS 섹터명"),
+    start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
+):
+    """
+    wics_daily_index 테이블에서 특정 섹터의 일별 지수(EW/MC, base=100)를 반환합니다.
+    테이블이 없으면 빈 data를 반환합니다.
+    """
+    db_path = get_stock_master_db_path()
+    if not os.path.exists(db_path):
+        return WicsIndexResponse(WICS=wics, data=[])
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='wics_daily_index'"
+        )
+        if cursor.fetchone() is None:
+            return WicsIndexResponse(WICS=wics, data=[])
+
+        clauses = ["WICS = ?"]
+        params: list = [wics]
+        if start_date:
+            clauses.append("date >= ?")
+            params.append(start_date)
+        if end_date:
+            clauses.append("date <= ?")
+            params.append(end_date)
+        where = " AND ".join(clauses)
+        cursor.execute(
+            f"""
+            SELECT date, EW_Index, MC_Index
+            FROM wics_daily_index
+            WHERE {where}
+            ORDER BY date ASC
+            """,
+            params,
+        )
+        rows = cursor.fetchall()
+        data = [
+            WicsIndexPoint(
+                date=row["date"],
+                EW_Index=row["EW_Index"],
+                MC_Index=row["MC_Index"],
+            )
+            for row in rows
+        ]
+        return WicsIndexResponse(WICS=wics, data=data)
+    except Exception as e:
+        print(f"Error loading WICS index: {e}")
+        return WicsIndexResponse(WICS=wics, data=[])
     finally:
         conn.close()

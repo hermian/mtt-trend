@@ -28,3 +28,15 @@ export const useWicsWeeklyRankings = (startWeek?: string, endWeek?: string) => {
     queryFn: () => api.getWicsWeeklyRankings(startWeek, endWeek),
   });
 };
+
+export const useWicsIndex = (
+  wics: string | null,
+  startDate?: string,
+  endDate?: string
+) => {
+  return useQuery({
+    queryKey: ["wicsIndex", wics, startDate, endDate],
+    queryFn: () => api.getWicsIndex(wics!, startDate, endDate),
+    enabled: !!wics,
+  });
+};

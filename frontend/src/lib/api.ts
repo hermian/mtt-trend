@@ -145,6 +145,17 @@ export interface WicsRankingsResponse {
   months: WicsMonthRankings[];
 }
 
+export interface WicsIndexPoint {
+  date: string;
+  EW_Index?: number;
+  MC_Index?: number;
+}
+
+export interface WicsIndexResponse {
+  WICS: string;
+  data: WicsIndexPoint[];
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -211,6 +222,18 @@ export const api = {
   ): Promise<WicsRankingsResponse> => {
     const { data } = await apiClient.get<WicsRankingsResponse>("/api/charts/wics-rankings/weekly", {
       params: { start_week: startWeek, end_week: endWeek },
+    });
+    return data;
+  },
+
+  // GET /api/charts/wics-index?wics=&start_date=&end_date= → WicsIndexResponse
+  getWicsIndex: async (
+    wics: string,
+    startDate?: string,
+    endDate?: string
+  ): Promise<WicsIndexResponse> => {
+    const { data } = await apiClient.get<WicsIndexResponse>("/api/charts/wics-index", {
+      params: { wics, start_date: startDate, end_date: endDate },
     });
     return data;
   },

@@ -26,6 +26,22 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 describe("WicsRankingPanel Component - Unit Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+
+    vi.spyOn(useWicsData, "useWicsWeeks").mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useWicsData, "useWicsWeeklyRankings").mockReturnValue({
+      data: { months: [] },
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useWicsData, "useWicsIndex").mockReturnValue({
+      data: { WICS: "", data: [] },
+      isLoading: false,
+      error: null,
+    } as any);
   });
 
   it("should render loading spinner when loading months", () => {

@@ -72,6 +72,18 @@ def temp_stock_master_db(monkeypatch):
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE wics_daily_index (
+            date TEXT NOT NULL,
+            WICS TEXT NOT NULL,
+            EW_Index REAL,
+            MC_Index REAL,
+            EW_Return REAL,
+            MC_Return REAL,
+            PRIMARY KEY (date, WICS)
+        )
+    """)
+
     # Insert dummy data
     dummy_data = [
         ("2026-06-30", "2026-06", "IT서비스", 0.1, 0.2, 2, 1, 0.5, "IT서비스 (10%)", "IT서비스 (20%)"),
@@ -112,6 +124,18 @@ def temp_stock_master_db(monkeypatch):
         INSERT INTO wics_weekly_rankings_top_stocks (date, YearWeek, WICS, stock_code, stock_name, stock_12m_return, sector_weight, marcap, rank_in_sector)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, dummy_weekly_top_stocks)
+
+    dummy_index = [
+        ("2026-06-01", "IT서비스", 100.0, 100.0, 0.0, 0.0),
+        ("2026-06-02", "IT서비스", 110.0, 105.0, 0.1, 0.05),
+        ("2026-06-03", "IT서비스", 121.0, 110.25, 0.1, 0.05),
+        ("2026-06-01", "가구", 100.0, 100.0, 0.0, 0.0),
+        ("2026-06-02", "가구", 90.0, 95.0, -0.1, -0.05),
+    ]
+    cursor.executemany("""
+        INSERT INTO wics_daily_index (date, WICS, EW_Index, MC_Index, EW_Return, MC_Return)
+        VALUES (?, ?, ?, ?, ?, ?)
+    """, dummy_index)
 
     conn.commit()
     conn.close()
@@ -198,3 +222,39 @@ def test_get_wics_weekly_rankings(temp_stock_master_db):
     data_filtered = response_filtered.json()
     assert len(data_filtered["months"]) == 1
     assert data_filtered["months"][0]["YearMonth"] == "2026-W27"
+
+
+def test_get_wics_index(temp_stock_master_db):
+    response = client.get("/api/charts/wics-index", params={"wics": "IT서비스"})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["WICS"] == "IT서비스"
+    assert len(data["data"]) == 3
+    assert data["data"][0]["date"] == "2026-06-01"
+    assert data["data"][0]["EW_Index"] == 100.0
+    assert data["data"][1]["MC_Index"] == 105.0
+
+    filtered = client.get(
+        "/api/charts/wics-index",
+        params={"wics": "IT서비스", "start_date": "2026-06-02", "end_date": "2026-06-02"},
+    )
+    assert filtered.status_code == 200
+    assert len(filtered.json()["data"]) == 1
+    assert filtered.json()["data"][0]["EW_Index"] == 110.0
+
+
+def test_get_wics_index_missing_table(temp_stock_master_db, monkeypatch):
+    fd, db_path_str = tempfile.mkstemp(suffix=".db")
+    conn = sqlite3.connect(db_path_str)
+    conn.close()
+    os.close(fd)
+    monkeypatch.setenv("STOCK_MASTER_DB_PATH", db_path_str)
+    try:
+        response = client.get("/api/charts/wics-index", params={"wics": "IT서비스"})
+        assert response.status_code == 200
+        assert response.json()["data"] == []
+    finally:
+        try:
+            os.remove(db_path_str)
+        except OSError:
+            pass

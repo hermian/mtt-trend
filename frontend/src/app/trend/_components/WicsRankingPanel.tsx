@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useWicsMonths, useWicsRankings, useWicsWeeks, useWicsWeeklyRankings } from "@/hooks/useWicsData";
 import { WicsRankingItem } from "@/lib/api";
+import { WicsIndexChart } from "./WicsIndexChart";
 import clsx from "clsx";
 
 const TOP_10_COLORS = [
@@ -17,6 +18,29 @@ const TOP_10_COLORS = [
   "bg-purple-900/60 border border-purple-700/50 text-purple-200",
   "bg-rose-900/60 border border-rose-700/50 text-rose-200",
 ];
+
+function endOfMonth(ym: string): string {
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m, 0));
+  return d.toISOString().slice(0, 10);
+}
+
+function isoWeekToRange(yw: string): { start: string; end: string } {
+  const match = yw.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return { start: yw, end: yw };
+  const year = Number(match[1]);
+  const week = Number(match[2]);
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const day = jan4.getUTCDay() || 7;
+  const monday = new Date(jan4);
+  monday.setUTCDate(jan4.getUTCDate() - day + 1 + (week - 1) * 7);
+  const friday = new Date(monday);
+  friday.setUTCDate(monday.getUTCDate() + 4);
+  return {
+    start: monday.toISOString().slice(0, 10),
+    end: friday.toISOString().slice(0, 10),
+  };
+}
 
 export const WicsRankingPanel: React.FC = () => {
   const { data: months, isLoading: monthsLoading, error: monthsError } = useWicsMonths();
@@ -475,6 +499,18 @@ export const WicsRankingPanel: React.FC = () => {
   const activeLoading = viewMode === "monthly" ? monthsLoading : weeksLoading;
   const activeRankingsLoading = viewMode === "monthly" ? rankingsLoading : weeklyRankingsLoading;
 
+  const indexDateRange = useMemo(() => {
+    if (viewMode === "monthly") {
+      if (!startMonth || !endMonth) return { start: undefined, end: undefined };
+      return { start: `${startMonth}-01`, end: endOfMonth(endMonth) };
+    }
+    if (!startWeek || !endWeek) return { start: undefined, end: undefined };
+    return {
+      start: isoWeekToRange(startWeek).start,
+      end: isoWeekToRange(endWeek).end,
+    };
+  }, [viewMode, startMonth, endMonth, startWeek, endWeek]);
+
   return (
     <div ref={outerRef} className="flex flex-col h-full space-y-6 relative">
       {/* Filters & Header Controls */}
@@ -622,6 +658,17 @@ export const WicsRankingPanel: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {activeWics && (
+        <WicsIndexChart
+          key={activeWics}
+          wics={activeWics}
+          weight={rankType}
+          onWeightChange={setRankType}
+          startDate={indexDateRange.start}
+          endDate={indexDateRange.end}
+        />
+      )}
 
       {/* Main Ranking Grid */}
       <div className="flex-1 bg-gray-900/40 border border-gray-800 rounded-2xl overflow-hidden flex flex-col min-h-[600px]">

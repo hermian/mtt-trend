@@ -17,6 +17,8 @@ from app.schemas import (
     WicsIndexSectorSeries,
     WicsIndexOhlcPoint,
     WicsIndexMetaResponse,
+    MarketFlowResponse,
+    MarketFlowPoint,
 )
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
@@ -132,6 +134,83 @@ async def get_macro_chart_data(
     except Exception as e:
         print(f"Error loading macro data: {e}")
         return MacroDataResponse(data=[])
+    finally:
+        conn.close()
+
+@router.get("/market-flow", response_model=MarketFlowResponse)
+async def get_market_flow_chart_data(
+    start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)")
+):
+    """
+    ~/.cache/db/macro.db에서 수급 데이터(market_flow)를 반환합니다.
+    """
+    db_path = os.path.expanduser("~/.cache/db/macro.db")
+    if not os.path.exists(db_path):
+        return MarketFlowResponse(data=[])
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = "SELECT * FROM market_flow"
+    filters = []
+    params = []
+    if start_date:
+        filters.append("date >= ?")
+        params.append(start_date)
+    if end_date:
+        filters.append("date <= ?")
+        params.append(end_date)
+    if filters:
+        query += " WHERE " + " AND ".join(filters)
+    query += " ORDER BY date ASC, time ASC"
+
+    try:
+        cursor.execute(query, params)
+        rows = cursor.fetchall()
+        result = []
+        for row in rows:
+            result.append(MarketFlowPoint(
+                date=row["date"],
+                time=row["time"],
+                kospi_price=row["kospi_price"],
+                kospi200_price=row["kospi200_price"],
+                kosdaq_price=row["kosdaq_price"],
+                kq150_price=row["kq150_price"],
+                kospi_foreigner=row["kospi_foreigner"],
+                kospi_institution=row["kospi_institution"],
+                kospi_individual=row["kospi_individual"],
+                kospi_program=row["kospi_program"],
+                kosdaq_foreigner=row["kosdaq_foreigner"],
+                kosdaq_institution=row["kosdaq_institution"],
+                kosdaq_individual=row["kosdaq_individual"],
+                future_foreigner=row["future_foreigner"],
+                future_institution=row["future_institution"],
+                future_individual=row["future_individual"]
+            ))
+        return MarketFlowResponse(data=result)
+    except Exception as e:
+        print(f"Error loading market flow data: {e}")
+        return MarketFlowResponse(data=[])
+    finally:
+        conn.close()
+
+@router.get("/market-flow/dates", response_model=list[str])
+async def get_market_flow_dates():
+    """market_flow 테이블의 모든 고유 날짜 목록을 반환합니다."""
+    db_path = os.path.expanduser("~/.cache/db/macro.db")
+    if not os.path.exists(db_path):
+        return []
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("SELECT DISTINCT date FROM market_flow ORDER BY date ASC")
+        rows = cursor.fetchall()
+        return [row[0] for row in rows if row[0]]
+    except Exception as e:
+        print(f"Error loading market flow dates: {e}")
+        return []
     finally:
         conn.close()
 

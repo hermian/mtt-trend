@@ -115,6 +115,29 @@ export interface MacroDataResponse {
   data: MacroDataPoint[];
 }
 
+export interface MarketFlowPoint {
+  date: string;
+  time: string;
+  kospi_price?: number;
+  kospi200_price?: number;
+  kosdaq_price?: number;
+  kq150_price?: number;
+  kospi_foreigner?: number;
+  kospi_institution?: number;
+  kospi_individual?: number;
+  kospi_program?: number;
+  kosdaq_foreigner?: number;
+  kosdaq_institution?: number;
+  kosdaq_individual?: number;
+  future_foreigner?: number;
+  future_institution?: number;
+  future_individual?: number;
+}
+
+export interface MarketFlowResponse {
+  data: MarketFlowPoint[];
+}
+
 export interface WicsTopStockItem {
   stock_name: string;
   stock_code: string;
@@ -216,6 +239,21 @@ export const api = {
     const { data } = await apiClient.get<MacroDataResponse>("/api/charts/macro", {
       params: { start_date: startDate, end_date: endDate },
     });
+    return data;
+  },
+  // GET /api/charts/market-flow → MarketFlowResponse
+  getMarketFlowData: async (
+    startDate?: string,
+    endDate?: string
+  ): Promise<MarketFlowResponse> => {
+    const { data } = await apiClient.get<MarketFlowResponse>("/api/charts/market-flow", {
+      params: { start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
+  // GET /api/charts/market-flow/dates → string[]
+  getMarketFlowDates: async (): Promise<string[]> => {
+    const { data } = await apiClient.get<string[]>("/api/charts/market-flow/dates");
     return data;
   },
   // GET /api/charts/wics-months → { months: string[] }

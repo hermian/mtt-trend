@@ -29,6 +29,28 @@ class MacroDataPoint(BaseModel):
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]
 
+# --- Market Flow Schemas ---
+class MarketFlowPoint(BaseModel):
+    date: str
+    time: str
+    kospi_price: Optional[float] = None
+    kospi200_price: Optional[float] = None
+    kosdaq_price: Optional[float] = None
+    kq150_price: Optional[float] = None
+    kospi_foreigner: Optional[float] = None
+    kospi_institution: Optional[float] = None
+    kospi_individual: Optional[float] = None
+    kospi_program: Optional[float] = None
+    kosdaq_foreigner: Optional[float] = None
+    kosdaq_institution: Optional[float] = None
+    kosdaq_individual: Optional[float] = None
+    future_foreigner: Optional[float] = None
+    future_institution: Optional[float] = None
+    future_individual: Optional[float] = None
+
+class MarketFlowResponse(BaseModel):
+    data: List[MarketFlowPoint]
+
 # --- WICS Ranking Schemas ---
 class WicsMonthResponse(BaseModel):
     months: List[str]

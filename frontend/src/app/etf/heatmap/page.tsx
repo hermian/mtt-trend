@@ -66,6 +66,17 @@ export default function ETFHeatmapPage() {
             자산군·섹터별 수익률을 한눈에 비교합니다. (
             {data?.as_of_date || "-"} 기준)
           </p>
+          <p className="mt-1 text-[11px] text-gray-500">
+            참고:{" "}
+            <a
+              href="https://snowball72.com/etf/heatmap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-sky-400 underline transition-colors"
+            >
+              https://snowball72.com/etf/heatmap
+            </a>
+          </p>
         </div>
         <PeriodFilter value={selectedPeriod} onChange={setSelectedPeriod} />
       </div>

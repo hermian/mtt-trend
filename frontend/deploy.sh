@@ -8,6 +8,7 @@ echo "Building Next.js..."
 pnpm build
 
 echo "Copying static files to standalone directory..."
+cp -r public .next/standalone/public
 cp -r .next/static .next/standalone/.next/static
 
 echo "Restarting pm2..."

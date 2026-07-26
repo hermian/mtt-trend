@@ -13,7 +13,7 @@ interface HeatmapCellProps {
 
 export function HeatmapCell({ etf, period, label, onHover }: HeatmapCellProps) {
   const val = etf.returns?.[period] ?? null;
-  const style = getHeatStyle(val);
+  const style = getHeatStyle(val, period);
   const header = label ?? etf.name;
 
   return (

@@ -52,7 +52,7 @@ ETF_HEATMAP_LAYOUT = {
         "category": "KOSPI 200",
         "etfs": [
           {"code": "122630", "name": "KODEX 레버리지"},
-          {"code": "252670", "name": "KODEX 200선물인버스2X"},
+          {"code": "267770", "name": "TIGER 200선물레버리지"},
           {"code": "114800", "name": "KODEX 인버스"},
           {"code": "252420", "name": "RISE 200선물인버스2X"}
         ]

@@ -5,6 +5,7 @@ import { apiClient } from "@/lib/apiClient";
 import { HeatmapCell } from "./_components/HeatmapCell";
 import { HeatmapSectionBlock } from "./_components/HeatmapSectionBlock";
 import { HeatmapTooltip } from "./_components/HeatmapTooltip";
+import { ColorLegend } from "./_components/ColorLegend";
 import { PeriodFilter } from "./_components/PeriodFilter";
 import { KR_SECTIONS } from "./_lib/sections";
 import type { ETFItem, HeatmapData, PeriodKey } from "./_lib/types";
@@ -146,6 +147,8 @@ export default function ETFHeatmapPage() {
               ))}
             </div>
           </div>
+
+          <ColorLegend period={selectedPeriod} />
         </div>
       )}
 

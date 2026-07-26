@@ -669,5 +669,55 @@ ETF_HEATMAP_LAYOUT = {
         ]
       }
     ]
+  },
+  "GLOBAL": {
+    "indexes": [],
+    "groups": [
+      {
+        "category": "Global-All",
+        "etfs": [
+          {"code": "BBCA", "name": "캐나다"},
+          {"code": "SPY", "name": "미국"},
+          {"code": "QQQ", "name": "미국기술주"},
+          {"code": "EWW", "name": "멕시코"},
+          {"code": "EPU", "name": "페루"},
+          {"code": "ECH", "name": "칠레"},
+          {"code": "EWZ", "name": "브라질"},
+          {"code": "ILF", "name": "라틴아메리카"},
+          {"code": "VGK", "name": "유로존"},
+          {"code": "EWU", "name": "영국"},
+          {"code": "EWN", "name": "네덜란드"},
+          {"code": "EWD", "name": "스웨덴"},
+          {"code": "EDEN", "name": "덴마크"},
+          {"code": "EWG", "name": "독일"},
+          {"code": "EPOL", "name": "폴란드"},
+          {"code": "EWQ", "name": "프랑스"},
+          {"code": "EWL", "name": "스위스"},
+          {"code": "EWP", "name": "스페인"},
+          {"code": "EWI", "name": "이탈리아"},
+          {"code": "EIS", "name": "이스라엘"},
+          {"code": "KSA", "name": "사우디"},
+          {"code": "AFK", "name": "아프리카"},
+          {"code": "EZA", "name": "남아공"},
+          {"code": "ASHR", "name": "중국 A주"},
+          {"code": "MCHI", "name": "중국"},
+          {"code": "EWH", "name": "홍콩"},
+          {"code": "EWT", "name": "대만"},
+          {"code": "INDA", "name": "인도"},
+          {"code": "THD", "name": "태국"},
+          {"code": "VNM", "name": "베트남"},
+          {"code": "EWS", "name": "싱가폴"},
+          {"code": "ASEA", "name": "아세안"},
+          {"code": "EWM", "name": "말레이시아"},
+          {"code": "EIDO", "name": "인도네시아"},
+          {"code": "EWY", "name": "한국"},
+          {"code": "EWJ", "name": "일본"},
+          {"code": "EPHE", "name": "필리핀"},
+          {"code": "EWA", "name": "호주"},
+          {"code": "ENZL", "name": "뉴질랜드"},
+          {"code": "VPL", "name": "아시아"}
+        ]
+      }
+    ]
   }
 }

@@ -95,7 +95,7 @@ def get_us_db_code(conn_master: sqlite3.Connection, symbol: str) -> str:
 def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None) -> dict:
     etf_price_db, macro_db = get_db_paths()
     
-    if market == "US":
+    if market in ["US", "GLOBAL"]:
         etf_us_price_db = Path.home() / ".cache" / "db" / "etf_us_price.db"
         etf_us_master_db = Path.home() / ".cache" / "db" / "etf_us_master.db"
         
@@ -128,54 +128,55 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
             d_3y = (target_dt - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d")
             d_5y = (target_dt - datetime.timedelta(days=5*365)).strftime("%Y-%m-%d")
 
-            # Fetch Indexes
+            # Fetch Indexes (only for US)
             indexes_data = []
-            for idx in ETF_HEATMAP_LAYOUT["US"]["indexes"]:
-                code = idx["code"]
-                if code in ["sp500", "nasdaq100"]:
-                    c_now = get_index_close_price(conn_macro, code, target_date_str)
-                    c_1d = get_index_close_price(conn_macro, code, d_1d)
-                    c_1w = get_index_close_price(conn_macro, code, d_1w)
-                    c_mtd = get_index_close_price(conn_macro, code, d_mtd)
-                    c_ytd = get_index_close_price(conn_macro, code, d_ytd)
-                    c_3m = get_index_close_price(conn_macro, code, d_3m)
-                    c_6m = get_index_close_price(conn_macro, code, d_6m)
-                    c_1y = get_index_close_price(conn_macro, code, d_1y)
-                    c_3y = get_index_close_price(conn_macro, code, d_3y)
-                    c_5y = get_index_close_price(conn_macro, code, d_5y)
-                else:
-                    # DOW represented by DIA
-                    db_code = get_us_db_code(conn_master, code)
-                    c_now = get_us_etf_close_price(conn_etf, db_code, target_date_str)
-                    c_1d = get_us_etf_close_price(conn_etf, db_code, d_1d)
-                    c_1w = get_us_etf_close_price(conn_etf, db_code, d_1w)
-                    c_mtd = get_us_etf_close_price(conn_etf, db_code, d_mtd)
-                    c_ytd = get_us_etf_close_price(conn_etf, db_code, d_ytd)
-                    c_3m = get_us_etf_close_price(conn_etf, db_code, d_3m)
-                    c_6m = get_us_etf_close_price(conn_etf, db_code, d_6m)
-                    c_1y = get_us_etf_close_price(conn_etf, db_code, d_1y)
-                    c_3y = get_us_etf_close_price(conn_etf, db_code, d_3y)
-                    c_5y = get_us_etf_close_price(conn_etf, db_code, d_5y)
+            if market == "US":
+                for idx in ETF_HEATMAP_LAYOUT["US"]["indexes"]:
+                    code = idx["code"]
+                    if code in ["sp500", "nasdaq100"]:
+                        c_now = get_index_close_price(conn_macro, code, target_date_str)
+                        c_1d = get_index_close_price(conn_macro, code, d_1d)
+                        c_1w = get_index_close_price(conn_macro, code, d_1w)
+                        c_mtd = get_index_close_price(conn_macro, code, d_mtd)
+                        c_ytd = get_index_close_price(conn_macro, code, d_ytd)
+                        c_3m = get_index_close_price(conn_macro, code, d_3m)
+                        c_6m = get_index_close_price(conn_macro, code, d_6m)
+                        c_1y = get_index_close_price(conn_macro, code, d_1y)
+                        c_3y = get_index_close_price(conn_macro, code, d_3y)
+                        c_5y = get_index_close_price(conn_macro, code, d_5y)
+                    else:
+                        # DOW represented by DIA
+                        db_code = get_us_db_code(conn_master, code)
+                        c_now = get_us_etf_close_price(conn_etf, db_code, target_date_str)
+                        c_1d = get_us_etf_close_price(conn_etf, db_code, d_1d)
+                        c_1w = get_us_etf_close_price(conn_etf, db_code, d_1w)
+                        c_mtd = get_us_etf_close_price(conn_etf, db_code, d_mtd)
+                        c_ytd = get_us_etf_close_price(conn_etf, db_code, d_ytd)
+                        c_3m = get_us_etf_close_price(conn_etf, db_code, d_3m)
+                        c_6m = get_us_etf_close_price(conn_etf, db_code, d_6m)
+                        c_1y = get_us_etf_close_price(conn_etf, db_code, d_1y)
+                        c_3y = get_us_etf_close_price(conn_etf, db_code, d_3y)
+                        c_5y = get_us_etf_close_price(conn_etf, db_code, d_5y)
 
-                indexes_data.append({
-                    "code": code,
-                    "name": idx["name"],
-                    "returns": {
-                        "1D": calculate_return(c_now, c_1d),
-                        "1W": calculate_return(c_now, c_1w),
-                        "MTD": calculate_return(c_now, c_mtd),
-                        "YTD": calculate_return(c_now, c_ytd),
-                        "3M": calculate_return(c_now, c_3m),
-                        "6M": calculate_return(c_now, c_6m),
-                        "1Y": calculate_return(c_now, c_1y),
-                        "3Y": calculate_return(c_now, c_3y),
-                        "5Y": calculate_return(c_now, c_5y),
-                    }
-                })
+                    indexes_data.append({
+                        "code": code,
+                        "name": idx["name"],
+                        "returns": {
+                            "1D": calculate_return(c_now, c_1d),
+                            "1W": calculate_return(c_now, c_1w),
+                            "MTD": calculate_return(c_now, c_mtd),
+                            "YTD": calculate_return(c_now, c_ytd),
+                            "3M": calculate_return(c_now, c_3m),
+                            "6M": calculate_return(c_now, c_6m),
+                            "1Y": calculate_return(c_now, c_1y),
+                            "3Y": calculate_return(c_now, c_3y),
+                            "5Y": calculate_return(c_now, c_5y),
+                        }
+                    })
 
             # Construct Groups Structure
             groups_data = []
-            for g in ETF_HEATMAP_LAYOUT["US"]["groups"]:
+            for g in ETF_HEATMAP_LAYOUT[market]["groups"]:
                 group_etfs = []
                 for etf in g.get("etfs", []):
                     code = etf["code"]
@@ -213,7 +214,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                 })
 
             return {
-                "market": "US",
+                "market": market,
                 "as_of_date": target_date_str,
                 "indexes": indexes_data,
                 "groups": groups_data

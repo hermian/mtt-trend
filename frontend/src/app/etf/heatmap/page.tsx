@@ -7,13 +7,14 @@ import { HeatmapSectionBlock } from "./_components/HeatmapSectionBlock";
 import { HeatmapTooltip } from "./_components/HeatmapTooltip";
 import { ColorLegend } from "./_components/ColorLegend";
 import { PeriodFilter } from "./_components/PeriodFilter";
+import { GlobalMapHeatmap } from "./_components/GlobalMapHeatmap";
 import { KR_SECTIONS, US_SECTIONS } from "./_lib/sections";
 import type { ETFItem, HeatmapData, PeriodKey } from "./_lib/types";
 
 const TABS = [
   { id: "KR" as const, label: "한국 ETF", enabled: true },
   { id: "US" as const, label: "미국 ETF", enabled: true },
-  { id: "GLOBAL" as const, label: "세계 ETF", enabled: false },
+  { id: "GLOBAL" as const, label: "세계 ETF", enabled: true },
 ];
 
 export default function ETFHeatmapPage() {
@@ -25,7 +26,7 @@ export default function ETFHeatmapPage() {
   const [hoveredEtf, setHoveredEtf] = useState<ETFItem | null>(null);
 
   useEffect(() => {
-    if (activeTab !== "KR" && activeTab !== "US") return;
+    if (activeTab !== "KR" && activeTab !== "US" && activeTab !== "GLOBAL") return;
     setLoading(true);
     setData(null); // Clear previous market's data to prevent flashing old layouts
     apiClient
@@ -107,65 +108,75 @@ export default function ETFHeatmapPage() {
 
       {!loading && !error && data && (
         <div className="space-y-4">
-          {/* Indexes */}
-          {data.indexes?.length > 0 && (
-            <section className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
-              <h2 className="mb-2 text-sm font-bold text-gray-100">시장 지수</h2>
-              <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
-                {data.indexes.map((idx) => (
-                  <HeatmapCell
-                    key={idx.code}
-                    etf={idx}
-                    period={selectedPeriod}
-                    label={idx.name}
-                    onHover={setHoveredEtf}
-                  />
-                ))}
+          {activeTab === "GLOBAL" ? (
+            <GlobalMapHeatmap
+              data={data}
+              period={selectedPeriod}
+              onHover={setHoveredEtf}
+            />
+          ) : (
+            <>
+              {/* Indexes */}
+              {data.indexes?.length > 0 && (
+                <section className="rounded-lg border border-gray-800 bg-gray-950/60 p-3">
+                  <h2 className="mb-2 text-sm font-bold text-gray-100">시장 지수</h2>
+                  <div className="grid grid-cols-2 gap-1 sm:grid-cols-4">
+                    {data.indexes.map((idx) => (
+                      <HeatmapCell
+                        key={idx.code}
+                        etf={idx}
+                        period={selectedPeriod}
+                        label={idx.name}
+                        onHover={setHoveredEtf}
+                      />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Section bundles — 좌: 국내/해외/대체, 우: 산업별/테마/그룹주 */}
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
+                <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
+                  {sections.filter((s) => s.column === "left").map((section) => (
+                    <HeatmapSectionBlock
+                      key={section.id}
+                      section={section}
+                      groups={data.groups}
+                      period={selectedPeriod}
+                      onHover={setHoveredEtf}
+                    />
+                  ))}
+                </div>
+                <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
+                  {sections.filter((s) => s.column === "right").map((section) => (
+                    <HeatmapSectionBlock
+                      key={section.id}
+                      section={section}
+                      groups={data.groups}
+                      period={selectedPeriod}
+                      onHover={setHoveredEtf}
+                    />
+                  ))}
+                </div>
               </div>
-            </section>
-          )}
 
-          {/* Section bundles — 좌: 국내/해외/대체, 우: 산업별/테마/그룹주 */}
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
-            <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
-              {sections.filter((s) => s.column === "left").map((section) => (
-                <HeatmapSectionBlock
-                  key={section.id}
-                  section={section}
-                  groups={data.groups}
-                  period={selectedPeriod}
-                  onHover={setHoveredEtf}
-                />
-              ))}
-            </div>
-            <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
-              {sections.filter((s) => s.column === "right").map((section) => (
-                <HeatmapSectionBlock
-                  key={section.id}
-                  section={section}
-                  groups={data.groups}
-                  period={selectedPeriod}
-                  onHover={setHoveredEtf}
-                />
-              ))}
-            </div>
-          </div>
-
-          {/* Bottom Section (e.g. US leverage) */}
-          {sections.some((s) => s.column === "bottom") && (
-            <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
-              {sections
-                .filter((s) => s.column === "bottom")
-                .map((section) => (
-                  <HeatmapSectionBlock
-                    key={section.id}
-                    section={section}
-                    groups={data.groups}
-                    period={selectedPeriod}
-                    onHover={setHoveredEtf}
-                  />
-                ))}
-            </div>
+              {/* Bottom Section (e.g. US leverage) */}
+              {sections.some((s) => s.column === "bottom") && (
+                <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
+                  {sections
+                    .filter((s) => s.column === "bottom")
+                    .map((section) => (
+                      <HeatmapSectionBlock
+                        key={section.id}
+                        section={section}
+                        groups={data.groups}
+                        period={selectedPeriod}
+                        onHover={setHoveredEtf}
+                      />
+                    ))}
+                </div>
+              )}
+            </>
           )}
 
           <ColorLegend period={selectedPeriod} />

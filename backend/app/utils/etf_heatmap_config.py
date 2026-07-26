@@ -326,5 +326,348 @@ ETF_HEATMAP_LAYOUT = {
         ]
       }
     ]
+  },
+  "US": {
+    "indexes": [
+      {"code": "sp500", "name": "S&P500"},
+      {"code": "nasdaq100", "name": "NASDAQ"},
+      {"code": "DIA", "name": "DOW"}
+    ],
+    "groups": [
+      {
+        "category": "US-Equity",
+        "etfs": [
+          {"code": "SPY", "name": "S&P500"},
+          {"code": "QQQ", "name": "NASDAQ"},
+          {"code": "DIA", "name": "DOW30"}
+        ]
+      },
+      {
+        "category": "Global-Equity",
+        "etfs": [
+          {"code": "VT", "name": "전세계"},
+          {"code": "IEFA", "name": "미국의 선진국"},
+          {"code": "VWO", "name": "신흥국"}
+        ]
+      },
+      {
+        "category": "Size-Style-Large",
+        "etfs": [
+          {"code": "IWD", "name": "대형 가치"},
+          {"code": "IWB", "name": "대형 혼합"},
+          {"code": "IWF", "name": "대형 성장"}
+        ]
+      },
+      {
+        "category": "Size-Style-Mid",
+        "etfs": [
+          {"code": "IWS", "name": "중형 가치"},
+          {"code": "IWR", "name": "중형 혼합"},
+          {"code": "IWP", "name": "중형 성장"}
+        ]
+      },
+      {
+        "category": "Size-Style-Small",
+        "etfs": [
+          {"code": "IWN", "name": "소형 가치"},
+          {"code": "IWM", "name": "소형 혼합"},
+          {"code": "IWO", "name": "소형 성장"}
+        ]
+      },
+      {
+        "category": "Size-Style-Global",
+        "etfs": [
+          {"code": "EFV", "name": "글로벌가치"},
+          {"code": "EFA", "name": "글로벌혼합"},
+          {"code": "EFG", "name": "글로벌성장"}
+        ]
+      },
+      {
+        "category": "Size-Style-US-Small",
+        "etfs": [
+          {"code": "SCZ", "name": "미국의 소형주"}
+        ]
+      },
+      {
+        "category": "Dividend-US",
+        "etfs": [
+          {"code": "VYM", "name": "고배당"},
+          {"code": "SCHD", "name": "고배당"},
+          {"code": "VIG", "name": "배당성장주"},
+          {"code": "COWZ", "name": "캐쉬카우"}
+        ]
+      },
+      {
+        "category": "Dividend-Global",
+        "etfs": [
+          {"code": "IDV", "name": "선진국고배당"},
+          {"code": "DEM", "name": "신흥국고배당"}
+        ]
+      },
+      {
+        "category": "Dividend-Other-US",
+        "etfs": [
+          {"code": "RSP", "name": "동일비중"},
+          {"code": "FNDX", "name": "펀더멘털"},
+          {"code": "USMV", "name": "저변동성"},
+          {"code": "QUAL", "name": "퀄리티팩터"},
+          {"code": "MTUM", "name": "모멘텀팩터"},
+          {"code": "VLUE", "name": "밸류팩터"},
+          {"code": "VIXY", "name": "변동성"}
+        ]
+      },
+      {
+        "category": "Dividend-Other-Global",
+        "etfs": [
+          {"code": "EFAV", "name": "선진국로우볼"},
+          {"code": "EEMV", "name": "신흥국로우볼"},
+          {"code": "IQLT", "name": "퀄리티팩터"}
+        ]
+      },
+      {
+        "category": "Bond-US-Aggregate",
+        "etfs": [
+          {"code": "BND", "name": "혼합"},
+          {"code": "BSV", "name": "단기"},
+          {"code": "BIV", "name": "중기"},
+          {"code": "BLV", "name": "장기"}
+        ]
+      },
+      {
+        "category": "Bond-US-Treasury",
+        "etfs": [
+          {"code": "GOVT", "name": "혼합"},
+          {"code": "SHY", "name": "단기"},
+          {"code": "IEF", "name": "중기"},
+          {"code": "TLT", "name": "장기"}
+        ]
+      },
+      {
+        "category": "Bond-US-Corporate",
+        "etfs": [
+          {"code": "LQD", "name": "혼합"},
+          {"code": "VCSH", "name": "단기"},
+          {"code": "VCIT", "name": "중기"},
+          {"code": "VCLT", "name": "장기"}
+        ]
+      },
+      {
+        "category": "Bond-US-TIPS",
+        "etfs": [
+          {"code": "TIP", "name": "혼합"},
+          {"code": "STIP", "name": "단기"},
+          {"code": "LTPZ", "name": "장기"},
+          {"code": "SPMB", "name": "MBS"}
+        ]
+      },
+      {
+        "category": "Bond-Global",
+        "etfs": [
+          {"code": "BNDX", "name": "글로벌대표채"},
+          {"code": "BWX", "name": "선진국대표채"},
+          {"code": "EMB", "name": "신흥국대표채"},
+          {"code": "EMLC", "name": "신흥국로컬채"},
+          {"code": "HYG", "name": "하이일드"},
+          {"code": "BKLN", "name": "BANK LOAN"}
+        ]
+      },
+      {
+        "category": "Sector-Energy",
+        "etfs": [
+          {"code": "XLE", "name": "에너지"},
+          {"code": "XOP", "name": "원유/가스개발"},
+          {"code": "OIH", "name": "에너지장비"},
+          {"code": "ICLN", "name": "신재생에너지"},
+          {"code": "TAN", "name": "태양광"},
+          {"code": "FAN", "name": "풍력"},
+          {"code": "FCG", "name": "천연가스"}
+        ]
+      },
+      {
+        "category": "Sector-Materials",
+        "etfs": [
+          {"code": "XLB", "name": "소재"},
+          {"code": "XME", "name": "금속/광산"},
+          {"code": "URA", "name": "우라늄"},
+          {"code": "GNR", "name": "천연자원"},
+          {"code": "VEGI", "name": "농업"},
+          {"code": "LIT", "name": "배터리소재"}
+        ]
+      },
+      {
+        "category": "Sector-Industrials",
+        "etfs": [
+          {"code": "XLI", "name": "산업재"},
+          {"code": "IFRA", "name": "인프라"},
+          {"code": "XHB", "name": "주택건설"},
+          {"code": "IYT", "name": "운송/물류"},
+          {"code": "JETS", "name": "항공"},
+          {"code": "ITA", "name": "항공우주/방위"},
+          {"code": "CGW", "name": "수자원"}
+        ]
+      },
+      {
+        "category": "Sector-Discretionary",
+        "etfs": [
+          {"code": "XLY", "name": "경기소비재"},
+          {"code": "XRT", "name": "소매"},
+          {"code": "PEJ", "name": "레저"},
+          {"code": "DRIV", "name": "자율주행"},
+          {"code": "IBUY", "name": "온라인소매"},
+          {"code": "AWAY", "name": "여행"},
+          {"code": "ESPO", "name": "게임"}
+        ]
+      },
+      {
+        "category": "Sector-Staples",
+        "etfs": [
+          {"code": "XLP", "name": "필수소비재"},
+          {"code": "PBJ", "name": "식음료"}
+        ]
+      },
+      {
+        "category": "Sector-Healthcare",
+        "etfs": [
+          {"code": "XLV", "name": "헬스케어"},
+          {"code": "XBI", "name": "바이오테크"},
+          {"code": "IHI", "name": "의료기기"},
+          {"code": "PPH", "name": "제약"}
+        ]
+      },
+      {
+        "category": "Sector-Financials",
+        "etfs": [
+          {"code": "XLF", "name": "금융"},
+          {"code": "KBE", "name": "은행"},
+          {"code": "KRE", "name": "지역은행"},
+          {"code": "KIE", "name": "보험"},
+          {"code": "IAI", "name": "자본시장"},
+          {"code": "FINX", "name": "핀테크"},
+          {"code": "IPO", "name": "IPO"}
+        ]
+      },
+      {
+        "category": "Sector-Tech",
+        "etfs": [
+          {"code": "XLK", "name": "IT"},
+          {"code": "SOXX", "name": "반도체"},
+          {"code": "FDN", "name": "인터넷"},
+          {"code": "IGV", "name": "소프트웨어"},
+          {"code": "CIBR", "name": "사이버보안"},
+          {"code": "SKYY", "name": "클라우드"},
+          {"code": "BOTZ", "name": "로봇/AI"}
+        ]
+      },
+      {
+        "category": "Sector-Telecom",
+        "etfs": [
+          {"code": "XLC", "name": "커뮤니케이션"},
+          {"code": "EMQQ", "name": "신흥국인터넷"}
+        ]
+      },
+      {
+        "category": "Sector-Utilities",
+        "etfs": [
+          {"code": "XLU", "name": "유틸리티"}
+        ]
+      },
+      {
+        "category": "Commodities",
+        "etfs": [
+          {"code": "PDBC", "name": "원자재"},
+          {"code": "GLD", "name": "금"},
+          {"code": "SLV", "name": "은"},
+          {"code": "USO", "name": "원유"},
+          {"code": "UNG", "name": "천연가스"},
+          {"code": "DBA", "name": "농산물"},
+          {"code": "DBB", "name": "산업금속"},
+          {"code": "CPER", "name": "구리"}
+        ]
+      },
+      {
+        "category": "REITs",
+        "etfs": [
+          {"code": "VNQ", "name": "미국"},
+          {"code": "SCHH", "name": "리츠"},
+          {"code": "REM", "name": "모기지"},
+          {"code": "VNQI", "name": "글로벌"},
+          {"code": "SRVR", "name": "데이터센터"},
+          {"code": "INDS", "name": "물류/산업"}
+        ]
+      },
+      {
+        "category": "Crypto",
+        "etfs": [
+          {"code": "GBTC", "name": "비트코인"},
+          {"code": "IBIT", "name": "비트코인"}
+        ]
+      },
+      {
+        "category": "Leverage-SPY",
+        "etfs": [
+          {"code": "SPY", "name": "1배"},
+          {"code": "SSO", "name": "2배"},
+          {"code": "UPRO", "name": "3배"},
+          {"code": "SH", "name": "-1배"},
+          {"code": "SDS", "name": "-2배"},
+          {"code": "SPXU", "name": "-3배"}
+        ]
+      },
+      {
+        "category": "Leverage-QQQ",
+        "etfs": [
+          {"code": "QQQ", "name": "1배"},
+          {"code": "QLD", "name": "2배"},
+          {"code": "TQQQ", "name": "3배"},
+          {"code": "PSQ", "name": "-1배"},
+          {"code": "QID", "name": "-2배"},
+          {"code": "SQQQ", "name": "-3배"}
+        ]
+      },
+      {
+        "category": "Leverage-DIA",
+        "etfs": [
+          {"code": "DIA", "name": "1배"},
+          {"code": "DDM", "name": "2배"},
+          {"code": "UDOW", "name": "3배"},
+          {"code": "DOG", "name": "-1배"},
+          {"code": "DXD", "name": "-2배"},
+          {"code": "SDOW", "name": "-3배"}
+        ]
+      },
+      {
+        "category": "Leverage-IWM",
+        "etfs": [
+          {"code": "IWM", "name": "1배"},
+          {"code": "UWM", "name": "2배"},
+          {"code": "TNA", "name": "3배"},
+          {"code": "RWM", "name": "-1배"},
+          {"code": "TWM", "name": "-2배"},
+          {"code": "TZA", "name": "-3배"}
+        ]
+      },
+      {
+        "category": "Leverage-TLT",
+        "etfs": [
+          {"code": "TLT", "name": "1배"},
+          {"code": "UBT", "name": "2배"},
+          {"code": "TMF", "name": "3배"},
+          {"code": "TBF", "name": "-1배"},
+          {"code": "TBT", "name": "-2배"},
+          {"code": "TMV", "name": "-3배"}
+        ]
+      },
+      {
+        "category": "Leverage-IEF",
+        "etfs": [
+          {"code": "IEF", "name": "1배"},
+          {"code": "UST", "name": "2배"},
+          {"code": "TYD", "name": "3배"},
+          {"code": "TBX", "name": "-1배"},
+          {"code": "PST", "name": "-2배"},
+          {"code": "TYO", "name": "-3배"}
+        ]
+      }
+    ]
   }
 }

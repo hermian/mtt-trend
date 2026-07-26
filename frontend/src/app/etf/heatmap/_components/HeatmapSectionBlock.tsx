@@ -33,6 +33,7 @@ export function HeatmapSectionBlock({
             etfs={item.etfs}
             period={period}
             onHover={onHover}
+            gridCols={section.gridCols}
           />
         ))}
       </div>

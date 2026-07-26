@@ -6,7 +6,6 @@ import {
   ColorType,
   CrosshairMode,
   LineSeries,
-  AreaSeries,
   IChartApi,
   ISeriesApi,
   SeriesType,
@@ -19,7 +18,7 @@ interface MarketFlowChartProps {
 
 interface HoveredData {
   time: string;
-  prices: Record<string, number | undefined>; // 다중 지수 가격 매핑
+  price?: number;
   foreigner?: number;
   institution?: number;
   program?: number;
@@ -40,17 +39,22 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
   const chartDataRef = useRef<any>(null);
+  const selectedIndexRef = useRef<IndexType>("kospi");
   const isSyncingRef = useRef<boolean>(false);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
-  // 지수 다중 선택 상태 (기본값: KOSPI)
-  const [selectedIndexes, setSelectedIndexes] = useState<IndexType[]>(["kospi"]);
+  // 지수 단일 선택 상태 (기본값: KOSPI)
+  const [selectedIndex, setSelectedIndex] = useState<IndexType>("kospi");
 
   // 날짜 리스트 및 선택 날짜 상태
   const { data: dates } = useMarketFlowDates();
   const [selectedDate, setSelectedDate] = useState<string>("");
+
+  useEffect(() => {
+    selectedIndexRef.current = selectedIndex;
+  }, [selectedIndex]);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -85,10 +89,19 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   };
 
+  const buildHoveredData = (point: any, idx: IndexType): HoveredData => ({
+    time: point.displayTime,
+    price: getIndexPrice(point, idx) ?? undefined,
+    foreigner: point.kospi_foreigner_val ?? undefined,
+    institution: point.kospi_institution_val ?? undefined,
+    program: point.kospi_program_val ?? undefined,
+    future_foreigner: point.future_foreigner_val ?? undefined,
+  });
+
   // 날짜 내 첫 시점 데이터를 기준으로 0부터 시작하게 가공 (Zero-start)
   const formattedData = useMemo(() => {
     if (!chartData || !chartData.data) return [];
-    
+
     const sorted = [...chartData.data].sort((a, b) => {
       const timeA = `${a.date}T${a.time}:00`;
       const timeB = `${b.date}T${b.time}:00`;
@@ -126,13 +139,23 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     if (formattedData.length > 0) chartDataRef.current = formattedData;
   }, [formattedData]);
 
+  // 최신 봉 기준으로 범례 초기값 설정 (마우스 이동 전에도 값 표시)
+  useEffect(() => {
+    if (formattedData.length === 0) {
+      setHoveredData(null);
+      return;
+    }
+    const latestPoint = formattedData[formattedData.length - 1];
+    setHoveredData(buildHoveredData(latestPoint, selectedIndex));
+  }, [formattedData, selectedIndex]);
+
   // X축 범위를 09:00 ~ 15:45로 고정
   const setChartVisibleRange = () => {
     if (formattedData.length > 0 && chartsRef.current.size > 0) {
       const dateStr = formattedData[0].date;
       const startSec = Math.floor(new Date(`${dateStr}T09:00:00+09:00`).getTime() / 1000);
       const endSec = Math.floor(new Date(`${dateStr}T15:45:00+09:00`).getTime() / 1000);
-      
+
       setTimeout(() => {
         isSyncingRef.current = true;
         chartsRef.current.forEach(c => {
@@ -146,8 +169,10 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   };
 
+  // 차트 인스턴스 생성 — 데이터 갱신 시 재생성하지 않음 (폴링 시 깜빡임 방지)
   useEffect(() => {
-    if (!containerRef.current || !selectedDate) return;
+    // 로딩 UI에는 chart DOM이 없으므로, isLoading이 끝난 뒤에만 생성
+    if (isLoading || !containerRef.current || !selectedDate) return;
     setStatus("Building Charts...");
     const cleanup = () => {
       chartsRef.current.forEach(c => c.remove());
@@ -230,17 +255,14 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         const activeSeries: ISeriesApi<SeriesType>[] = [];
 
         if (panel.id === "prices") {
-          // 다중 지수 선택 라인 추가
-          selectedIndexes.forEach(idxId => {
-            const opt = INDEX_OPTIONS.find(o => o.id === idxId);
-            const series = chart.addSeries(LineSeries, {
-              color: opt?.color || "#cbd5e1",
-              lineWidth: 2,
-              priceScaleId: "right",
-              priceFormat: { type: "price", precision: 2, minMove: 0.01 },
-            });
-            activeSeries.push(series);
+          const opt = INDEX_OPTIONS.find(o => o.id === selectedIndex);
+          const series = chart.addSeries(LineSeries, {
+            color: opt?.color || "#cbd5e1",
+            lineWidth: 2,
+            priceScaleId: "right",
+            priceFormat: { type: "price", precision: 2, minMove: 0.01 },
           });
+          activeSeries.push(series);
         } else if (panel.id === "supply") {
           chart.applyOptions({
             rightPriceScale: {
@@ -309,39 +331,18 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             }
           });
 
+          const idx = selectedIndexRef.current;
           if (!param.time || !param.point || param.point.x < 0) {
             const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
             if (latestPoint) {
-              const pricesMap: Record<string, number | undefined> = {};
-              selectedIndexes.forEach(idx => {
-                pricesMap[idx] = getIndexPrice(latestPoint, idx);
-              });
-              setHoveredData({
-                time: latestPoint.displayTime,
-                prices: pricesMap,
-                foreigner: latestPoint.kospi_foreigner_val || undefined,
-                institution: latestPoint.kospi_institution_val || undefined,
-                program: latestPoint.kospi_program_val || undefined,
-                future_foreigner: latestPoint.future_foreigner_val || undefined,
-              });
+              setHoveredData(buildHoveredData(latestPoint, idx));
             } else {
               setHoveredData(null);
             }
           } else {
             const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
             if (currentPoint) {
-              const pricesMap: Record<string, number | undefined> = {};
-              selectedIndexes.forEach(idx => {
-                pricesMap[idx] = getIndexPrice(currentPoint, idx);
-              });
-              setHoveredData({
-                time: currentPoint.displayTime,
-                prices: pricesMap,
-                foreigner: currentPoint.kospi_foreigner_val || undefined,
-                institution: currentPoint.kospi_institution_val || undefined,
-                program: currentPoint.kospi_program_val || undefined,
-                future_foreigner: currentPoint.future_foreigner_val || undefined,
-              });
+              setHoveredData(buildHoveredData(currentPoint, idx));
             }
           }
         });
@@ -377,37 +378,35 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       console.error("Error drawing charts:", e);
       setStatus(`Error: ${e.message}`);
     }
-  }, [formattedData, isMobile, selectedIndexes, selectedDate]);
+  }, [isMobile, selectedIndex, selectedDate, isLoading]);
 
   // 데이터 바인딩
   useEffect(() => {
     if (formattedData.length === 0 || status !== "Active") return;
 
     const pricesSeries = seriesRef.current.get("prices");
-    if (pricesSeries && pricesSeries.length === selectedIndexes.length) {
-      selectedIndexes.forEach((idxId, sIndex) => {
-        const limitSec = Math.floor(new Date(`${selectedDate}T15:30:00+09:00`).getTime() / 1000);
-        const filtered = formattedData
-          .filter(d => {
-            const price = getIndexPrice(d, idxId);
-            return price != null && price > 0 && d.time <= limitSec;
-          })
-          .map(d => ({ time: d.time, value: getIndexPrice(d, idxId)! }));
+    if (pricesSeries && pricesSeries.length >= 1) {
+      const limitSec = Math.floor(new Date(`${selectedDate}T15:30:00+09:00`).getTime() / 1000);
+      const filtered = formattedData
+        .filter(d => {
+          const price = getIndexPrice(d, selectedIndex);
+          return price != null && price > 0 && d.time <= limitSec;
+        })
+        .map(d => ({ time: d.time, value: getIndexPrice(d, selectedIndex)! }));
 
-        if (filtered.length > 0) {
-          const lastPrice = filtered[filtered.length - 1].value;
-          const targetTimes = ["15:35", "15:40", "15:45"];
-          
-          targetTimes.forEach(tStr => {
-            const tSec = Math.floor(new Date(`${selectedDate}T${tStr}:00+09:00`).getTime() / 1000);
-            if (formattedData.some(d => d.time === tSec)) {
-              filtered.push({ time: tSec, value: lastPrice });
-            }
-          });
-        }
-        
-        pricesSeries[sIndex].setData(filtered);
-      });
+      if (filtered.length > 0) {
+        const lastPrice = filtered[filtered.length - 1].value;
+        const targetTimes = ["15:35", "15:40", "15:45"];
+
+        targetTimes.forEach(tStr => {
+          const tSec = Math.floor(new Date(`${selectedDate}T${tStr}:00+09:00`).getTime() / 1000);
+          if (formattedData.some(d => d.time === tSec)) {
+            filtered.push({ time: tSec, value: lastPrice });
+          }
+        });
+      }
+
+      pricesSeries[0].setData(filtered);
     }
 
     const supplySeries = seriesRef.current.get("supply");
@@ -419,7 +418,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
 
     setChartVisibleRange();
-  }, [formattedData, status, selectedIndexes]);
+  }, [formattedData, status, selectedIndex, selectedDate]);
 
   if (isLoading) {
     return (
@@ -438,20 +437,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   }
 
   const fmt = (v: number | undefined, unit = "억") => {
-    if (v == null || v === 0) return "-";
+    if (v == null) return "-";
     const sign = v > 0 ? "+" : "";
     return `${sign}${v.toLocaleString()}${unit}`;
-  };
-
-  // 지수 다중 선택 처리 함수
-  const toggleIndex = (idxId: IndexType) => {
-    setSelectedIndexes(prev => {
-      if (prev.includes(idxId)) {
-        if (prev.length <= 1) return prev; // 최소 1개 보장
-        return prev.filter(x => x !== idxId);
-      }
-      return [...prev, idxId];
-    });
   };
 
   // 날짜 좌우 이동 헬퍼
@@ -473,6 +461,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
   const isFirstDay = dates ? dates.indexOf(selectedDate) === 0 : true;
   const isLastDay = dates ? dates.indexOf(selectedDate) === dates.length - 1 : true;
+  const selectedOpt = INDEX_OPTIONS.find(o => o.id === selectedIndex);
 
   return (
     <div ref={containerRef} className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -482,16 +471,16 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           <h2 className="text-lg font-bold text-slate-100">시장 지수 & 수급 트렌드</h2>
           <p className="text-xs text-slate-400">코스피/코스닥 지수 및 메이저 수급 추이 (5분봉)</p>
         </div>
-        
+
         <div className="flex flex-wrap items-center gap-4">
-          {/* Index toggle options */}
+          {/* Index single-select options */}
           <div className="flex items-center gap-1 bg-slate-900 p-1 rounded border border-slate-800">
             {INDEX_OPTIONS.map((opt) => {
-              const active = selectedIndexes.includes(opt.id);
+              const active = selectedIndex === opt.id;
               return (
                 <button
                   key={opt.id}
-                  onClick={() => toggleIndex(opt.id)}
+                  onClick={() => setSelectedIndex(opt.id)}
                   className={`rounded px-2.5 py-1 text-xs font-bold transition-all ${
                     active
                       ? "bg-blue-600 text-white shadow-sm"
@@ -535,23 +524,18 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       </div>
 
       {/* Hover Info Board */}
-      <div className="grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 md:grid-cols-7 text-xs border border-slate-800/40">
+      <div className="grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 md:grid-cols-6 text-xs border border-slate-800/40">
         <div className="flex flex-col">
           <span className="text-slate-400 font-medium">시간</span>
           <span className="font-semibold text-slate-200">{hoveredData?.time || "-"}</span>
         </div>
-        
-        {/* 선택된 다중 지수를 범례에 출력 */}
-        {INDEX_OPTIONS.map(opt => {
-          if (!selectedIndexes.includes(opt.id)) return null;
-          const val = hoveredData?.prices[opt.id];
-          return (
-            <div className="flex flex-col" key={opt.id} style={{ color: opt.color }}>
-              <span className="font-medium opacity-90">{opt.name}</span>
-              <span className="font-semibold">{val ? val.toFixed(2) : "-"}</span>
-            </div>
-          );
-        })}
+
+        <div className="flex flex-col" style={{ color: selectedOpt?.color }}>
+          <span className="font-medium opacity-90">{selectedOpt?.name}</span>
+          <span className="font-semibold">
+            {hoveredData?.price != null ? hoveredData.price.toFixed(2) : "-"}
+          </span>
+        </div>
 
         <div className="flex flex-col">
           <span className="text-red-400 font-medium">외국인</span>
@@ -583,14 +567,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       <div data-scroll-area className="flex flex-col gap-4">
         <div className="relative">
           <div className="absolute left-2 top-2 z-10 flex items-center gap-3 bg-slate-900/80 px-2 py-0.5 rounded text-[10px] font-semibold border border-slate-800">
-            {INDEX_OPTIONS.map(opt => {
-              if (!selectedIndexes.includes(opt.id)) return null;
-              return (
-                <span key={opt.id} style={{ color: opt.color }}>
-                  ● {opt.name}
-                </span>
-              );
-            })}
+            <span style={{ color: selectedOpt?.color }}>
+              ● {selectedOpt?.name}
+            </span>
           </div>
           <div data-chart-id="prices" className="w-full rounded-lg overflow-hidden border border-slate-900" />
         </div>

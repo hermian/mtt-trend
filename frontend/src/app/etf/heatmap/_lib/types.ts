@@ -1,5 +1,6 @@
 export interface ReturnData {
   "1D": number | null;
+  "1W": number | null;
   MTD: number | null;
   YTD: number | null;
   "3M": number | null;
@@ -29,6 +30,7 @@ export interface HeatmapData {
 
 export const PERIODS = [
   { key: "1D", label: "1일" },
+  { key: "1W", label: "1주" },
   { key: "MTD", label: "이달" },
   { key: "YTD", label: "올해" },
   { key: "3M", label: "3개월" },
@@ -48,5 +50,7 @@ export interface HeatmapSection {
   /** category 키 → 화면 표시명 */
   categoryLabels?: Record<string, string>;
   /** 데스크톱 2열 레이아웃 위치 */
-  column?: "left" | "right";
+  column?: "left" | "right" | "bottom";
+  /** 그리드 열 개수 (기본값: 5) */
+  gridCols?: number;
 }

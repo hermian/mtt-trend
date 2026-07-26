@@ -3,6 +3,7 @@ import type { PeriodKey } from "./types";
 /** 기간별 최대 강도(|%|). 이 값 이상은 가장 진한 색 */
 const PERIOD_SCALE: Record<PeriodKey, number> = {
   "1D": 1,
+  "1W": 3,
   MTD: 5,
   YTD: 20,
   "3M": 10,

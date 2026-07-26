@@ -57,9 +57,173 @@ def calculate_return(close_now: float | None, close_then: float | None) -> float
         return None
     return round(((close_now - close_then) / close_then) * 100, 2)
 
-def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
+def get_us_etf_close_price(conn: sqlite3.Connection, etf_code: str, target_date_str: str) -> float | None:
+    """Find the close price of the closest trading date <= target_date_str for a specific US ETF code in etf_us_price.db.
+    Fallback to the earliest available price if listed after target_date_str (only for genuinely newly listed ETFs)."""
+    cursor = conn.cursor()
+    target_dt_prefix = target_date_str.split(" ")[0]
+    cursor.execute(
+        "SELECT Close, Date FROM etf_us_price WHERE Code = ? AND (Date <= ? OR Date <= ?) ORDER BY Date DESC LIMIT 1",
+        (etf_code, f"{target_dt_prefix} 23:59:59", f"{target_dt_prefix} 00:00:00")
+    )
+    row = cursor.fetchone()
+    if row:
+        return row[0]
+
+    # Fallback ONLY for genuinely newly listed ETFs (listed after 2025-08-01)
+    cursor.execute(
+        "SELECT Close, Date FROM etf_us_price WHERE Code = ? ORDER BY Date ASC LIMIT 1",
+        (etf_code,)
+    )
+    row_earliest = cursor.fetchone()
+    if row_earliest:
+        earliest_date = row_earliest[1].split(" ")[0]
+        if earliest_date > "2025-08-01":
+            return row_earliest[0]
+            
+    return None
+
+def get_us_db_code(conn_master: sqlite3.Connection, symbol: str) -> str:
+    """Map standard US ETF symbol (e.g. QQQ) to database code (e.g. QQQ.O) using etf_us_master.db."""
+    cursor = conn_master.cursor()
+    cursor.execute("SELECT url FROM etf_master WHERE Symbol = ? LIMIT 1;", (symbol,))
+    row = cursor.fetchone()
+    if row and row[0]:
+        return row[0]
+    return symbol
+
+def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None) -> dict:
     etf_price_db, macro_db = get_db_paths()
     
+    if market == "US":
+        etf_us_price_db = Path.home() / ".cache" / "db" / "etf_us_price.db"
+        etf_us_master_db = Path.home() / ".cache" / "db" / "etf_us_master.db"
+        
+        conn_etf = sqlite3.connect(str(etf_us_price_db))
+        conn_master = sqlite3.connect(str(etf_us_master_db))
+        conn_macro = sqlite3.connect(str(macro_db))
+        
+        try:
+            # Determine target date
+            if not target_date_str:
+                cursor = conn_etf.cursor()
+                cursor.execute("SELECT MAX(Date) FROM etf_us_price")
+                row = cursor.fetchone()
+                if row and row[0]:
+                    target_date_str = row[0].split(" ")[0]
+                else:
+                    target_date_str = datetime.date.today().strftime("%Y-%m-%d")
+
+            target_date_str = target_date_str.split(" ")[0]
+            target_dt = datetime.datetime.strptime(target_date_str, "%Y-%m-%d")
+
+            # Period Target Dates
+            d_1d = (target_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            d_1w = (target_dt - datetime.timedelta(days=target_dt.weekday())).strftime("%Y-%m-%d")
+            d_mtd = (target_dt.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            d_ytd = (target_dt.replace(month=1, day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+            d_3m = (target_dt - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
+            d_6m = (target_dt - datetime.timedelta(days=180)).strftime("%Y-%m-%d")
+            d_1y = (target_dt - datetime.timedelta(days=365)).strftime("%Y-%m-%d")
+            d_3y = (target_dt - datetime.timedelta(days=3*365)).strftime("%Y-%m-%d")
+            d_5y = (target_dt - datetime.timedelta(days=5*365)).strftime("%Y-%m-%d")
+
+            # Fetch Indexes
+            indexes_data = []
+            for idx in ETF_HEATMAP_LAYOUT["US"]["indexes"]:
+                code = idx["code"]
+                if code in ["sp500", "nasdaq100"]:
+                    c_now = get_index_close_price(conn_macro, code, target_date_str)
+                    c_1d = get_index_close_price(conn_macro, code, d_1d)
+                    c_1w = get_index_close_price(conn_macro, code, d_1w)
+                    c_mtd = get_index_close_price(conn_macro, code, d_mtd)
+                    c_ytd = get_index_close_price(conn_macro, code, d_ytd)
+                    c_3m = get_index_close_price(conn_macro, code, d_3m)
+                    c_6m = get_index_close_price(conn_macro, code, d_6m)
+                    c_1y = get_index_close_price(conn_macro, code, d_1y)
+                    c_3y = get_index_close_price(conn_macro, code, d_3y)
+                    c_5y = get_index_close_price(conn_macro, code, d_5y)
+                else:
+                    # DOW represented by DIA
+                    db_code = get_us_db_code(conn_master, code)
+                    c_now = get_us_etf_close_price(conn_etf, db_code, target_date_str)
+                    c_1d = get_us_etf_close_price(conn_etf, db_code, d_1d)
+                    c_1w = get_us_etf_close_price(conn_etf, db_code, d_1w)
+                    c_mtd = get_us_etf_close_price(conn_etf, db_code, d_mtd)
+                    c_ytd = get_us_etf_close_price(conn_etf, db_code, d_ytd)
+                    c_3m = get_us_etf_close_price(conn_etf, db_code, d_3m)
+                    c_6m = get_us_etf_close_price(conn_etf, db_code, d_6m)
+                    c_1y = get_us_etf_close_price(conn_etf, db_code, d_1y)
+                    c_3y = get_us_etf_close_price(conn_etf, db_code, d_3y)
+                    c_5y = get_us_etf_close_price(conn_etf, db_code, d_5y)
+
+                indexes_data.append({
+                    "code": code,
+                    "name": idx["name"],
+                    "returns": {
+                        "1D": calculate_return(c_now, c_1d),
+                        "1W": calculate_return(c_now, c_1w),
+                        "MTD": calculate_return(c_now, c_mtd),
+                        "YTD": calculate_return(c_now, c_ytd),
+                        "3M": calculate_return(c_now, c_3m),
+                        "6M": calculate_return(c_now, c_6m),
+                        "1Y": calculate_return(c_now, c_1y),
+                        "3Y": calculate_return(c_now, c_3y),
+                        "5Y": calculate_return(c_now, c_5y),
+                    }
+                })
+
+            # Construct Groups Structure
+            groups_data = []
+            for g in ETF_HEATMAP_LAYOUT["US"]["groups"]:
+                group_etfs = []
+                for etf in g.get("etfs", []):
+                    code = etf["code"]
+                    db_code = get_us_db_code(conn_master, code)
+                    
+                    c_now = get_us_etf_close_price(conn_etf, db_code, target_date_str)
+                    c_1d = get_us_etf_close_price(conn_etf, db_code, d_1d)
+                    c_1w = get_us_etf_close_price(conn_etf, db_code, d_1w)
+                    c_mtd = get_us_etf_close_price(conn_etf, db_code, d_mtd)
+                    c_ytd = get_us_etf_close_price(conn_etf, db_code, d_ytd)
+                    c_3m = get_us_etf_close_price(conn_etf, db_code, d_3m)
+                    c_6m = get_us_etf_close_price(conn_etf, db_code, d_6m)
+                    c_1y = get_us_etf_close_price(conn_etf, db_code, d_1y)
+                    c_3y = get_us_etf_close_price(conn_etf, db_code, d_3y)
+                    c_5y = get_us_etf_close_price(conn_etf, db_code, d_5y)
+
+                    group_etfs.append({
+                        "code": code,
+                        "name": etf["name"],
+                        "returns": {
+                            "1D": calculate_return(c_now, c_1d),
+                            "1W": calculate_return(c_now, c_1w),
+                            "MTD": calculate_return(c_now, c_mtd),
+                            "YTD": calculate_return(c_now, c_ytd),
+                            "3M": calculate_return(c_now, c_3m),
+                            "6M": calculate_return(c_now, c_6m),
+                            "1Y": calculate_return(c_now, c_1y),
+                            "3Y": calculate_return(c_now, c_3y),
+                            "5Y": calculate_return(c_now, c_5y),
+                        }
+                    })
+                groups_data.append({
+                    "category": g["category"],
+                    "etfs": group_etfs
+                })
+
+            return {
+                "market": "US",
+                "as_of_date": target_date_str,
+                "indexes": indexes_data,
+                "groups": groups_data
+            }
+        finally:
+            conn_etf.close()
+            conn_master.close()
+            conn_macro.close()
+
+    # Default to KR market
     conn_etf = sqlite3.connect(str(etf_price_db))
     conn_macro = sqlite3.connect(str(macro_db))
 
@@ -79,6 +243,7 @@ def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
 
         # Period Target Dates
         d_1d = (target_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+        d_1w = (target_dt - datetime.timedelta(days=target_dt.weekday())).strftime("%Y-%m-%d")
         d_mtd = (target_dt.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         d_ytd = (target_dt.replace(month=1, day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         d_3m = (target_dt - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
@@ -94,6 +259,7 @@ def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
             
             c_now = get_index_close_price(conn_macro, name_lower, target_date_str)
             c_1d = get_index_close_price(conn_macro, name_lower, d_1d)
+            c_1w = get_index_close_price(conn_macro, name_lower, d_1w)
             c_mtd = get_index_close_price(conn_macro, name_lower, d_mtd)
             c_ytd = get_index_close_price(conn_macro, name_lower, d_ytd)
             c_3m = get_index_close_price(conn_macro, name_lower, d_3m)
@@ -107,6 +273,7 @@ def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
                 "name": idx["name"],
                 "returns": {
                     "1D": calculate_return(c_now, c_1d),
+                    "1W": calculate_return(c_now, c_1w),
                     "MTD": calculate_return(c_now, c_mtd),
                     "YTD": calculate_return(c_now, c_ytd),
                     "3M": calculate_return(c_now, c_3m),
@@ -126,6 +293,7 @@ def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
                 
                 c_now = get_etf_close_price(conn_etf, code, target_date_str)
                 c_1d = get_etf_close_price(conn_etf, code, d_1d)
+                c_1w = get_etf_close_price(conn_etf, code, d_1w)
                 c_mtd = get_etf_close_price(conn_etf, code, d_mtd)
                 c_ytd = get_etf_close_price(conn_etf, code, d_ytd)
                 c_3m = get_etf_close_price(conn_etf, code, d_3m)
@@ -139,6 +307,7 @@ def load_etf_heatmap_data(target_date_str: str | None = None) -> dict:
                     "name": etf["name"],
                     "returns": {
                         "1D": calculate_return(c_now, c_1d),
+                        "1W": calculate_return(c_now, c_1w),
                         "MTD": calculate_return(c_now, c_mtd),
                         "YTD": calculate_return(c_now, c_ytd),
                         "3M": calculate_return(c_now, c_3m),

@@ -8,6 +8,7 @@ interface HeatmapGroupProps {
   etfs: ETFItem[];
   period: PeriodKey;
   onHover?: (etf: ETFItem | null) => void;
+  gridCols?: number;
 }
 
 /** 서브카테고리 라벨(좌) + 타일 행(우) — 스노우볼72 스타일 */
@@ -16,8 +17,13 @@ export function HeatmapGroup({
   etfs,
   period,
   onHover,
+  gridCols,
 }: HeatmapGroupProps) {
   const showLabel = Boolean(label);
+
+  const gridClass = gridCols === 6
+    ? "grid grid-cols-3 gap-1 sm:grid-cols-6 md:grid-cols-6"
+    : "grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-5";
 
   return (
     <div
@@ -30,7 +36,7 @@ export function HeatmapGroup({
           {label}
         </h3>
       )}
-      <div className="grid grid-cols-2 gap-1 sm:grid-cols-3 md:grid-cols-5">
+      <div className={gridClass}>
         {etfs.map((etf) => (
           <HeatmapCell
             key={`${label}-${etf.code}-${etf.name}`}

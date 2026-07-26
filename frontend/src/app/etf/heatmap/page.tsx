@@ -7,12 +7,12 @@ import { HeatmapSectionBlock } from "./_components/HeatmapSectionBlock";
 import { HeatmapTooltip } from "./_components/HeatmapTooltip";
 import { ColorLegend } from "./_components/ColorLegend";
 import { PeriodFilter } from "./_components/PeriodFilter";
-import { KR_SECTIONS } from "./_lib/sections";
+import { KR_SECTIONS, US_SECTIONS } from "./_lib/sections";
 import type { ETFItem, HeatmapData, PeriodKey } from "./_lib/types";
 
 const TABS = [
   { id: "KR" as const, label: "한국 ETF", enabled: true },
-  { id: "US" as const, label: "미국 ETF", enabled: false },
+  { id: "US" as const, label: "미국 ETF", enabled: true },
   { id: "GLOBAL" as const, label: "세계 ETF", enabled: false },
 ];
 
@@ -25,10 +25,11 @@ export default function ETFHeatmapPage() {
   const [hoveredEtf, setHoveredEtf] = useState<ETFItem | null>(null);
 
   useEffect(() => {
-    if (activeTab !== "KR") return;
+    if (activeTab !== "KR" && activeTab !== "US") return;
     setLoading(true);
+    setData(null); // Clear previous market's data to prevent flashing old layouts
     apiClient
-      .get<HeatmapData>("/api/etf/heatmap?market=KR")
+      .get<HeatmapData>(`/api/etf/heatmap?market=${activeTab}`)
       .then((res) => {
         if (
           res.data &&
@@ -49,6 +50,8 @@ export default function ETFHeatmapPage() {
         setLoading(false);
       });
   }, [activeTab]);
+
+  const sections = activeTab === "US" ? US_SECTIONS : KR_SECTIONS;
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-950 p-4 text-gray-100 md:p-6">
@@ -125,7 +128,7 @@ export default function ETFHeatmapPage() {
           {/* Section bundles — 좌: 국내/해외/대체, 우: 산업별/테마/그룹주 */}
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-start">
             <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
-              {KR_SECTIONS.filter((s) => s.column === "left").map((section) => (
+              {sections.filter((s) => s.column === "left").map((section) => (
                 <HeatmapSectionBlock
                   key={section.id}
                   section={section}
@@ -136,7 +139,7 @@ export default function ETFHeatmapPage() {
               ))}
             </div>
             <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
-              {KR_SECTIONS.filter((s) => s.column === "right").map((section) => (
+              {sections.filter((s) => s.column === "right").map((section) => (
                 <HeatmapSectionBlock
                   key={section.id}
                   section={section}
@@ -147,6 +150,23 @@ export default function ETFHeatmapPage() {
               ))}
             </div>
           </div>
+
+          {/* Bottom Section (e.g. US leverage) */}
+          {sections.some((s) => s.column === "bottom") && (
+            <div className="rounded-lg border border-gray-800 bg-gray-950/40 px-3">
+              {sections
+                .filter((s) => s.column === "bottom")
+                .map((section) => (
+                  <HeatmapSectionBlock
+                    key={section.id}
+                    section={section}
+                    groups={data.groups}
+                    period={selectedPeriod}
+                    onHover={setHoveredEtf}
+                  />
+                ))}
+            </div>
+          )}
 
           <ColorLegend period={selectedPeriod} />
         </div>

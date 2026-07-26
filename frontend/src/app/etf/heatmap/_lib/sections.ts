@@ -105,6 +105,146 @@ export const KR_SECTIONS: HeatmapSection[] = [
   },
 ];
 
+export const US_SECTIONS: HeatmapSection[] = [
+  // —— 좌열: 미국/글로벌 주식 → 사이즈 및 스타일 → 미국배당/글로벌배당/기타 미국/기타 글로벌 → 미국채권/미국국채/회사채/TIPS → 글로벌채권 ——
+  {
+    id: "us-equity",
+    title: "미국 및 글로벌 주식",
+    column: "left",
+    categories: ["US-Equity", "Global-Equity"],
+    categoryLabels: {
+      "US-Equity": "미국 주식",
+      "Global-Equity": "글로벌 주식",
+    },
+  },
+  {
+    id: "size-style",
+    title: "사이즈 및 스타일",
+    column: "left",
+    categories: [
+      "Size-Style-Large",
+      "Size-Style-Mid",
+      "Size-Style-Small",
+      "Size-Style-Global",
+      "Size-Style-US-Small",
+    ],
+    categoryLabels: {
+      "Size-Style-Large": "대형 가치/혼합/성장",
+      "Size-Style-Mid": "중형 가치/혼합/성장",
+      "Size-Style-Small": "소형 가치/혼합/성장",
+      "Size-Style-Global": "글로벌 가치/혼합/성장",
+      "Size-Style-US-Small": "미국 소형주",
+    },
+  },
+  {
+    id: "dividend-others",
+    title: "배당 및 기타",
+    column: "left",
+    categories: [
+      "Dividend-US",
+      "Dividend-Global",
+      "Dividend-Other-US",
+      "Dividend-Other-Global",
+    ],
+    categoryLabels: {
+      "Dividend-US": "미국 고배당/배당성장/캐쉬카우",
+      "Dividend-Global": "선진국/신흥국 고배당",
+      "Dividend-Other-US": "동일비중/펀더멘털/모멘텀 등",
+      "Dividend-Other-Global": "선진국/신흥국 로우볼/퀄리티",
+    },
+  },
+  {
+    id: "bond",
+    title: "채권",
+    column: "left",
+    categories: [
+      "Bond-US-Aggregate",
+      "Bond-US-Treasury",
+      "Bond-US-Corporate",
+      "Bond-US-TIPS",
+    ],
+    categoryLabels: {
+      "Bond-US-Aggregate": "미국 채권 혼합/단기/중기/장기",
+      "Bond-US-Treasury": "미국 국채 혼합/단기/중기/장기",
+      "Bond-US-Corporate": "미국 회사채 혼합/단기/중기/장기",
+      "Bond-US-TIPS": "물가연동/MBS",
+    },
+  },
+  {
+    id: "global-bond",
+    title: "글로벌 채권",
+    column: "left",
+    categories: ["Bond-Global"],
+    categoryLabels: {
+      "Bond-Global": "글로벌/선진국/신흥국대표채/하이일드",
+    },
+  },
+  // —— 우열: 산업별 → 대체자산 및 원자재 ——
+  {
+    id: "sector",
+    title: "산업별",
+    column: "right",
+    categories: [
+      "Sector-Energy",
+      "Sector-Materials",
+      "Sector-Industrials",
+      "Sector-Discretionary",
+      "Sector-Staples",
+      "Sector-Healthcare",
+      "Sector-Financials",
+      "Sector-Tech",
+      "Sector-Telecom",
+      "Sector-Utilities",
+    ],
+    categoryLabels: {
+      "Sector-Energy": "에너지",
+      "Sector-Materials": "소재",
+      "Sector-Industrials": "산업재",
+      "Sector-Discretionary": "경기소비재",
+      "Sector-Staples": "필수소비재",
+      "Sector-Healthcare": "헬스케어",
+      "Sector-Financials": "금융",
+      "Sector-Tech": "정보기술 (IT)",
+      "Sector-Telecom": "커뮤니케이션",
+      "Sector-Utilities": "유틸리티",
+    },
+  },
+  {
+    id: "alts",
+    title: "대체자산 및 원자재",
+    column: "right",
+    categories: ["Commodities", "REITs", "Crypto"],
+    categoryLabels: {
+      Commodities: "원자재/금/은/원유 등",
+      REITs: "부동산 (리츠)",
+      Crypto: "가상 자산",
+    },
+  },
+  // —— 하단: 레버리지 & 인버스 ——
+  {
+    id: "leverage",
+    title: "레버리지 & 인버스",
+    column: "bottom",
+    gridCols: 6,
+    categories: [
+      "Leverage-SPY",
+      "Leverage-QQQ",
+      "Leverage-DIA",
+      "Leverage-IWM",
+      "Leverage-TLT",
+      "Leverage-IEF",
+    ],
+    categoryLabels: {
+      "Leverage-SPY": "S&P 500",
+      "Leverage-QQQ": "NASDAQ 100",
+      "Leverage-DIA": "DOW JONES",
+      "Leverage-IWM": "RUSSELL 2000",
+      "Leverage-TLT": "미국채 (장기)",
+      "Leverage-IEF": "미국채 (중기)",
+    },
+  },
+];
+
 export function buildSectionGroups(
   groups: GroupItem[],
   section: HeatmapSection

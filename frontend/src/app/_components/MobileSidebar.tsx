@@ -86,15 +86,14 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const isChartActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "chart";
   const isAboveMaActive =
-    pathname.startsWith("/trend") && searchParams.get("tab") === "above_ma";
+    pathname.startsWith("/trend") &&
+    (searchParams.get("tab") === "above_ma" || searchParams.get("tab") === "market_flow");
   const isMacroActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "macro";
   const isWicsRankingActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "wics_ranking";
   const isWicsIndexActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "wics_index";
-  const isMarketFlowActive =
-    pathname.startsWith("/trend") && searchParams.get("tab") === "market_flow";
   return (
     <div
       className={clsx(
@@ -195,7 +194,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
             <span className="truncate">심층지표 분석</span>
           </Link>
 
-          {/* Above MA Button-styled Link */}
+          {/* Above MA & 수급 Button-styled Link */}
           <Link
             href="/trend?tab=above_ma"
             onClick={onClose}
@@ -220,7 +219,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <line x1="12" y1="20" x2="12" y2="4" />
               <line x1="6" y1="20" x2="6" y2="14" />
             </svg>
-            <span className="truncate">Above MA</span>
+            <span className="truncate">Above MA & 수급</span>
           </Link>
           {/* 매크로 지표 Button-styled Link */}
           <Link
@@ -302,33 +301,6 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
             </svg>
             <span className="truncate">WICS Index</span>
-          </Link>
-          {/* 시장 지수 & 수급 Button-styled Link */}
-          <Link
-            href="/trend?tab=market_flow"
-            onClick={onClose}
-            className={clsx(
-              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
-              isMarketFlowActive
-                ? "bg-blue-600 text-white shadow-lg"
-                : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
-            )}
-          >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="w-5 h-5 flex-shrink-0"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 20V10" />
-              <path d="M18 20V4" />
-              <path d="M6 20V16" />
-            </svg>
-            <span className="truncate">시장 수급</span>
           </Link>
 
           {/* Sync Button */}

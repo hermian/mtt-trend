@@ -163,8 +163,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "market_flow" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" ? (
             <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
               데이터를 로드하고 있습니다...
             </div>
@@ -324,59 +324,98 @@ function TrendPageContent() {
                 </div>
               )}
 
-              {activeTab === "above_ma" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
-                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white tracking-tight">Above MA Realtime Trends</h3>
-                      <p className="text-gray-400 text-sm mt-1">이동평균선(10/20/50 MA) 상회 종목 비율 실시간 추이 분석 (정전 시 보간 지원)</p>
-                      
-                      {/* 시장 인덱스 선택 영역 */}
-                      <div className="flex flex-wrap gap-2 mt-4 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
-                        {[
-                          { id: "kospi", name: "KOSPI" },
-                          { id: "kospi200", name: "KOSPI 200" },
-                          { id: "kosdaq", name: "KOSDAQ" },
-                          { id: "kosdaq150", name: "KOSDAQ 150" }
-                        ].map(item => (
-                          <button
-                            key={item.id}
-                            onClick={() => setSelectedTheme(item.id)}
-                            className={`text-xs px-4 py-2 rounded-lg font-bold transition-all duration-200 ${
-                              (selectedTheme?.toLowerCase() || "kospi") === item.id 
-                                ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 transform scale-[1.02]" 
-                                : "bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-white"
-                            }`}
-                          >
-                            {item.name}
-                          </button>
-                        ))}
+              {(activeTab === "above_ma" || activeTab === "market_flow") && (
+                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-10">
+                  {/* --- Top: Above MA Realtime Trends --- */}
+                  <div className="flex flex-col gap-6">
+                    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
+                      <div>
+                        <h3 className="text-2xl font-extrabold text-white tracking-tight">Above MA Realtime Trends</h3>
+                        <p className="text-gray-400 text-sm mt-1">이동평균선(10/20/50 MA) 상회 종목 비율 실시간 추이 분석 (정전 시 보간 지원)</p>
+                        
+                        {/* 시장 인덱스 선택 영역 */}
+                        <div className="flex flex-wrap gap-2 mt-4 bg-gray-900/60 p-4 rounded-xl border border-gray-800">
+                          {[
+                            { id: "kospi", name: "KOSPI" },
+                            { id: "kospi200", name: "KOSPI 200" },
+                            { id: "kosdaq", name: "KOSDAQ" },
+                            { id: "kosdaq150", name: "KOSDAQ 150" }
+                          ].map(item => (
+                            <button
+                              key={item.id}
+                              onClick={() => setSelectedTheme(item.id)}
+                              className={`text-xs px-4 py-2 rounded-lg font-bold transition-all duration-200 ${
+                                (selectedTheme?.toLowerCase() || "kospi") === item.id 
+                                  ? "bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/20 transform scale-[1.02]" 
+                                  : "bg-gray-800 text-gray-400 hover:bg-gray-750 hover:text-white"
+                              }`}
+                            >
+                              {item.name}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => router.push("/trend")}
+                        className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
+                      >
+                        ← 대시보드 요약보기
+                      </button>
+                    </div>
+                    
+                    <div className="min-h-[690px]">
+                      <AboveMaChart 
+                        market={selectedTheme?.toUpperCase() || "KOSPI"} 
+                      />
+                    </div>
+                    
+                    <div className="p-6 bg-gray-900/40 border border-gray-800 rounded-2xl">
+                      <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Above MA System Status</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                         <p>Target Index: <span className="text-gray-300 font-bold">{selectedTheme?.toUpperCase() || "KOSPI"}</span></p>
+                         <p>DB Source: <span className="text-gray-300 font-bold">realtime_above_ma.db (SQLite)</span></p>
+                         <p>Interpolation Status: <span className="text-emerald-400 font-bold">Active (Linear 15m grid)</span></p>
                       </div>
                     </div>
-                    <button 
-                      onClick={() => router.push("/trend")}
-                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
-                    >
-                      ← 대시보드 요약보기
-                    </button>
                   </div>
-                  
-                  <div className="flex-1 min-h-[690px]">
-                    <AboveMaChart 
-                      market={selectedTheme?.toUpperCase() || "KOSPI"} 
-                    />
+
+                  {/* Section Divider */}
+                  <div className="relative py-2">
+                    <div className="absolute inset-0 flex items-center" aria-hidden="true">
+                      <div className="w-full border-t border-gray-800" />
+                    </div>
+                    <div className="relative flex justify-center">
+                      <span className="bg-gray-950 px-4 text-xs font-semibold text-gray-500 uppercase tracking-widest">
+                        Market Flow & Supply
+                      </span>
+                    </div>
                   </div>
-                  
-                  <div className="mt-8 p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
-                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Above MA System Status</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
-                       <p>Target Index: <span className="text-gray-300 font-bold">{selectedTheme?.toUpperCase() || "KOSPI"}</span></p>
-                       <p>DB Source: <span className="text-gray-300 font-bold">realtime_above_ma.db (SQLite)</span></p>
-                       <p>Interpolation Status: <span className="text-emerald-400 font-bold">Active (Linear 15m grid)</span></p>
+
+                  {/* --- Bottom: Market Flow & Supply --- */}
+                  <div className="flex flex-col gap-6 mb-10">
+                    <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
+                      <div>
+                        <h3 className="text-2xl font-extrabold text-white tracking-tight">Market Flow & Supply</h3>
+                        <p className="text-gray-400 text-sm mt-1">국내 주가지수와 시장 메이저 수급의 추이를 실시간으로 모니터링</p>
+                      </div>
+                    </div>
+                    
+                    <div className="min-h-[690px]">
+                      <MarketFlowChart />
+                    </div>
+                    
+                    <div className="p-6 bg-gray-900/40 border border-gray-800 rounded-2xl">
+                      <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Market Flow Database Status</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                         <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db (market_flow)</span></p>
+                         <p>Data Range: <span className="text-gray-300 font-bold">KOSPI200, KQ150, Major supply & demand</span></p>
+                         <p>Collector status: <span className="text-emerald-400 font-bold">Active (5m Interval via telegram_kospi200_v2.sh)</span></p>
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
+
               {activeTab === "macro" && (
                 <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
                   <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
@@ -442,35 +481,6 @@ function TrendPageContent() {
                   </div>
                   <div className="flex-1 min-h-0">
                     <WicsIndexExplorer />
-                  </div>
-                </div>
-              )}
-              {activeTab === "market_flow" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
-                  <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
-                    <div>
-                      <h3 className="text-2xl font-extrabold text-white tracking-tight">Market Flow & Supply</h3>
-                      <p className="text-gray-400 text-sm mt-1">국내 주가지수와 시장 메이저 수급의 추이를 실시간으로 모니터링</p>
-                    </div>
-                    <button 
-                      onClick={() => router.push("/trend")}
-                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all self-start lg:self-end shrink-0"
-                    >
-                      ← 대시보드 요약보기
-                    </button>
-                  </div>
-                  
-                  <div className="flex-1 min-h-[690px]">
-                    <MarketFlowChart />
-                  </div>
-                  
-                  <div className="mt-8 p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
-                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Market Flow Database Status</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
-                       <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db (market_flow)</span></p>
-                       <p>Data Range: <span className="text-gray-300 font-bold">KOSPI200, KQ150, Major supply & demand</span></p>
-                       <p>Collector status: <span className="text-emerald-400 font-bold">Active (5m Interval via telegram_kospi200_v2.sh)</span></p>
-                    </div>
                   </div>
                 </div>
               )}

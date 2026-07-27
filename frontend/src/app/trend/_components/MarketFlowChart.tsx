@@ -21,8 +21,9 @@ interface HoveredData {
   price?: number;
   foreigner?: number;
   institution?: number;
-  program?: number;
+  programOrIndividual?: number;
   future_foreigner?: number;
+  isKosdaq?: boolean;
 }
 
 const INDEX_OPTIONS = [
@@ -89,14 +90,18 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   };
 
-  const buildHoveredData = (point: any, idx: IndexType): HoveredData => ({
-    time: point.displayTime,
-    price: getIndexPrice(point, idx) ?? undefined,
-    foreigner: point.kospi_foreigner_val ?? undefined,
-    institution: point.kospi_institution_val ?? undefined,
-    program: point.kospi_program_val ?? undefined,
-    future_foreigner: point.future_foreigner_val ?? undefined,
-  });
+  const buildHoveredData = (point: any, idx: IndexType): HoveredData => {
+    const isKosdaq = idx === "kosdaq" || idx === "kq150";
+    return {
+      time: point.displayTime,
+      price: getIndexPrice(point, idx) ?? undefined,
+      foreigner: isKosdaq ? point.kosdaq_foreigner_val ?? undefined : point.kospi_foreigner_val ?? undefined,
+      institution: isKosdaq ? point.kosdaq_institution_val ?? undefined : point.kospi_institution_val ?? undefined,
+      programOrIndividual: isKosdaq ? point.kosdaq_individual_val ?? undefined : point.kospi_program_val ?? undefined,
+      future_foreigner: point.future_foreigner_val ?? undefined,
+      isKosdaq,
+    };
+  };
 
   // 날짜 내 첫 시점 데이터를 기준으로 0부터 시작하게 가공 (Zero-start)
   const formattedData = useMemo(() => {
@@ -108,7 +113,10 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       return timeA > timeB ? 1 : -1;
     });
 
-    const dayFirstData: Record<string, { f: number; i: number; p: number; ff: number }> = {};
+    const dayFirstData: Record<string, {
+      f: number; i: number; p: number; ff: number;
+      kq_f: number; kq_i: number; kq_ind: number;
+    }> = {};
     sorted.forEach(p => {
       if (!dayFirstData[p.date]) {
         dayFirstData[p.date] = {
@@ -116,6 +124,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           i: p.kospi_institution ?? 0,
           p: p.kospi_program ?? 0,
           ff: p.future_foreigner ?? 0,
+          kq_f: p.kosdaq_foreigner ?? 0,
+          kq_i: p.kosdaq_institution ?? 0,
+          kq_ind: p.kosdaq_individual ?? 0,
         };
       }
     });
@@ -131,6 +142,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         kospi_institution_val: (p.kospi_institution ?? 0) - first.i,
         kospi_program_val: (p.kospi_program ?? 0) - first.p,
         future_foreigner_val: (p.future_foreigner ?? 0) - first.ff,
+        kosdaq_foreigner_val: (p.kosdaq_foreigner ?? 0) - first.kq_f,
+        kosdaq_institution_val: (p.kosdaq_institution ?? 0) - first.kq_i,
+        kosdaq_individual_val: (p.kosdaq_individual ?? 0) - first.kq_ind,
       };
     });
   }, [chartData]);
@@ -271,7 +285,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             },
           });
 
-          // 1. 외국인 (KOSPI)
+          // 1. 외국인 (KOSPI/KOSDAQ)
           const foreigner = chart.addSeries(LineSeries, {
             color: "#ef4444",
             lineWidth: 2,
@@ -288,7 +302,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           });
           activeSeries.push(foreigner);
 
-          // 2. 기관 (KOSPI)
+          // 2. 기관 (KOSPI/KOSDAQ)
           const institution = chart.addSeries(LineSeries, {
             color: "#3b82f6",
             lineWidth: 2,
@@ -297,14 +311,14 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           });
           activeSeries.push(institution);
 
-          // 3. 비차익 (KOSPI)
-          const program = chart.addSeries(LineSeries, {
+          // 3. 비차익 (KOSPI) 또는 개인 (KOSDAQ)
+          const programOrIndividual = chart.addSeries(LineSeries, {
             color: "#10b981",
             lineWidth: 2,
             priceScaleId: "right",
             priceFormat: { type: "price", precision: 0, minMove: 1 },
           });
-          activeSeries.push(program);
+          activeSeries.push(programOrIndividual);
 
           // 4. 외국인 선물
           const futureForeigner = chart.addSeries(LineSeries, {
@@ -411,10 +425,23 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
     const supplySeries = seriesRef.current.get("supply");
     if (supplySeries && supplySeries.length >= 4) {
-      supplySeries[0].setData(formattedData.map(d => ({ time: d.time, value: d.kospi_foreigner_val ?? 0 })));
-      supplySeries[1].setData(formattedData.map(d => ({ time: d.time, value: d.kospi_institution_val ?? 0 })));
-      supplySeries[2].setData(formattedData.map(d => ({ time: d.time, value: d.kospi_program_val ?? 0 })));
-      supplySeries[3].setData(formattedData.map(d => ({ time: d.time, value: d.future_foreigner_val ?? 0 })));
+      const isKosdaq = selectedIndex === "kosdaq" || selectedIndex === "kq150";
+      supplySeries[0].setData(formattedData.map(d => ({
+        time: d.time,
+        value: isKosdaq ? (d.kosdaq_foreigner_val ?? 0) : (d.kospi_foreigner_val ?? 0)
+      })));
+      supplySeries[1].setData(formattedData.map(d => ({
+        time: d.time,
+        value: isKosdaq ? (d.kosdaq_institution_val ?? 0) : (d.kospi_institution_val ?? 0)
+      })));
+      supplySeries[2].setData(formattedData.map(d => ({
+        time: d.time,
+        value: isKosdaq ? (d.kosdaq_individual_val ?? 0) : (d.kospi_program_val ?? 0)
+      })));
+      supplySeries[3].setData(formattedData.map(d => ({
+        time: d.time,
+        value: d.future_foreigner_val ?? 0
+      })));
     }
 
     setChartVisibleRange();
@@ -462,6 +489,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   const isFirstDay = dates ? dates.indexOf(selectedDate) === 0 : true;
   const isLastDay = dates ? dates.indexOf(selectedDate) === dates.length - 1 : true;
   const selectedOpt = INDEX_OPTIONS.find(o => o.id === selectedIndex);
+  const isKosdaqSelection = selectedIndex === "kosdaq" || selectedIndex === "kq150";
 
   return (
     <div ref={containerRef} className="flex flex-col gap-4 rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -550,9 +578,11 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           </span>
         </div>
         <div className="flex flex-col">
-          <span className="text-emerald-400 font-medium">비차익</span>
+          <span className="text-emerald-400 font-medium">
+            {hoveredData?.isKosdaq ? "개인" : "비차익"}
+          </span>
           <span className="font-semibold text-emerald-400">
-            {fmt(hoveredData?.program)}
+            {fmt(hoveredData?.programOrIndividual)}
           </span>
         </div>
         <div className="flex flex-col">
@@ -577,7 +607,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           <div className="absolute left-2 top-2 z-10 flex items-center gap-3 bg-slate-900/80 px-2 py-0.5 rounded text-[10px] font-semibold border border-slate-800">
             <span className="text-red-400">● 외국인</span>
             <span className="text-blue-400">● 기관</span>
-            <span className="text-emerald-400">● 비차익</span>
+            <span className="text-emerald-400">
+              ● {isKosdaqSelection ? "개인" : "비차익"}
+            </span>
             <span className="text-fuchsia-400">● 선물외인</span>
             <span className="text-slate-500 ml-1">(억 원)</span>
           </div>

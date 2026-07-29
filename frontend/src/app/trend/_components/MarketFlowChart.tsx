@@ -98,7 +98,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       foreigner: isKosdaq ? point.kosdaq_foreigner_val ?? undefined : point.kospi_foreigner_val ?? undefined,
       institution: isKosdaq ? point.kosdaq_institution_val ?? undefined : point.kospi_institution_val ?? undefined,
       programOrIndividual: isKosdaq ? point.kosdaq_individual_val ?? undefined : point.kospi_program_val ?? undefined,
-      future_foreigner: point.future_foreigner_val ?? undefined,
+      future_foreigner: isKosdaq ? undefined : (point.future_foreigner_val ?? undefined),
       isKosdaq,
     };
   };
@@ -438,10 +438,16 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         time: d.time,
         value: isKosdaq ? (d.kosdaq_individual_val ?? 0) : (d.kospi_program_val ?? 0)
       })));
-      supplySeries[3].setData(formattedData.map(d => ({
-        time: d.time,
-        value: d.future_foreigner_val ?? 0
-      })));
+      if (isKosdaq) {
+        supplySeries[3].setData([]);
+        supplySeries[3].applyOptions({ visible: false });
+      } else {
+        supplySeries[3].setData(formattedData.map(d => ({
+          time: d.time,
+          value: d.future_foreigner_val ?? 0
+        })));
+        supplySeries[3].applyOptions({ visible: true });
+      }
     }
 
     setChartVisibleRange();
@@ -552,7 +558,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       </div>
 
       {/* Hover Info Board */}
-      <div className="grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 md:grid-cols-6 text-xs border border-slate-800/40">
+      <div className={`grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 ${isKosdaqSelection ? "md:grid-cols-5" : "md:grid-cols-6"} text-xs border border-slate-800/40`}>
         <div className="flex flex-col">
           <span className="text-slate-400 font-medium">시간</span>
           <span className="font-semibold text-slate-200">{hoveredData?.time || "-"}</span>
@@ -585,12 +591,14 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             {fmt(hoveredData?.programOrIndividual)}
           </span>
         </div>
-        <div className="flex flex-col">
-          <span className="text-fuchsia-400 font-medium">선물외인</span>
-          <span className="font-semibold text-fuchsia-400">
-            {fmt(hoveredData?.future_foreigner)}
-          </span>
-        </div>
+        {!hoveredData?.isKosdaq && (
+          <div className="flex flex-col">
+            <span className="text-fuchsia-400 font-medium">선물외인</span>
+            <span className="font-semibold text-fuchsia-400">
+              {fmt(hoveredData?.future_foreigner)}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Chart container area */}
@@ -610,7 +618,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             <span className="text-emerald-400">
               ● {isKosdaqSelection ? "개인" : "비차익"}
             </span>
-            <span className="text-fuchsia-400">● 선물외인</span>
+            {!isKosdaqSelection && <span className="text-fuchsia-400">● 선물외인</span>}
             <span className="text-slate-500 ml-1">(억 원)</span>
           </div>
           <div data-chart-id="supply" className="w-full rounded-lg overflow-hidden border border-slate-900" />

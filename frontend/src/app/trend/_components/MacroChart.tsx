@@ -124,7 +124,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
       panels.forEach((panel, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${panel.id}"]`) as HTMLElement;
         if (!el) return;
-        const width = el.clientWidth;
+        const width = el.clientWidth || containerRef.current?.clientWidth || 800;
 
         const chart = createChart(el, {
           width,
@@ -363,19 +363,29 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 700 }) => {
     }
 
     setTimeout(() => { scrollToLatest(); }, 500);
-  }, [formattedData]);
+  }, [formattedData, status]);
 
-  // Handle Resize
+  // Handle Resize via ResizeObserver
   useEffect(() => {
-    const handleResize = () => {
+    if (!containerRef.current) return;
+    const updateDimensions = () => {
       if (!containerRef.current) return;
       chartsRef.current.forEach((chart, id) => {
         const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`);
-        if (el) chart.applyOptions({ width: el.clientWidth });
+        if (el && el.clientWidth > 0) {
+          chart.applyOptions({ width: el.clientWidth });
+        }
       });
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    const observer = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    observer.observe(containerRef.current);
+    window.addEventListener("resize", updateDimensions);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateDimensions);
+    };
   }, []);
 
   return (

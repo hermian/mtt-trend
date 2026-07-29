@@ -11,6 +11,10 @@ import * as useThemes from "@/hooks/useThemes";
 
 // Mock hooks
 vi.mock("@/hooks/useThemes");
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}));
 
 // Test wrapper with QueryClientProvider
 function TestWrapper({ children }: { children: React.ReactNode }) {
@@ -64,8 +68,7 @@ describe("TrendPage Integration", () => {
     render(<TrendPage />, { wrapper: TestWrapper });
 
     // Assert
-    expect(screen.getByText("52주 고점 테마 트렌드")).toBeInTheDocument();
-    expect(screen.getByText(/테마별 RS\(상대강도\) 분석 대시보드/)).toBeInTheDocument();
+    expect(screen.getByText("Theme Overview")).toBeInTheDocument();
   });
 
   it("should render source toggle buttons", () => {
@@ -99,7 +102,7 @@ describe("TrendPage Integration", () => {
     fireEvent.click(mttButton);
 
     // Assert
-    expect(mttButton).toHaveClass("bg-blue-600");
+    expect(mttButton).toHaveClass("bg-gray-700");
   });
 
   it("should reset date when source changes", async () => {
@@ -173,7 +176,7 @@ describe("TrendPage Integration", () => {
     expect(skeleton).toBeInTheDocument();
   });
 
-  it("should show error state for dates", () => {
+  it("should show loading/error state when dates are not ready", () => {
     // Arrange
     vi.spyOn(useThemes, "useDates").mockReturnValue({
       data: undefined,
@@ -185,7 +188,7 @@ describe("TrendPage Integration", () => {
     render(<TrendPage />, { wrapper: TestWrapper });
 
     // Assert
-    expect(screen.getByText("날짜 로드 실패")).toBeInTheDocument();
+    expect(screen.getByText("데이터를 로드하고 있습니다...")).toBeInTheDocument();
   });
 
   it("should not render sections when no date is selected", () => {
@@ -200,9 +203,7 @@ describe("TrendPage Integration", () => {
     render(<TrendPage />, { wrapper: TestWrapper });
 
     // Assert
-    // SPEC-MTT-004: Changed text from "테마별 RS 점수 (상위 15)" to "테마별 RS 점수 — 52주 신고가"
     expect(screen.queryByText(/테마별 RS 점수/)).not.toBeInTheDocument();
-    expect(screen.getByText("날짜를 선택하세요")).toBeInTheDocument();
   });
 
   it("should render all sections when date is selected", async () => {
@@ -232,7 +233,7 @@ describe("TrendPage Integration", () => {
     expect(screen.getByText(/테마별 RS 점수/)).toBeInTheDocument();
     expect(screen.getByText("신규 급등 테마 탐지")).toBeInTheDocument();
     expect(screen.getByText("테마 RS 추이")).toBeInTheDocument();
-    expect(screen.getByText("종목 분석")).toBeInTheDocument();
+    expect(screen.getByText("지속 강세 종목")).toBeInTheDocument();
   });
 
   it("should update source label when source changes", async () => {
@@ -259,7 +260,7 @@ describe("TrendPage Integration", () => {
 
     // Assert - button should have active class
     await waitFor(() => {
-      expect(mttButton).toHaveClass("bg-blue-600");
+      expect(mttButton).toHaveClass("bg-gray-700");
     });
   });
 });

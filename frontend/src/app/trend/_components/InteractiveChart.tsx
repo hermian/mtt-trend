@@ -59,7 +59,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     return names.join(",");
   }, [configs]);
   
-  const { data: chartData } = useChartData(symbol, indicatorNames);
+  const { data: chartData, isLoading, error } = useChartData(symbol, indicatorNames);
 
   useEffect(() => { if (chartData) chartDataRef.current = chartData; }, [chartData]);
 
@@ -97,7 +97,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       configs.forEach((config, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${config.id}"]`) as HTMLElement;
         if (!el) return;
-        const width = el.clientWidth;
+        const width = el.clientWidth || containerRef.current?.clientWidth || 800;
         const chartHeight = config.id === "main" ? 400 : 100;
         
         const chart = createChart(el, {
@@ -171,7 +171,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         chart.subscribeCrosshairMove((param) => {
            chartsRef.current.forEach((c) => { if (c !== chart) { if (!param.time || (param.point && param.point.x < 0)) { c.setCrosshairPosition(null as any, null as any, null as any); } else { c.setCrosshairPosition(null as any, param.time as any, null as any); } } });
            if (!param.time || !param.point || param.point.x < 0) { setHoveredData(null); } else {
-              const currentPoint = chartDataRef.current?.data.find((p: any) => p.time === param.time);
+              const currentPoint = chartDataRef.current?.data?.find((p: any) => p.time === param.time);
               if (currentPoint) { 
                 setHoveredData({ 
                   time: currentPoint.time, 
@@ -245,12 +245,28 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       }
     });
     setTimeout(() => { scrollToLatest(); }, 500);
-  }, [chartData, configs]);
+  }, [chartData, configs, status]);
 
   useEffect(() => {
-    const handleResize = () => { if (!containerRef.current) return; chartsRef.current.forEach((chart, id) => { const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`); if (el) chart.applyOptions({ width: el.clientWidth }); }); };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    if (!containerRef.current) return;
+    const updateDimensions = () => {
+      if (!containerRef.current) return;
+      chartsRef.current.forEach((chart, id) => {
+        const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`);
+        if (el && el.clientWidth > 0) {
+          chart.applyOptions({ width: el.clientWidth });
+        }
+      });
+    };
+    const observer = new ResizeObserver(() => {
+      updateDimensions();
+    });
+    observer.observe(containerRef.current);
+    window.addEventListener("resize", updateDimensions);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", updateDimensions);
+    };
   }, []);
 
   const renderTooltip = (config: IndicatorConfig) => {
@@ -311,7 +327,19 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         )}
       </div>
 
-      <div data-scroll-area className="flex-1 overflow-y-scroll indicator-scroll-area bg-slate-950">
+      <div data-scroll-area className="flex-1 overflow-y-scroll indicator-scroll-area bg-slate-950 relative">
+        {(isLoading || (!chartData && status === "Initializing...")) && (
+          <div className="absolute inset-0 z-30 bg-slate-950/70 flex items-center justify-center text-slate-400 font-medium animate-pulse">
+            차트 데이터를 불러오는 중입니다...
+          </div>
+        )}
+        
+        {error && !isLoading && (
+          <div className="absolute inset-0 z-30 bg-slate-950/90 flex items-center justify-center text-red-400 font-medium">
+            데이터를 불러오는 데 실패했습니다.
+          </div>
+        )}
+
         {mainConfig && (
           <div className="relative shrink-0 bg-slate-950 border-b-2 border-slate-800 shadow-xl z-20 pr-[0px] sticky top-0">
             {renderTooltip(mainConfig)}

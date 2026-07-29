@@ -74,7 +74,7 @@ test.describe("Trend Page E2E", () => {
     await expect(page.getByText("종목 분석")).toBeVisible();
   });
 
-  test("should switch between stock analysis tabs", async ({ page }) {
+  test("should switch between stock analysis tabs", async ({ page }) => {
     await page.waitForSelector("select#date-select");
 
     // Select a date

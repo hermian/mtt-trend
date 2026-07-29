@@ -84,10 +84,12 @@ async def get_macro_chart_data(
     fgi_filters: list[str] = []
     params: list[str] = []
 
+    effective_start_date = start_date if start_date is not None else "2010-01-01"
+
     def append_date_filters(filters: list[str]) -> None:
-        if start_date:
+        if effective_start_date:
             filters.append("date >= ?")
-            params.append(start_date)
+            params.append(effective_start_date)
         if end_date:
             filters.append("date <= ?")
             params.append(end_date)

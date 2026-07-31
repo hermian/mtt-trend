@@ -225,3 +225,33 @@ class IntersectionResponse(BaseModel):
     theme_count: int
     total_stock_count: int
     themes: List[IntersectionThemeItem]
+
+# --- Stock Heatmap Schemas ---
+class HeatmapStockItem(BaseModel):
+    code: str
+    name: str
+    market: Optional[str] = None
+    marcap: float  # 억원
+    ret: Optional[float] = None  # 선택 기간 수익률 (%)
+    rs: Optional[int] = None
+    weight: float  # ∛(시가총액), 트리맵 면적 가중치
+
+
+class HeatmapGroupItem(BaseModel):
+    name: str
+    stock_count: int
+    avg_return: Optional[float] = None  # 구성종목 단순평균 수익률 (%)
+    rs: Optional[int] = None  # 구성종목 RS 평균
+    weight: float  # 구성종목 weight 합계
+    stocks: List[HeatmapStockItem]
+
+
+class StockHeatmapResponse(BaseModel):
+    as_of_date: Optional[str] = None
+    grouping: str
+    period: str
+    marcap_min: Optional[float] = None
+    marcap_max: Optional[float] = None
+    limit: int = 0
+    stock_count: int
+    groups: List[HeatmapGroupItem]

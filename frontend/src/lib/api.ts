@@ -204,6 +204,47 @@ export interface WicsIndexMetaResponse {
   max_date?: string;
 }
 
+export type HeatmapGrouping = "sector" | "industry" | "theme";
+export type HeatmapPeriod = "1D" | "5D" | "1M" | "3M" | "6M" | "12M";
+
+export interface StockHeatmapItem {
+  code: string;
+  name: string;
+  market: string | null;
+  marcap: number; // 억원
+  ret: number | null; // 선택 기간 수익률 (%)
+  rs: number | null;
+  weight: number; // ∛(시가총액)
+}
+
+export interface StockHeatmapGroup {
+  name: string;
+  stock_count: number;
+  avg_return: number | null;
+  rs: number | null;
+  weight: number;
+  stocks: StockHeatmapItem[];
+}
+
+export interface StockHeatmapResponse {
+  as_of_date: string | null;
+  grouping: HeatmapGrouping;
+  period: HeatmapPeriod;
+  marcap_min: number | null;
+  marcap_max: number | null;
+  limit: number;
+  stock_count: number;
+  groups: StockHeatmapGroup[];
+}
+
+export interface StockHeatmapParams {
+  grouping: HeatmapGrouping;
+  period: HeatmapPeriod;
+  marcapMin?: number | null;
+  marcapMax?: number | null;
+  limit: number;
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -441,6 +482,25 @@ export const api = {
       }
     );
     return data.stocks;
+  },
+
+  // GET /api/heatmap/stocks → StockHeatmapResponse
+  getStockHeatmap: async (
+    params: StockHeatmapParams
+  ): Promise<StockHeatmapResponse> => {
+    const { data } = await apiClient.get<StockHeatmapResponse>(
+      "/api/heatmap/stocks",
+      {
+        params: {
+          grouping: params.grouping,
+          period: params.period,
+          marcap_min: params.marcapMin ?? undefined,
+          marcap_max: params.marcapMax ?? undefined,
+          limit: params.limit,
+        },
+      }
+    );
+    return data;
   },
 };
 

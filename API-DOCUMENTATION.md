@@ -281,6 +281,77 @@ curl "http://localhost:8000/api/stocks/group-action?date=2024-01-15&timeWindow=7
 
 ---
 
+### 주식 히트맵
+
+#### GET /api/heatmap/stocks
+
+한국 주식 히트맵 데이터. 최신 RS 유니버스(`~/.cache/db/rs` 파티션, 약 2,400종목)를
+그룹 기준(섹터/WICS 산업/테마)으로 묶어 선택 기간의 수익률·RS·시가총액을 반환합니다.
+기간 수익률은 `stock_price.duckdb` 일별 종가로 영업일 기준 계산합니다
+(1D=1, 5D=5, 1M=21, 3M=63, 6M=126, 12M=252).
+
+**Query Parameters:**
+
+| 파라미터 | 타입 | 기본값 | 설명 |
+|----------|------|--------|------|
+| `grouping` | string | `sector` | 그룹 기준: `sector` (10대 섹터) \| `industry` (WICS 79 산업) \| `theme` (인포스탁 테마, 종목 중복 소속) |
+| `period` | string | `1M` | 수익률 기간: `1D` \| `5D` \| `1M` \| `3M` \| `6M` \| `12M` |
+| `marcap_min` | float | - | 시가총액 하한 (억원) |
+| `marcap_max` | float | - | 시가총액 상한 (억원) |
+| `limit` | int | `0` | 표시 개수: `0`=전체, 그 외=시가총액 상위 N (그룹화 전 적용) |
+
+**Response:**
+
+```json
+{
+  "as_of_date": "2026-07-29",
+  "grouping": "sector",
+  "period": "1M",
+  "marcap_min": null,
+  "marcap_max": null,
+  "limit": 0,
+  "stock_count": 2423,
+  "groups": [
+    {
+      "name": "IT",
+      "stock_count": 692,
+      "avg_return": -18.97,
+      "rs": 45,
+      "weight": 1234.5,
+      "stocks": [
+        {
+          "code": "005930",
+          "name": "삼성전자",
+          "market": "KOSPI",
+          "marcap": 12189490.0,
+          "ret": -35.45,
+          "rs": 98,
+          "weight": 230.142
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `avg_return`: 구성 종목 수익률의 단순 평균 (%), 유효 값 없으면 `null`
+- `rs`: 구성 종목 `RS_Rating` 평균 (반올림)
+- `weight`: `∛(시가총액)` — 프론트엔드 트리맵 면적 가중치 (그룹은 구성 종목 합)
+- 그룹·종목 모두 `weight` 내림차순 정렬
+
+```bash
+# 섹터별 1개월 수익률 (기본값)
+curl "http://localhost:8000/api/heatmap/stocks"
+
+# 테마별 1일, 시총 5000억 이상, 상위 100종목
+curl "http://localhost:8000/api/heatmap/stocks?grouping=theme&period=1D&marcap_min=5000&limit=100"
+
+# WICS 산업별 12개월, 시총 1조 이상
+curl "http://localhost:8000/api/heatmap/stocks?grouping=industry&period=12M&marcap_min=10000"
+```
+
+---
+
 ### 헬스 체크
 
 ---
@@ -641,6 +712,13 @@ docker run -p 8000:8000 mtt-trend-backend
 ---
 
 ## 업데이트 로그
+
+### v1.3.0 (2026-07-29)
+- **한국 주식 히트맵** (easyinvesting.app/#/heatmap 스타일)
+  - 새로운 엔드포인트: `GET /api/heatmap/stocks`
+  - 데이터 소스: `~/.cache/db/rs` 일별 RS parquet (섹터/WICS/테마/시가총액/RS) + `stock_price.duckdb` (기간 수익률)
+  - 프론트엔드: `/heatmap` 라우트, squarified 트리맵 (박스 크기 = ∛시가총액), 상승=빨강/하락=파랑, 중립 구간 + p2/p98 데이터 기반 색상 스케일
+  - 백엔드 의존성 추가: `duckdb`
 
 ### v1.2.0 (2026-03-15)
 - **52주 신고가 × MTT 교집합 추천 기능** (SPEC-MTT-012)

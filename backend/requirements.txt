@@ -19,3 +19,6 @@ watchdog>=4.0.0
 polars>=1.0.0
 pandas>=2.0.0
 
+# Stock heatmap (duckdb price DB + RS parquet)
+duckdb>=1.0.0
+

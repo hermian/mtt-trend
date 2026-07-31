@@ -213,3 +213,4 @@ backend/data/*.html
 .bkit
 .gemini
 backend/data/charts/*.csv
+.gjc/

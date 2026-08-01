@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { useStockHeatmap } from "@/hooks/useStockHeatmap";
 import { ControlBar, type HeatmapControls } from "./_components/ControlBar";
 import { Legend } from "./_components/Legend";
-import { TreemapChart } from "./_components/TreemapChart";
+import { GroupTreemap, StockTreemap } from "./_components/TreemapChart";
 import { buildColorScale } from "./_lib/colors";
 
 const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
@@ -22,6 +22,8 @@ export default function StockHeatmapPage() {
     limit: 0,
   });
 
+  const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
+
   const { data, isFetching, isError } = useStockHeatmap({
     grouping: controls.grouping,
     period: controls.period,
@@ -30,12 +32,23 @@ export default function StockHeatmapPage() {
     limit: controls.limit,
   });
 
+  // Reset drill-down when controls change
+  const handleControlChange = (patch: Partial<HeatmapControls>) => {
+    setDrilledGroup(null);
+    setControls((prev) => ({ ...prev, ...patch }));
+  };
+
   const scale = useMemo(() => {
     const rets = (data?.groups ?? []).flatMap((g) =>
       g.stocks.map((s) => s.ret)
     );
     return buildColorScale(rets, controls.period);
   }, [data, controls.period]);
+
+  const drilledGroupData = useMemo(() => {
+    if (!drilledGroup || !data) return null;
+    return data.groups.find((g) => g.name === drilledGroup) ?? null;
+  }, [drilledGroup, data]);
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-950 p-4 text-gray-100 md:p-6">
@@ -63,11 +76,29 @@ export default function StockHeatmapPage() {
       </div>
 
       <div className="space-y-3">
-        <ControlBar
-          value={controls}
-          onChange={(patch) => setControls((prev) => ({ ...prev, ...patch }))}
-        />
+        <ControlBar value={controls} onChange={handleControlChange} />
         <Legend scale={scale} />
+
+        {/* Breadcrumb for drill-down */}
+        {drilledGroup && (
+          <div className="flex items-center gap-2 text-sm">
+            <button
+              onClick={() => setDrilledGroup(null)}
+              className="rounded-md bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-gray-700 hover:text-white"
+            >
+              ← 전체 {GROUPING_TITLES[controls.grouping]}
+            </button>
+            <span className="text-gray-500">/</span>
+            <span className="text-sm font-semibold text-gray-200">
+              {drilledGroup}
+            </span>
+            {drilledGroupData && (
+              <span className="text-xs text-gray-500">
+                ({drilledGroupData.stock_count}종목)
+              </span>
+            )}
+          </div>
+        )}
 
         {isError && (
           <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-center text-red-200">
@@ -75,9 +106,19 @@ export default function StockHeatmapPage() {
           </div>
         )}
 
-        {!isError && data && data.groups.length > 0 && (
+        {!isError && data && data.groups.length > 0 && !drilledGroup && (
           <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-2">
-            <TreemapChart groups={data.groups} scale={scale} />
+            <GroupTreemap
+              groups={data.groups}
+              scale={scale}
+              onDrill={(name) => setDrilledGroup(name)}
+            />
+          </div>
+        )}
+
+        {!isError && drilledGroupData && (
+          <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-2">
+            <StockTreemap group={drilledGroupData} scale={scale} />
           </div>
         )}
 

@@ -4,29 +4,182 @@ import { useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
 import type { StockHeatmapGroup, StockHeatmapItem } from "@/lib/api";
 import { squarify, type Rect } from "../_lib/treemap";
 import { heatColor, type ColorScale } from "../_lib/colors";
-import { formatMarcap, formatReturn, textWidth, truncate } from "../_lib/format";
+import { formatMarcap, formatReturn, truncate } from "../_lib/format";
 
-interface TreemapChartProps {
+/* ──────────────────────────────────────────────────────────────────────────
+ * Group-level treemap  (Step 1)
+ * Each cell = one group (sector / industry / theme), sized by weight,
+ * coloured by avg_return.  Clicking a cell drills into the group.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+interface GroupTreemapProps {
   groups: StockHeatmapGroup[];
+  scale: ColorScale;
+  onDrill: (groupName: string) => void;
+}
+
+export function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(1000);
+
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      setWidth(entries[0].contentRect.width);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const height = Math.max(480, Math.min(width * 0.6, 800));
+
+  const layout = useMemo(() => {
+    return squarify(
+      groups.map((g) => ({ g, weight: g.weight })),
+      { x: 0, y: 0, w: width, h: height },
+    );
+  }, [groups, width, height]);
+
+  return (
+    <div ref={containerRef} className="relative w-full">
+      <svg
+        width={width}
+        height={height}
+        role="img"
+        aria-label="그룹별 히트맵"
+        className="block select-none"
+      >
+        {layout.map(({ item, rect }) => {
+          const g = item.g as StockHeatmapGroup;
+          const ret = g.avg_return ?? 0;
+          const { fill, text } = heatColor(ret, scale);
+          const cx = rect.x + rect.w / 2;
+          const cy = rect.y + rect.h / 2;
+
+          // Progressive disclosure based on box size
+          const showName = rect.w > 50 && rect.h > 28;
+          const showRet = rect.w > 60 && rect.h > 44;
+          const showRS = rect.w > 60 && rect.h > 58 && g.rs !== null;
+          const showCount = rect.w > 70 && rect.h > 72;
+
+          // Font sizes scale with box width
+          const nameFs = Math.min(14, Math.max(9, rect.w / 8));
+          const retFs = Math.min(13, Math.max(9, rect.w / 9));
+          const subFs = Math.min(11, Math.max(8, rect.w / 11));
+
+          // Compute total text block height for vertical centering
+          const lineHeights: number[] = [];
+          if (showName) lineHeights.push(nameFs);
+          if (showRet) lineHeights.push(retFs);
+          if (showRS) lineHeights.push(subFs);
+          if (showCount) lineHeights.push(subFs);
+          const lineGap = 3;
+          const totalH = lineHeights.reduce((s, h) => s + h, 0) + lineGap * Math.max(0, lineHeights.length - 1);
+          let curY = cy - totalH / 2;
+
+          const nameMaxW = rect.w - 12;
+
+          return (
+            <g
+              key={g.name}
+              className="cursor-pointer"
+              onClick={() => onDrill(g.name)}
+            >
+              <rect
+                x={rect.x}
+                y={rect.y}
+                width={rect.w}
+                height={rect.h}
+                fill={fill}
+                stroke="rgba(0,0,0,0.5)"
+                strokeWidth={1}
+              />
+              {showName && (
+                <text
+                  x={cx}
+                  y={curY + nameFs * 0.85}
+                  fontSize={nameFs}
+                  fontWeight={700}
+                  fill={text}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                >
+                  {truncate(g.name, nameMaxW, nameFs)}
+                </text>
+              )}
+              {showName && showRet && (curY += nameFs + lineGap)}
+              {showRet && (
+                <text
+                  x={cx}
+                  y={curY + retFs * 0.85}
+                  fontSize={retFs}
+                  fontWeight={600}
+                  fill={text}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                  opacity={0.9}
+                >
+                  {formatReturn(g.avg_return)}
+                </text>
+              )}
+              {showRet && showRS && (curY += retFs + lineGap)}
+              {showRS && (
+                <text
+                  x={cx}
+                  y={curY + subFs * 0.85}
+                  fontSize={subFs}
+                  fill={text}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                  opacity={0.7}
+                >
+                  RS {g.rs}
+                </text>
+              )}
+              {showRS && showCount && (curY += subFs + lineGap)}
+              {showCount && (
+                <text
+                  x={cx}
+                  y={curY + subFs * 0.85}
+                  fontSize={subFs}
+                  fill={text}
+                  textAnchor="middle"
+                  pointerEvents="none"
+                  opacity={0.6}
+                >
+                  {g.stock_count}종목
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
+  );
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
+ * Stock-level treemap  (Step 2 – drill-down)
+ * Shows individual stocks inside a single group.
+ * ──────────────────────────────────────────────────────────────────────── */
+
+interface StockTreemapProps {
+  group: StockHeatmapGroup;
   scale: ColorScale;
 }
 
 interface HoverState {
   stock: StockHeatmapItem;
-  group: string;
   x: number;
   y: number;
 }
 
 interface SelectedState {
   stock: StockHeatmapItem;
-  group: string;
 }
 
-const HEADER_H = 22;
-const PAD = 1;
-
-export function TreemapChart({ groups, scale }: TreemapChartProps) {
+export function StockTreemap({ group, scale }: StockTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -38,7 +191,7 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
       setIsTouch(
         "ontouchstart" in window ||
           navigator.maxTouchPoints > 0 ||
-          window.matchMedia("(pointer: coarse)").matches
+          window.matchMedia("(pointer: coarse)").matches,
       );
     }
   }, []);
@@ -55,32 +208,16 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
 
   const height = Math.max(480, Math.min(width * 0.6, 800));
 
-  const layout = useMemo(() => {
-    const outer = squarify(
-      groups.map((g) => ({ g, weight: g.weight })),
-      { x: 0, y: 0, w: width, h: height }
+  const cells = useMemo(() => {
+    return squarify(
+      group.stocks.map((s) => ({ s, weight: s.weight })),
+      { x: 0, y: 0, w: width, h: height },
     );
-    return outer.map(({ item, rect }) => {
-      const showHeader = rect.h >= 48 && rect.w >= 70;
-      const headerH = showHeader ? HEADER_H : 0;
-      const inner: Rect = {
-        x: rect.x + PAD,
-        y: rect.y + PAD + headerH,
-        w: Math.max(0, rect.w - 2 * PAD),
-        h: Math.max(0, rect.h - 2 * PAD - headerH),
-      };
-      const cells = squarify(
-        item.g.stocks.map((s) => ({ s, weight: s.weight })),
-        inner
-      );
-      return { group: item.g, rect, showHeader, cells };
-    });
-  }, [groups, width, height]);
+  }, [group, width, height]);
 
   const handleStockClick = (
     e: React.MouseEvent,
     stock: StockHeatmapItem,
-    groupName: string
   ) => {
     const isTouchEvent =
       isTouch || (e.nativeEvent as PointerEvent).pointerType === "touch";
@@ -88,13 +225,13 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
     if (isTouchEvent) {
       e.stopPropagation();
       setSelected((prev) =>
-        prev?.stock.code === stock.code ? null : { stock, group: groupName }
+        prev?.stock.code === stock.code ? null : { stock },
       );
     } else {
       window.open(
         `https://finance.naver.com/item/main.nhn?code=${stock.code}`,
         "_blank",
-        "noopener"
+        "noopener",
       );
     }
   };
@@ -109,109 +246,64 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
         width={width}
         height={height}
         role="img"
-        aria-label="주식 히트맵 트리맵"
+        aria-label={`${group.name} 종목 히트맵`}
         className="block select-none"
       >
-        {layout.map(({ group, rect, showHeader, cells }) => {
-          const metrics = `${formatReturn(group.avg_return)}${
-            group.rs !== null ? `  RS ${group.rs}` : ""
-          }`;
-          const nameMax = rect.w - 10 - textWidth(metrics, 11) - 6;
-          return (
-            <g key={group.name}>
-              <rect
-                x={rect.x}
-                y={rect.y}
-                width={rect.w}
-                height={rect.h}
-                fill="#0d1424"
-                stroke="#1f2937"
-                strokeWidth={1}
-              />
-              {showHeader && (
-                <>
-                  {nameMax > 18 && (
-                    <text
-                      x={rect.x + 5}
-                      y={rect.y + 15}
-                      fontSize={11}
-                      fontWeight={700}
-                      fill="#e5e7eb"
-                    >
-                      {truncate(group.name, nameMax, 11)}
-                    </text>
-                  )}
-                  <text
-                    x={rect.x + rect.w - 5}
-                    y={rect.y + 15}
-                    fontSize={11}
-                    fontWeight={600}
-                    fill="#9ca3af"
-                    textAnchor="end"
-                  >
-                    {metrics}
-                  </text>
-                </>
-              )}
-              {cells.map(({ item, rect: cr }) => {
-                const { fill, text } = heatColor(item.s.ret, scale);
-                const fs = cr.w > 95 ? 11 : 9.5;
-                const showRet = cr.w > 58 && cr.h > 36;
-                const showName = showRet || (cr.w > 36 && cr.h > 16);
-                const isSelectedCell = selected?.stock.code === item.s.code;
+        {cells.map(({ item, rect: cr }) => {
+          const { fill, text } = heatColor(item.s.ret, scale);
+          const fs = cr.w > 95 ? 11 : 9.5;
+          const showRet = cr.w > 58 && cr.h > 36;
+          const showName = showRet || (cr.w > 36 && cr.h > 16);
+          const isSelectedCell = selected?.stock.code === item.s.code;
 
-                return (
-                  <g
-                    key={item.s.code}
-                    className="cursor-pointer"
-                    onMouseMove={(e) => {
-                      if (!isTouch) {
-                        setHover({
-                          stock: item.s,
-                          group: group.name,
-                          x: e.clientX,
-                          y: e.clientY,
-                        });
-                      }
-                    }}
-                    onMouseLeave={() => setHover(null)}
-                    onClick={(e) => handleStockClick(e, item.s, group.name)}
-                  >
-                    <rect
-                      x={cr.x}
-                      y={cr.y}
-                      width={cr.w}
-                      height={cr.h}
-                      fill={fill}
-                      stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
-                      strokeWidth={isSelectedCell ? 2 : 0.5}
-                    />
-                    {showName && (
-                      <text
-                        x={cr.x + 3}
-                        y={cr.y + fs + 2}
-                        fontSize={fs}
-                        fontWeight={600}
-                        fill={text}
-                        pointerEvents="none"
-                      >
-                        {truncate(item.s.name, cr.w - 6, fs)}
-                      </text>
-                    )}
-                    {showRet && (
-                      <text
-                        x={cr.x + 3}
-                        y={cr.y + fs * 2 + 4}
-                        fontSize={fs - 1}
-                        fill={text}
-                        pointerEvents="none"
-                      >
-                        {formatReturn(item.s.ret)}
-                      </text>
-                    )}
-                  </g>
-                );
-              })}
+          return (
+            <g
+              key={item.s.code}
+              className="cursor-pointer"
+              onMouseMove={(e) => {
+                if (!isTouch) {
+                  setHover({
+                    stock: item.s,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }
+              }}
+              onMouseLeave={() => setHover(null)}
+              onClick={(e) => handleStockClick(e, item.s)}
+            >
+              <rect
+                x={cr.x}
+                y={cr.y}
+                width={cr.w}
+                height={cr.h}
+                fill={fill}
+                stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
+                strokeWidth={isSelectedCell ? 2 : 0.5}
+              />
+              {showName && (
+                <text
+                  x={cr.x + 3}
+                  y={cr.y + fs + 2}
+                  fontSize={fs}
+                  fontWeight={600}
+                  fill={text}
+                  pointerEvents="none"
+                >
+                  {truncate(item.s.name, cr.w - 6, fs)}
+                </text>
+              )}
+              {showRet && (
+                <text
+                  x={cr.x + 3}
+                  y={cr.y + fs * 2 + 4}
+                  fontSize={fs - 1}
+                  fill={text}
+                  pointerEvents="none"
+                >
+                  {formatReturn(item.s.ret)}
+                </text>
+              )}
             </g>
           );
         })}
@@ -232,7 +324,7 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
               {hover.stock.code} · {hover.stock.market}
             </span>
           </div>
-          <div className="mt-1 text-gray-500">{hover.group}</div>
+          <div className="mt-1 text-gray-500">{group.name}</div>
           <div className="mt-1 flex gap-3">
             <span
               className={
@@ -274,9 +366,7 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
                   {selected.stock.code} · {selected.stock.market}
                 </span>
               </div>
-              <div className="mt-0.5 text-xs text-gray-400">
-                {selected.group}
-              </div>
+              <div className="mt-0.5 text-xs text-gray-400">{group.name}</div>
             </div>
             <button
               onClick={() => setSelected(null)}
@@ -326,4 +416,3 @@ export function TreemapChart({ groups, scale }: TreemapChartProps) {
     </div>
   );
 }
-

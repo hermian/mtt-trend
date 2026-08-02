@@ -107,8 +107,19 @@ export interface ChartDataResponse {
 export interface MacroDataPoint {
   date: string;
   sp500?: number;
+  nasdaq100?: number;
+  kospi?: number;
   high_yield?: number;
   cnn_fgi?: number;
+  kr_fgi?: number;
+  vix?: number;
+  vkospi?: number;
+  pcr?: number;
+  move?: number;
+  us_2y?: number;
+  us_10y?: number;
+  us_spread?: number;
+  kr_10y?: number;
 }
 
 export interface MacroDataResponse {

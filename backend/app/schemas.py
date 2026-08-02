@@ -23,8 +23,19 @@ class ChartDataResponse(BaseModel):
 class MacroDataPoint(BaseModel):
     date: str
     sp500: Optional[float] = None
+    nasdaq100: Optional[float] = None
+    kospi: Optional[float] = None
     high_yield: Optional[float] = None
     cnn_fgi: Optional[float] = None
+    kr_fgi: Optional[float] = None
+    vix: Optional[float] = None
+    vkospi: Optional[float] = None
+    pcr: Optional[float] = None
+    move: Optional[float] = None
+    us_2y: Optional[float] = None
+    us_10y: Optional[float] = None
+    us_spread: Optional[float] = None
+    kr_10y: Optional[float] = None
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

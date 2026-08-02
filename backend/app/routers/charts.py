@@ -69,75 +69,100 @@ async def get_macro_chart_data(
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)")
 ):
     """
-    ~/.cache/db/macro.db에서 SP500, High Yield Spread (BAMLH0A0HYM2), CNN Fear & Greed Index 데이터를 반환합니다.
+    ~/.cache/db/macro.db에서 주요 매크로 지표 시계열을 날짜 기준으로 병합해 반환합니다.
+
+    지표별 소스:
+      sp500      index_ohlcv(index_name='sp500')
+      nasdaq100  index_ohlcv(index_name='nasdaq100')
+      kospi      index_ohlcv(index_name='kospi')
+      high_yield fred_macro(BAMLH0A0HYM2)
+      vix        fred_macro(VIX)
+      cnn_fgi    cnn_fear_greed
+      kr_fgi     kr_fear_greed(market='KOSPI')
+      vkospi     krx_vkospi
+      pcr        krx_pcr
+      move       index_ohlcv(index_name='move')
+      us_2y      us_treasury_yield(y2)
+      us_10y     us_treasury_yield(y10)
+      us_spread  us_treasury_yield(y2y10_spread)
+      kr_10y     us_treasury_yield(kr10)
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
         return MacroDataResponse(data=[])
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-
-    # 날짜 필터를 서브쿼리에 먼저 적용해 FULL OUTER JOIN 입력 크기를 줄임
-    sp_filters = ["index_name = 'sp500'"]
-    hy_filters = ["series_id = 'BAMLH0A0HYM2'"]
-    fgi_filters: list[str] = []
-    params: list[str] = []
-
     effective_start_date = start_date if start_date is not None else "2010-01-01"
 
-    def append_date_filters(filters: list[str]) -> None:
+    # (테이블, 컬럼, 조건절) — 조건절은 시리즈 행을 좁히는 SQL, None이면 전체.
+    series_defs = {
+        "sp500":     ("index_ohlcv",        "close",       "index_name = 'sp500'"),
+        "nasdaq100": ("index_ohlcv",        "close",       "index_name = 'nasdaq100'"),
+        "kospi":     ("index_ohlcv",        "close",       "index_name = 'kospi'"),
+        "high_yield": ("fred_macro",        "value",       "series_id = 'BAMLH0A0HYM2'"),
+        "vix":       ("fred_macro",         "value",       "series_id = 'VIX'"),
+        "cnn_fgi":   ("cnn_fear_greed",     "value",       None),
+        "kr_fgi":    ("kr_fear_greed",      "value",       "market = 'KOSPI'"),
+        "vkospi":    ("krx_vkospi",         "close",       None),
+        "pcr":       ("krx_pcr",            "pcratio",     None),
+        "move":      ("index_ohlcv",        "close",       "index_name = 'move'"),
+        "us_2y":     ("us_treasury_yield",  "y2",          None),
+        "us_10y":    ("us_treasury_yield",  "y10",         None),
+        "us_spread": ("us_treasury_yield",  "y2y10_spread", None),
+        "kr_10y":    ("us_treasury_yield",  "kr10",        None),
+    }
+
+    merged: dict = {}
+
+    def load_series(key: str, table: str, col: str, cond: Optional[str]) -> None:
+        where = []
+        params: list = []
+        if cond:
+            where.append(cond)
         if effective_start_date:
-            filters.append("date >= ?")
+            where.append("date >= ?")
             params.append(effective_start_date)
         if end_date:
-            filters.append("date <= ?")
+            where.append("date <= ?")
             params.append(end_date)
+        w = (" WHERE " + " AND ".join(where)) if where else ""
+        query = f"SELECT date, {col} FROM {table}{w}"
+        try:
+            for date, value in conn.execute(query, params):
+                merged.setdefault(date, {})[key] = value
+        except Exception as e:
+            print(f"Warning: macro source '{key}' ({table}) failed: {e}")
 
-    append_date_filters(sp_filters)
-    append_date_filters(hy_filters)
-    append_date_filters(fgi_filters)
-
-    sp_where = " AND ".join(sp_filters)
-    hy_where = " AND ".join(hy_filters)
-    fgi_where = (" WHERE " + " AND ".join(fgi_filters)) if fgi_filters else ""
-
-    query = f"""
-        SELECT 
-            COALESCE(s.date, h.date, f.date) as date,
-            s.close as sp500,
-            h.value as high_yield,
-            f.value as cnn_fgi
-        FROM (
-            SELECT date, close FROM index_ohlcv WHERE {sp_where}
-        ) s
-        FULL OUTER JOIN (
-            SELECT date, value FROM fred_macro WHERE {hy_where}
-        ) h ON s.date = h.date
-        FULL OUTER JOIN (
-            SELECT date, value FROM cnn_fear_greed{fgi_where}
-        ) f ON COALESCE(s.date, h.date) = f.date
-        ORDER BY date ASC
-    """
-
+    conn = sqlite3.connect(db_path)
     try:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        result = []
-        for row in rows:
-            result.append(MacroDataPoint(
-                date=row[0],
-                sp500=row[1],
-                high_yield=row[2],
-                cnn_fgi=row[3]
-            ))
-        return MacroDataResponse(data=result)
+        for key, (table, col, cond) in series_defs.items():
+            load_series(key, table, col, cond)
     except Exception as e:
         print(f"Error loading macro data: {e}")
         return MacroDataResponse(data=[])
     finally:
         conn.close()
+
+    result = [
+        MacroDataPoint(
+            date=d,
+            sp500=p.get("sp500"),
+            nasdaq100=p.get("nasdaq100"),
+            kospi=p.get("kospi"),
+            high_yield=p.get("high_yield"),
+            cnn_fgi=p.get("cnn_fgi"),
+            kr_fgi=p.get("kr_fgi"),
+            vix=p.get("vix"),
+            vkospi=p.get("vkospi"),
+            pcr=p.get("pcr"),
+            move=p.get("move"),
+            us_2y=p.get("us_2y"),
+            us_10y=p.get("us_10y"),
+            us_spread=p.get("us_spread"),
+            kr_10y=p.get("kr_10y"),
+        )
+        for d, p in sorted(merged.items())
+    ]
+    return MacroDataResponse(data=result)
 
 @router.get("/market-flow", response_model=MarketFlowResponse)
 async def get_market_flow_chart_data(

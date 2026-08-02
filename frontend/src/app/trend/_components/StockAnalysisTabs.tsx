@@ -38,7 +38,7 @@ const TABS: Tab[] = [
   },
 ];
 
-export function StockAnalysisTabs({ date, source = "52w_high" }: StockAnalysisTabsProps) {
+export function StockAnalysisTabs({ date, source = "mtt" }: StockAnalysisTabsProps) {
   const [activeTab, setActiveTab] = useState<TabId>("persistent");
 
   return (
@@ -66,7 +66,7 @@ export function StockAnalysisTabs({ date, source = "52w_high" }: StockAnalysisTa
       <div className="p-6">
         {activeTab === "persistent" && <StrongStocksTable source={source} />}
         {activeTab === "group-action" && <GroupActionTable date={date} source={source} />}
-        {activeTab === "intersection" && <IntersectionTab source={source} />}
+        {activeTab === "intersection" && <IntersectionTab date={date} source={source} />}
       </div>
     </div>
   );

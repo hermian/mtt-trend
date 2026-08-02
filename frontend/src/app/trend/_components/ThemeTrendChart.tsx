@@ -162,7 +162,7 @@ function CustomLegend({ payload, disabledThemes, onToggleTheme }: CustomLegendPr
   );
 }
 
-export function ThemeTrendChart({ date, source = "52w_high" }: ThemeTrendChartProps) {
+export function ThemeTrendChart({ date, source = "mtt" }: ThemeTrendChartProps) {
   // @MX:NOTE: 소스별로 선택된 테마와 사용자 수정 플래그를 저장하여 상태 유지
   const [selectedThemesBySource, setSelectedThemesBySource] = useState<Record<DataSource, string[]>>({
     "52w_high": [],

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useWicsMonths, useWicsRankings, useWicsWeeks, useWicsWeeklyRankings } from "@/hooks/useWicsData";
 import { WicsRankingItem } from "@/lib/api";
+import { StockNameLink } from "@/components/StockNameLink";
 import { WicsIndexChart } from "./WicsIndexChart";
 import clsx from "clsx";
 
@@ -920,7 +921,8 @@ export const WicsRankingPanel: React.FC = () => {
                     <div key={stock.stock_code} className="bg-black/35 p-2 rounded-lg border border-gray-800/40">
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-bold text-gray-350 truncate max-w-[120px] text-[11px]">
-                          {stock.rank_in_sector}. {stock.stock_name}
+                          {stock.rank_in_sector}.{" "}
+                          <StockNameLink name={stock.stock_name} />
                         </span>
                         <span className="text-[8px] text-gray-500 font-mono">
                           {stock.stock_code}

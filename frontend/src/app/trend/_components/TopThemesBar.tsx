@@ -89,7 +89,7 @@ function handleBarClick(data: ThemeDaily, onThemeClick?: (themeName: string) => 
   }
 }
 
-export function TopThemesBar({ date, source = "52w_high", onThemeClick, selectedTheme }: TopThemesBarProps) {
+export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme }: TopThemesBarProps) {
   const { data: themes, isLoading, error } = useThemesDaily(date, source);
 
   // SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 설정

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useStocksPersistent } from "@/hooks/useStocks";
 import { PersistentStock, DataSource } from "@/lib/api";
+import { StockNameLink } from "@/components/StockNameLink";
 import clsx from "clsx";
 
 // SPEC-MTT-017: 등락률 셀 컴포넌트 (null/undefined이면 "-" 표시)
@@ -70,7 +71,7 @@ function RsChangeBadge({ value }: { value: number | null | undefined }) {
 type SortKey = "stock_name" | "avg_rs" | "appearance_count";
 type SortDir = "asc" | "desc";
 
-export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource }) {
+export function StrongStocksTable({ source = "mtt" }: { source?: DataSource }) {
   const { data: stocks, isLoading, error } = useStocksPersistent(5, 3, source);
   const [sortKey, setSortKey] = useState<SortKey>("avg_rs");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
@@ -219,7 +220,7 @@ export function StrongStocksTable({ source = "52w_high" }: { source?: DataSource
                 className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
               >
                 <td className="px-4 py-3 text-white font-medium">
-                  {stock.stock_name}
+                  <StockNameLink name={stock.stock_name} />
                 </td>
                 <td className="px-4 py-3">
                   <span

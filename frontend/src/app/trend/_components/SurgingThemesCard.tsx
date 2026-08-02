@@ -14,7 +14,7 @@ interface SurgingThemesCardProps {
   selectedTheme?: string | null;
 }
 
-export function SurgingThemesCard({ date, source = "52w_high", onThemeClick, selectedTheme }: SurgingThemesCardProps) {
+export function SurgingThemesCard({ date, source = "mtt", onThemeClick, selectedTheme }: SurgingThemesCardProps) {
   const [threshold, setThreshold] = useState(10);
   const { data: themesData, isLoading, error } = useThemesSurging(date, threshold, source);
   

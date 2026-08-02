@@ -67,7 +67,7 @@ function TrendPageContent() {
       ? "market_flow"
       : "overview";
   
-  const [source, setSource] = useState<DataSource>("52w_high");
+  const [source, setSource] = useState<DataSource>("mtt");
   const { data: dates, isLoading: datesLoading, error: datesError } = useDates(source);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [selectedTheme, setSelectedTheme] = useState<string | null>(null);
@@ -116,9 +116,14 @@ function TrendPageContent() {
         {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
-              <h2 className="text-sm font-semibold text-gray-300 uppercase tracking-widest">
-                {activeTab === "overview" ? "Theme Overview" : "Technical Analysis"}
+              <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-3">
+                <span>{activeTab === "overview" ? "Theme Overview" : "Technical Analysis"}</span>
               </h2>
+              {selectedDate && (
+                <span className="text-lg md:text-xl font-extrabold text-blue-400 font-mono tracking-tight bg-blue-500/10 px-3 py-0.5 rounded-lg border border-blue-500/20 shadow-sm">
+                  {selectedDate}
+                </span>
+              )}
               {selectedTheme && (
                 <span className="bg-blue-900/40 text-blue-400 px-3 py-1 rounded-full text-xs font-bold border border-blue-800/50">
                   Selected: {selectedTheme}
@@ -165,8 +170,16 @@ function TrendPageContent() {
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
         <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
           {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" ? (
-            <div className="flex items-center justify-center h-full text-gray-500 animate-pulse font-medium">
-              데이터를 로드하고 있습니다...
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2 font-medium">
+              {datesLoading ? (
+                <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
+              ) : datesError ? (
+                <div className="text-red-400">데이터를 불러오는 중 오류가 발생했습니다. (백엔드 서버 상태를 확인하세요)</div>
+              ) : (!dates || dates.length === 0) ? (
+                <div className="text-amber-400">조회할 수 있는 날짜 데이터가 없습니다. DB 동기화(DB Sync)를 진행해 주세요.</div>
+              ) : (
+                <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
+              )}
             </div>
           ) : (
             <>

@@ -2,10 +2,16 @@
 
 import { useIntersection } from "@/hooks/useStocks";
 import { DataSource } from "@/lib/api";
+import { StockNameLink } from "@/components/StockNameLink";
 import clsx from "clsx";
 
-export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }) {
-  const { data: themesData, isLoading, error } = useIntersection(undefined, source);
+interface IntersectionTabProps {
+  date?: string;
+  source?: DataSource;
+}
+
+export function IntersectionTab({ date, source = "mtt" }: IntersectionTabProps) {
+  const { data: themesData, isLoading, error } = useIntersection(date, source);
 
   // 'kodex_leverage', 'kosdaq_leverage' 및 신규 지수 테마 제외 필터링 추가
   const EXCLUDED_THEMES = ["kodex_leverage", "kosdaq_leverage", "kospi", "kospi200", "kosdaq", "kosdaq150"];
@@ -96,7 +102,7 @@ export function IntersectionTab({ source = "52w_high" }: { source?: DataSource }
                     className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
                   >
                     <td className="px-4 py-3 text-white font-medium">
-                      {stock.stock_name}
+                      <StockNameLink name={stock.stock_name} />
                     </td>
                     <td className="px-4 py-3 text-right">
                       <span

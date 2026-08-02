@@ -2,6 +2,7 @@
 
 import { useThemeStocks } from "@/hooks/useThemes";
 import { DataSource } from "@/lib/api";
+import { StockNameLink } from "@/components/StockNameLink";
 import { useEffect, useRef, useState } from "react";
 
 // @MX:ANCHOR: 테마 종목 패널 컴포넌트 (fan_in: trend/page.tsx)
@@ -132,7 +133,9 @@ export function ThemeStocksPanel({ themeName, date, source, onClose }: ThemeStoc
                     key={stock.stock_name}
                     className="border-b border-gray-700 hover:bg-gray-750 transition-colors"
                   >
-                    <td className="py-3 px-4 text-white">{stock.stock_name}</td>
+                    <td className="py-3 px-4 text-white">
+                      <StockNameLink name={stock.stock_name} />
+                    </td>
                     <td className={`py-3 px-4 text-right font-medium ${getRsScoreColor(stock.rs_score)}`}>
                       {stock.rs_score !== null ? stock.rs_score.toFixed(1) : "-"}
                     </td>

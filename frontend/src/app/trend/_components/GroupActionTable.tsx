@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useStocksGroupAction } from "@/hooks/useStocks";
 import { GroupActionStock, DataSource } from "@/lib/api";
+import { StockNameLink } from "@/components/StockNameLink";
 import clsx from "clsx";
 import { Tooltip } from "./Tooltip";
 
@@ -160,7 +161,7 @@ function StockStatusBadge({ status }: { status: "new" | "returning" | "neutral" 
 
 export function GroupActionTable({
   date,
-  source = "52w_high",
+  source = "mtt",
   timeWindow: initialTimeWindow = 3,
   rsThreshold: initialRsThreshold = 0,
   statusThreshold: initialStatusThreshold = 5
@@ -300,7 +301,7 @@ export function GroupActionTable({
                   className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors"
                 >
                   <td className="px-4 py-3 text-white font-medium">
-                    {stock.stock_name}
+                    <StockNameLink name={stock.stock_name} />
                   </td>
                   <td className="px-4 py-3">
                     <span

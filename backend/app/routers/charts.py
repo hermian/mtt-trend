@@ -1,5 +1,6 @@
 import os
 import sqlite3
+from datetime import date as date_cls, timedelta
 from typing import Optional
 from fastapi import APIRouter, Query
 from app.schemas import (
@@ -91,6 +92,8 @@ async def get_macro_chart_data(
       usdcny     fx_rate(usdcny)
       eurusd     fx_rate(eurusd)
       dxy        fx_rate(dxy)
+      fed_funds  fred_macro(DFF) — 조회 시 ffill
+      bok_base   fred_macro(BOK_BASE) — 조회 시 ffill
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -120,6 +123,11 @@ async def get_macro_chart_data(
         "eurusd":    ("fx_rate",            "eurusd",      None),
         "dxy":       ("fx_rate",            "dxy",         None),
     }
+    # 정책금리는 관측일이 희소할 수 있어 조회 시 기존 날짜축에 ffill
+    ffill_series = {
+        "fed_funds": "DFF",
+        "bok_base": "BOK_BASE",
+    }
 
     merged: dict = {}
 
@@ -142,10 +150,61 @@ async def get_macro_chart_data(
         except Exception as e:
             print(f"Warning: macro source '{key}' ({table}) failed: {e}")
 
+    def apply_ffill(key: str, series_id: str) -> None:
+        """구간 시작 직전 값으로 seed 후, merged 날짜축에 forward-fill."""
+        try:
+            seed_row = conn.execute(
+                "SELECT value FROM fred_macro "
+                "WHERE series_id = ? AND date < ? AND value IS NOT NULL "
+                "ORDER BY date DESC LIMIT 1",
+                (series_id, effective_start_date),
+            ).fetchone()
+            seed = seed_row[0] if seed_row else None
+
+            where = ["series_id = ?", "date >= ?", "value IS NOT NULL"]
+            params: list = [series_id, effective_start_date]
+            if end_date:
+                where.append("date <= ?")
+                params.append(end_date)
+            obs = list(
+                conn.execute(
+                    f"SELECT date, value FROM fred_macro WHERE {' AND '.join(where)} ORDER BY date",
+                    params,
+                )
+            )
+        except Exception as e:
+            print(f"Warning: macro ffill source '{key}' failed: {e}")
+            return
+
+        if not merged and not obs:
+            return
+
+        # 다른 시리즈가 없으면 관측일(+캘린더)로 축 구성
+        if not merged and obs:
+            start_d = date_cls.fromisoformat(effective_start_date)
+            last_d = date_cls.fromisoformat(obs[-1][0])
+            if end_date:
+                last_d = min(last_d, date_cls.fromisoformat(end_date))
+            d = start_d
+            while d <= last_d:
+                merged.setdefault(d.isoformat(), {})
+                d += timedelta(days=1)
+
+        idx = 0
+        cur = seed
+        for d in sorted(merged.keys()):
+            while idx < len(obs) and obs[idx][0] <= d:
+                cur = obs[idx][1]
+                idx += 1
+            if cur is not None:
+                merged[d][key] = cur
+
     conn = sqlite3.connect(db_path)
     try:
         for key, (table, col, cond) in series_defs.items():
             load_series(key, table, col, cond)
+        for key, series_id in ffill_series.items():
+            apply_ffill(key, series_id)
     except Exception as e:
         print(f"Error loading macro data: {e}")
         return MacroDataResponse(data=[])
@@ -174,6 +233,8 @@ async def get_macro_chart_data(
             usdcny=p.get("usdcny"),
             eurusd=p.get("eurusd"),
             dxy=p.get("dxy"),
+            fed_funds=p.get("fed_funds"),
+            bok_base=p.get("bok_base"),
         )
         for d, p in sorted(merged.items())
     ]

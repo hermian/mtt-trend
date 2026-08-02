@@ -125,6 +125,8 @@ export interface MacroDataPoint {
   usdcny?: number;
   eurusd?: number;
   dxy?: number;
+  fed_funds?: number;
+  bok_base?: number;
 }
 
 export interface MacroDataResponse {

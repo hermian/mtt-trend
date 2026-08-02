@@ -95,6 +95,10 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "VIX", 15.0),
         ("2026-06-25", "VIX", 16.0),
         ("2026-06-26", "VIX", 17.0),
+        # BOK: 구간 시작 전 관측만 있어도 ffill 되어야 함
+        ("2026-06-20", "BOK_BASE", 2.50),
+        ("2026-06-24", "DFF", 4.33),
+        ("2026-06-26", "DFF", 4.34),
     ])
     
     cursor.executemany("""
@@ -162,6 +166,13 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["us_10y"] == 4.5
     assert pt["us_spread"] == 0.3
     assert pt["kr_10y"] == 3.1
+    assert pt["fed_funds"] == 4.33
+    assert pt["bok_base"] == 2.50  # 6/20 seed → ffill onto 6/24
+
+    # DFF 관측 없는 날도 직전값 유지
+    assert data["data"][1]["fed_funds"] == 4.33
+    assert data["data"][2]["fed_funds"] == 4.34
+    assert data["data"][2]["bok_base"] == 2.50
     
     # 날짜 필터 테스트
     response_filtered = client.get("/api/charts/macro?start_date=2026-06-25&end_date=2026-06-25")
@@ -169,3 +180,5 @@ def test_get_macro_chart_data(temp_macro_db):
     data_filtered = response_filtered.json()
     assert len(data_filtered["data"]) == 1
     assert data_filtered["data"][0]["date"] == "2026-06-25"
+    assert data_filtered["data"][0]["fed_funds"] == 4.33
+    assert data_filtered["data"][0]["bok_base"] == 2.50

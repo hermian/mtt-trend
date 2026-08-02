@@ -41,6 +41,8 @@ class MacroDataPoint(BaseModel):
     usdcny: Optional[float] = None
     eurusd: Optional[float] = None
     dxy: Optional[float] = None
+    fed_funds: Optional[float] = None
+    bok_base: Optional[float] = None
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

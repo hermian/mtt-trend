@@ -196,6 +196,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                     group_etfs.append({
                         "code": code,
                         "name": etf["name"],
+                        "url": db_code,
                         "returns": {
                             "1D": calculate_return(c_now, c_1d),
                             "1W": calculate_return(c_now, c_1w),

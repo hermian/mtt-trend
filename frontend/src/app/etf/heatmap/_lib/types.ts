@@ -13,6 +13,8 @@ export interface ReturnData {
 export interface ETFItem {
   code: string;
   name: string;
+  /** 네이버 worldstock 종목 코드(예: QQQ.O, SCHD.K). 없으면 code 사용. */
+  url?: string;
   returns: ReturnData;
 }
 

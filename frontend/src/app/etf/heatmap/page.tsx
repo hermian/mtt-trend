@@ -138,6 +138,7 @@ export default function ETFHeatmapPage() {
                         etf={idx}
                         period={selectedPeriod}
                         label={idx.name}
+                        market={activeTab}
                         onHover={setHoveredEtf}
                       />
                     ))}
@@ -154,6 +155,7 @@ export default function ETFHeatmapPage() {
                       section={section}
                       groups={data.groups}
                       period={selectedPeriod}
+                      market={activeTab}
                       onHover={setHoveredEtf}
                     />
                   ))}
@@ -165,6 +167,7 @@ export default function ETFHeatmapPage() {
                       section={section}
                       groups={data.groups}
                       period={selectedPeriod}
+                      market={activeTab}
                       onHover={setHoveredEtf}
                     />
                   ))}
@@ -182,6 +185,7 @@ export default function ETFHeatmapPage() {
                         section={section}
                         groups={data.groups}
                         period={selectedPeriod}
+                        market={activeTab}
                         onHover={setHoveredEtf}
                       />
                     ))}

@@ -1,6 +1,7 @@
 "use client";
 
 import { formatReturn, getHeatStyle } from "../_lib/colors";
+import { etfLink, type MarketKey } from "../_lib/links";
 import type { ETFItem, PeriodKey } from "../_lib/types";
 
 interface HeatmapCellProps {
@@ -8,17 +9,20 @@ interface HeatmapCellProps {
   period: PeriodKey;
   /** 타일 상단 라벨 (없으면 etf.name) */
   label?: string;
+  market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
 }
 
-export function HeatmapCell({ etf, period, label, onHover }: HeatmapCellProps) {
+export function HeatmapCell({ etf, period, label, market, onHover }: HeatmapCellProps) {
   const val = etf.returns?.[period] ?? null;
   const style = getHeatStyle(val, period);
   const header = label ?? etf.name;
 
   return (
-    <button
-      type="button"
+    <a
+      href={etfLink(etf, market)}
+      target="_blank"
+      rel="noopener noreferrer"
       onMouseEnter={() => onHover?.(etf)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(etf)}
@@ -41,6 +45,6 @@ export function HeatmapCell({ etf, period, label, onHover }: HeatmapCellProps) {
           {formatReturn(val)}
         </span>
       </span>
-    </button>
+    </a>
   );
 }

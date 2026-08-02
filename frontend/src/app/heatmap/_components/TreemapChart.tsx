@@ -229,7 +229,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
       );
     } else {
       window.open(
-        `https://finance.naver.com/item/main.nhn?code=${stock.code}`,
+        `https://stock.naver.com/domestic/stock/${stock.code}/price`,
         "_blank",
         "noopener",
       );
@@ -403,7 +403,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
 
           <div className="mt-3">
             <a
-              href={`https://finance.naver.com/item/main.nhn?code=${selected.stock.code}`}
+              href={`https://stock.naver.com/domestic/stock/${selected.stock.code}/price`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 active:bg-emerald-700"

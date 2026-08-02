@@ -16,7 +16,7 @@ const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
 export default function StockHeatmapPage() {
   const [controls, setControls] = useState<HeatmapControls>({
     grouping: "sector",
-    period: "1M",
+    period: "1D",
     marcapMin: null,
     marcapMax: null,
     limit: 0,

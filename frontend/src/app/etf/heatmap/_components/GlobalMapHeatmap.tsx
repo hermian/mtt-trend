@@ -1,6 +1,7 @@
 "use client";
 
 import { formatReturn, getHeatStyle } from "../_lib/colors";
+import { etfLink } from "../_lib/links";
 import type { HeatmapData, ETFItem, PeriodKey } from "../_lib/types";
 
 // Absolute coordinates mapped on a 700x330 grid wrapper
@@ -77,8 +78,10 @@ function CompactHeatmapCell({
   const style = getHeatStyle(val, period);
 
   return (
-    <button
-      type="button"
+    <a
+      href={etfLink(etf, "GLOBAL")}
+      target="_blank"
+      rel="noopener noreferrer"
       onMouseEnter={() => onHover?.(etf)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(etf)}
@@ -101,7 +104,7 @@ function CompactHeatmapCell({
           {formatReturn(val)}
         </span>
       </span>
-    </button>
+    </a>
   );
 }
 

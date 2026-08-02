@@ -401,6 +401,7 @@ export const WicsIndexOverlayChart = forwardRef<
     const host = containerRef.current;
 
     const chart = createChart(host, {
+      autoSize: true,
       height,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -421,7 +422,6 @@ export const WicsIndexOverlayChart = forwardRef<
         timeVisible: false,
         rightOffset: 4,
       },
-      width: host.clientWidth || 800,
       handleScroll: { vertTouchDrag: false },
       handleScale: {
         axisPressedMouseMove: { time: true, price: true },
@@ -535,25 +535,18 @@ export const WicsIndexOverlayChart = forwardRef<
       refreshForVisibleRange("settle");
     });
 
-    const onResize = () => {
-      if (chartRef.current) {
-        chartRef.current.applyOptions({ width: host.clientWidth });
-      }
-    };
     const keyDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) multiKeyRef.current = true;
     };
     const keyUp = () => {
       multiKeyRef.current = false;
     };
-    window.addEventListener("resize", onResize);
     window.addEventListener("keydown", keyDown);
     window.addEventListener("keyup", keyUp);
 
     return () => {
       if (settleTimerRef.current) clearTimeout(settleTimerRef.current);
       host.removeEventListener("wheel", onWheel);
-      window.removeEventListener("resize", onResize);
       window.removeEventListener("keydown", keyDown);
       window.removeEventListener("keyup", keyUp);
       chart.remove();

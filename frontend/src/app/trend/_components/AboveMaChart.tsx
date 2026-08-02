@@ -171,10 +171,9 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       panels.forEach((panel, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${panel.id}"]`) as HTMLElement;
         if (!el) return;
-        const width = el.clientWidth;
 
         const chart = createChart(el, {
-          width,
+          autoSize: true,
           height: panel.height,
           layout: {
             background: { type: ColorType.Solid, color: "#0f172a" },
@@ -368,14 +367,9 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [formattedData]);
 
-  // Clean resize listener
+  // autoSize가 폭을 맞추므로, 리사이즈 시 일자 구분선 좌표만 갱신
   useEffect(() => {
     const handleResize = () => {
-      if (!containerRef.current) return;
-      chartsRef.current.forEach((chart, id) => {
-        const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`);
-        if (el) chart.applyOptions({ width: el.clientWidth });
-      });
       setTimeout(() => {
         const closeChart = chartsRef.current.get("close");
         if (!closeChart) return;
@@ -389,8 +383,18 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
         setVerticalLineXs(xs);
       }, 50);
     };
+    const el = containerRef.current;
+    if (!el) {
+      window.addEventListener("resize", handleResize);
+      return () => window.removeEventListener("resize", handleResize);
+    }
+    const observer = new ResizeObserver(handleResize);
+    observer.observe(el);
     window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", handleResize);
+    };
   }, []);
 
   return (

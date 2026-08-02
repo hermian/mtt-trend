@@ -126,6 +126,9 @@ interface HoveredData {
 
 export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  /** 레이아웃 폭을 받는 셸 — 차트 호스트와 분리해 ResizeObserver가 실제 가용 폭을 읽게 함 */
+  const shellRef = useRef<HTMLDivElement>(null);
+  const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<Map<string, { main: ISeriesApi<SeriesType>; ma?: ISeriesApi<SeriesType> }>>(new Map());
   const chartDataRef = useRef<FakePoint[] | null>(null);
@@ -135,6 +138,8 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
   const [selected, setSelected] = useState<Set<string>>(DEFAULT_SELECTED);
   const [period, setPeriod] = useState<Period>("2Y");
   const [normalized, setNormalized] = useState<boolean>(false);
+  /** 셸 폭이 바뀌면 차트를 재생성 (resize API만으로 안 맞는 환경 대비) */
+  const [chartWidth, setChartWidth] = useState(0);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -142,6 +147,33 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
       setIsMobile(mobile);
     };
     checkMobile();
+  }, []);
+
+  /* 레이아웃 폭 추적 — 브라우저/패널 리사이즈 시 chartWidth 갱신 */
+  useEffect(() => {
+    const shell = shellRef.current;
+    const outer = containerRef.current;
+    if (!shell) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const publish = () => {
+      const w = Math.floor(shell.getBoundingClientRect().width);
+      if (w < 10) return;
+      setChartWidth((prev) => (Math.abs(prev - w) <= 1 ? prev : w));
+    };
+    const schedule = () => {
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(publish, 50);
+    };
+    publish();
+    const ro = new ResizeObserver(schedule);
+    ro.observe(shell);
+    if (outer) ro.observe(outer);
+    window.addEventListener("resize", schedule);
+    return () => {
+      if (timer) clearTimeout(timer);
+      ro.disconnect();
+      window.removeEventListener("resize", schedule);
+    };
   }, []);
 
   const startDate = useMemo(() => startDateFor(period), [period]);
@@ -173,18 +205,23 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     }
   };
 
-  /* 차트 + 시리즈 재구성 (지표 선택 / 정규화 모드 변경 시) */
+  /* 차트 + 시리즈 재구성 (지표/정규화/폭 변경 시 재생성 → 폭 불일치 원천 제거) */
   useEffect(() => {
-    if (!containerRef.current) return;
-    const el = containerRef.current.querySelector(`[data-chart-id="macro"]`) as HTMLElement;
-    if (!el) return;
+    const shell = shellRef.current;
+    const host = hostRef.current;
+    if (!shell || !host || chartWidth < 10) return;
 
     setStatus("Building Charts...");
     seriesRef.current.clear();
+    host.replaceChildren();
 
-    const chart = createChart(el, {
-      width: el.clientWidth || containerRef.current.clientWidth || 800,
-      height,
+    const initialW = chartWidth;
+    const initialH = Math.max(Math.floor(shell.getBoundingClientRect().height) || height, 1);
+
+    const chart = createChart(host, {
+      autoSize: false,
+      width: initialW,
+      height: initialH,
       layout: {
         background: { type: ColorType.Solid, color: "#0f172a" },
         textColor: "#cbd5e1",
@@ -194,7 +231,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
       timeScale: {
         visible: true,
         borderColor: "#334155",
-        rightOffset: 20,
+        rightOffset: 8,
         barSpacing: 6,
         timeVisible: false,
       },
@@ -314,7 +351,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     const last = pts[pts.length - 1];
     if (last) setHoveredData({ time: last.date, values: collectValuesFor(last, activeIndicators) });
 
-    setTimeout(() => scrollToLatest(), 300);
+    setTimeout(() => scrollToLatest(), 50);
     return () => {
       // cleanup에서만 remove — effect 시작 시 재호출하면 disposed 차트 이중 제거로 크래시남
       chart.remove();
@@ -323,7 +360,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, normalized, isMobile, height]);
+  }, [selected, normalized, isMobile, height, chartWidth]);
 
   /* 데이터 갱신 시 기존 시리즈에 반영 */
   useEffect(() => {
@@ -342,25 +379,6 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     setTimeout(() => scrollToLatest(), 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formattedData]);
-
-  /* Resize */
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const updateDimensions = () => {
-      if (!containerRef.current || !chartRef.current) return;
-      const el = containerRef.current.querySelector(`[data-chart-id="macro"]`);
-      if (el && (el as HTMLElement).clientWidth > 0) {
-        chartRef.current.applyOptions({ width: (el as HTMLElement).clientWidth });
-      }
-    };
-    const observer = new ResizeObserver(updateDimensions);
-    observer.observe(containerRef.current);
-    window.addEventListener("resize", updateDimensions);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateDimensions);
-    };
-  }, []);
 
   const toggleIndicator = (id: string) => {
     setSelected((prev) => {
@@ -490,7 +508,10 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
                 : "다중 스케일 오버레이 (각 지표별 Y축) — 하이일드에 200MA 표시"}
             </span>
           </div>
-          <div data-chart-id="macro" className="w-full relative" style={{ height }}></div>
+          {/* 셸=레이아웃 폭 / 호스트=LWC 마운트. 셸 ResizeObserver → chart.resize */}
+          <div ref={shellRef} className="w-full relative" style={{ height }}>
+            <div ref={hostRef} data-chart-id="macro" className="absolute inset-0" />
+          </div>
         </div>
       </div>
     </div>

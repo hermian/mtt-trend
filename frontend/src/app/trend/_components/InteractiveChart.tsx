@@ -97,11 +97,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       configs.forEach((config, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${config.id}"]`) as HTMLElement;
         if (!el) return;
-        const width = el.clientWidth || containerRef.current?.clientWidth || 800;
         const chartHeight = config.id === "main" ? 400 : 100;
-        
+        el.style.height = `${chartHeight}px`;
         const chart = createChart(el, {
-          width, height: chartHeight,
+          autoSize: true,
+          height: chartHeight,
           layout: { background: { type: ColorType.Solid, color: "#0f172a" }, textColor: "#94a3b8" },
           grid: { vertLines: { color: "#1e293b" }, horzLines: { color: "#1e293b" } },
           timeScale: { visible: index === configs.length - 1, borderColor: "#334155", rightOffset: 20, barSpacing: 10 },
@@ -246,28 +246,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     });
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [chartData, configs, status]);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const updateDimensions = () => {
-      if (!containerRef.current) return;
-      chartsRef.current.forEach((chart, id) => {
-        const el = containerRef.current?.querySelector(`[data-chart-id="${id}"]`);
-        if (el && el.clientWidth > 0) {
-          chart.applyOptions({ width: el.clientWidth });
-        }
-      });
-    };
-    const observer = new ResizeObserver(() => {
-      updateDimensions();
-    });
-    observer.observe(containerRef.current);
-    window.addEventListener("resize", updateDimensions);
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", updateDimensions);
-    };
-  }, []);
 
   const renderTooltip = (config: IndicatorConfig) => {
     if (!hoveredData) return null;

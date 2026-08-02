@@ -245,7 +245,7 @@ function TrendPageContent() {
               )}
 
               {activeTab === "chart" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0">
+                <div className="w-full h-full flex flex-col px-3 md:px-6 pr-[20px] md:pr-6">
                   {(!selectedTheme || !REAL_DATA_THEMES.includes(selectedTheme)) && (
                     <div className="mb-4 p-3 bg-amber-900/30 border border-amber-800/50 rounded-xl flex items-center gap-3">
                       <span className="text-amber-500 animate-pulse">⚠️</span>
@@ -338,7 +338,7 @@ function TrendPageContent() {
               )}
 
               {(activeTab === "above_ma" || activeTab === "market_flow") && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-10">
+                <div className="w-full h-full flex flex-col gap-10">
                   {/* --- Top: Above MA Realtime Trends --- */}
                   <div className="flex flex-col gap-6">
                     <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
@@ -430,7 +430,7 @@ function TrendPageContent() {
               )}
 
               {activeTab === "macro" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
+                <div className="w-full h-full flex flex-col gap-6">
                   <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
                     <div>
                       <h3 className="text-2xl font-extrabold text-white tracking-tight">Macro & Sentiment Metrics</h3>
@@ -459,7 +459,7 @@ function TrendPageContent() {
                 </div>
               )}
               {activeTab === "wics_ranking" && (
-                <div className="max-w-7xl mx-auto h-full flex flex-col pr-[20px] md:pr-0 gap-6">
+                <div className="w-full h-full flex flex-col px-3 md:px-6 pr-[20px] md:pr-6 gap-6">
                   <div className="mb-6 flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-6 gap-4">
                     <div>
                       <h3 className="text-2xl font-extrabold text-white tracking-tight">WICS Industry Rankings</h3>

@@ -207,10 +207,10 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       panels.forEach((panel) => {
         const el = scrollArea.querySelector(`[data-chart-id="${panel.id}"]`) as HTMLElement;
         if (!el) return;
-        const width = el.clientWidth;
+        el.style.height = `${panel.height}px`;
 
         const chart = createChart(el, {
-          width,
+          autoSize: true,
           height: panel.height,
           layout: {
             background: { type: ColorType.Solid, color: "#0f172a" },
@@ -372,21 +372,9 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         });
       });
 
-      const resizeObserver = new ResizeObserver(() => {
-        chartsRef.current.forEach((chart, id) => {
-          const scrollArea2 = containerRef.current?.querySelector("[data-scroll-area]") as HTMLElement;
-          const el = scrollArea2?.querySelector(`[data-chart-id="${id}"]`) as HTMLElement;
-          if (el) {
-            chart.resize(el.clientWidth, chart.options().height as number);
-          }
-        });
-      });
-      resizeObserver.observe(scrollArea);
-
       setStatus("Active");
       return () => {
         cleanup();
-        resizeObserver.disconnect();
       };
     } catch (e: any) {
       console.error("Error drawing charts:", e);

@@ -68,6 +68,7 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
     if (!containerRef.current || seriesData.length === 0) return;
 
     const chart = createChart(containerRef.current, {
+      autoSize: true,
       height,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
@@ -80,7 +81,6 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
       crosshair: { mode: CrosshairMode.Magnet },
       rightPriceScale: { borderColor: "rgba(75, 85, 99, 0.4)" },
       timeScale: { borderColor: "rgba(75, 85, 99, 0.4)", timeVisible: false },
-      width: containerRef.current.clientWidth || containerRef.current.parentElement?.clientWidth || 600,
     });
 
     const series = chart.addSeries(LineSeries, {
@@ -109,15 +109,7 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
       setHover({ time: String(param.time), value: point.value });
     });
 
-    const onResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
-      }
-    };
-    window.addEventListener("resize", onResize);
-
     return () => {
-      window.removeEventListener("resize", onResize);
       chart.remove();
       chartRef.current = null;
       seriesRef.current = null;

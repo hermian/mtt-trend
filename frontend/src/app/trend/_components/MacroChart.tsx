@@ -43,6 +43,11 @@ const INDICATORS: IndicatorDef[] = [
   { id: "us_10y", label: "US 10Y", color: "#818cf8", raw: (v) => `10Y ${v.toFixed(2)}%` },
   { id: "us_spread", label: "US 2-10", color: "#4ade80", raw: (v) => `2-10 ${v.toFixed(2)}%` },
   { id: "kr_10y", label: "KR 10Y", color: "#fbbf24", raw: (v) => `KR10 ${v.toFixed(2)}%` },
+  { id: "usdkrw", label: "USD/KRW", color: "#34d399", raw: (v) => `₩${v.toFixed(1)}` },
+  { id: "usdjpy", label: "USD/JPY", color: "#a3e635", raw: (v) => `¥${v.toFixed(2)}` },
+  { id: "usdcny", label: "USD/CNY", color: "#facc15", raw: (v) => `¥${v.toFixed(3)}` },
+  { id: "eurusd", label: "EUR/USD", color: "#c084fc", raw: (v) => `€${v.toFixed(4)}` },
+  { id: "dxy", label: "DXY", color: "#94a3b8", raw: (v) => `DXY ${v.toFixed(2)}` },
 ];
 
 const DEFAULT_SELECTED = new Set(["sp500", "high_yield", "cnn_fgi"]);

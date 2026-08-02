@@ -120,6 +120,11 @@ export interface MacroDataPoint {
   us_10y?: number;
   us_spread?: number;
   kr_10y?: number;
+  usdkrw?: number;
+  usdjpy?: number;
+  usdcny?: number;
+  eurusd?: number;
+  dxy?: number;
 }
 
 export interface MacroDataResponse {

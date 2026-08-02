@@ -36,6 +36,11 @@ class MacroDataPoint(BaseModel):
     us_10y: Optional[float] = None
     us_spread: Optional[float] = None
     kr_10y: Optional[float] = None
+    usdkrw: Optional[float] = None
+    usdjpy: Optional[float] = None
+    usdcny: Optional[float] = None
+    eurusd: Optional[float] = None
+    dxy: Optional[float] = None
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

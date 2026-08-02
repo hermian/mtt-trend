@@ -86,6 +86,11 @@ async def get_macro_chart_data(
       us_10y     us_treasury_yield(y10)
       us_spread  us_treasury_yield(y2y10_spread)
       kr_10y     us_treasury_yield(kr10)
+      usdkrw     fx_rate(usdkrw)
+      usdjpy     fx_rate(usdjpy)
+      usdcny     fx_rate(usdcny)
+      eurusd     fx_rate(eurusd)
+      dxy        fx_rate(dxy)
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -109,6 +114,11 @@ async def get_macro_chart_data(
         "us_10y":    ("us_treasury_yield",  "y10",         None),
         "us_spread": ("us_treasury_yield",  "y2y10_spread", None),
         "kr_10y":    ("us_treasury_yield",  "kr10",        None),
+        "usdkrw":    ("fx_rate",            "usdkrw",      None),
+        "usdjpy":    ("fx_rate",            "usdjpy",      None),
+        "usdcny":    ("fx_rate",            "usdcny",      None),
+        "eurusd":    ("fx_rate",            "eurusd",      None),
+        "dxy":       ("fx_rate",            "dxy",         None),
     }
 
     merged: dict = {}
@@ -159,6 +169,11 @@ async def get_macro_chart_data(
             us_10y=p.get("us_10y"),
             us_spread=p.get("us_spread"),
             kr_10y=p.get("kr_10y"),
+            usdkrw=p.get("usdkrw"),
+            usdjpy=p.get("usdjpy"),
+            usdcny=p.get("usdcny"),
+            eurusd=p.get("eurusd"),
+            dxy=p.get("dxy"),
         )
         for d, p in sorted(merged.items())
     ]

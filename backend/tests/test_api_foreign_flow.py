@@ -48,6 +48,7 @@ def test_load_foreign_flow_empty_when_missing(tmp_path: Path, monkeypatch: pytes
 
 def test_load_foreign_flow_computes_ma_and_units(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ff, "_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(ff, "_MACRO_DB", tmp_path / "missing.db")  # CSV 폴백 강제
     spot = tmp_path / "kospi_investor.parquet"
     future = tmp_path / "kospi200_future.parquet"
     kospi = tmp_path / "kospi.csv"
@@ -76,6 +77,7 @@ def test_load_foreign_flow_computes_ma_and_units(tmp_path: Path, monkeypatch: py
 
 def test_foreign_flow_api_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(ff, "_CACHE_DIR", tmp_path)
+    monkeypatch.setattr(ff, "_MACRO_DB", tmp_path / "missing.db")
     spot = tmp_path / "kospi_investor.parquet"
     future = tmp_path / "kospi200_future.parquet"
     kospi = tmp_path / "kospi.csv"
@@ -101,3 +103,30 @@ def test_foreign_flow_api_ok(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     body = res.json()
     assert body["etf"] is False
     assert len(body["data"]) == 30
+
+
+def test_read_kospi_prefers_macro_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    """CSV보다 macro.db index_ohlcv 를 우선한다."""
+    import sqlite3
+
+    db = tmp_path / "macro.db"
+    con = sqlite3.connect(db)
+    con.execute(
+        "CREATE TABLE index_ohlcv (date TEXT, index_name TEXT, close REAL, PRIMARY KEY(date, index_name))"
+    )
+    con.executemany(
+        "INSERT INTO index_ohlcv VALUES (?, 'kospi', ?)",
+        [("2026-08-01", 6200.0), ("2026-08-03", 6257.45)],
+    )
+    con.commit()
+    con.close()
+
+    stale_csv = tmp_path / "kospi.csv"
+    _write_kospi(stale_csv, ["2026-06-01"], [100.0])
+
+    monkeypatch.setattr(ff, "_MACRO_DB", db)
+    monkeypatch.setattr(ff, "_KOSPI_CANDIDATES", [stale_csv])
+
+    s = ff._read_kospi()
+    assert float(s.loc["2026-08-03"]) == pytest.approx(6257.45)
+    assert 100.0 not in set(s.astype(float).tolist())

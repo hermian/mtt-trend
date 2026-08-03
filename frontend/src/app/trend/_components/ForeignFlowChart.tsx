@@ -203,8 +203,28 @@ export const ForeignFlowChart: React.FC<ForeignFlowChartProps> = ({ height = 560
         <div>
           <h3 className="text-2xl font-extrabold text-white tracking-tight">외국인 현선물 동향</h3>
           <p className="text-gray-400 text-sm mt-1">{subtitle || "외국인 현·선물 순매수(20MA)와 KOSPI"}</p>
-          <p className="text-xs text-gray-500 mt-2">
-            빨강영역=현선물 순매수(20MA) · 파랑영역=현선물 순매도(20MA) · 주황=60MA · 하늘=120MA · 흰선=KOSPI
+          <p className="text-xs text-gray-500 mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>
+              <span className="text-red-500 font-semibold">빨강영역</span>
+              =현선물 순매수(20MA)
+            </span>
+            <span className="text-gray-600">·</span>
+            <span>
+              <span className="text-blue-500 font-semibold">파랑영역</span>
+              =현선물 순매도(20MA)
+            </span>
+            <span className="text-gray-600">·</span>
+            <span>
+              <span className="text-orange-500 font-semibold">주황</span>=60MA
+            </span>
+            <span className="text-gray-600">·</span>
+            <span>
+              <span className="text-cyan-400 font-semibold">하늘</span>=120MA
+            </span>
+            <span className="text-gray-600">·</span>
+            <span>
+              <span className="text-gray-200 font-semibold">흰선</span>=KOSPI
+            </span>
           </p>
         </div>
         <div className="flex items-center gap-2 bg-gray-900/60 p-1 rounded-lg border border-gray-800">

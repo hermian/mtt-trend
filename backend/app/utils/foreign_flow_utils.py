@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any, Optional
 
@@ -14,10 +15,14 @@ _SPOT_PATHS = {
     True: _CACHE_DIR / "kospi_investor_etf.parquet",
 }
 _FUTURE_PATH = _CACHE_DIR / "kospi200_future.parquet"
-_KOSPI_CANDIDATES = [
+# 지수 SSOT: macro.db index_ohlcv (finance_krx index_cache). CSV는 레거시 폴백.
+_MACRO_DB = Path(os.path.expanduser("~/.cache/db/macro.db"))
+_KOSPI_CSV_CANDIDATES = [
     _CACHE_DIR / "kospi.csv",
     Path(os.path.expanduser("~/.cache/db/kospi.csv")),
 ]
+# 하위 호환: 테스트가 _KOSPI_CANDIDATES 를 패치할 수 있음
+_KOSPI_CANDIDATES = _KOSPI_CSV_CANDIDATES
 
 # KRX 금액(원) → 억원
 _WON_TO_EOK = 1e8
@@ -32,7 +37,33 @@ def _read_parquet(path: Path) -> pd.DataFrame:
     return df.sort_index()
 
 
-def _read_kospi() -> pd.Series:
+def _read_kospi_from_macro_db() -> pd.Series:
+    """macro.db index_ohlcv(index_name='kospi') — finance_krx index_cache SSOT."""
+    if not _MACRO_DB.is_file():
+        return pd.Series(dtype=float, name="kospi")
+    try:
+        con = sqlite3.connect(f"file:{_MACRO_DB.resolve()}?mode=ro", uri=True)
+        try:
+            df = pd.read_sql_query(
+                "SELECT date, close FROM index_ohlcv "
+                "WHERE index_name = 'kospi' AND close IS NOT NULL ORDER BY date",
+                con,
+            )
+        finally:
+            con.close()
+    except Exception:
+        return pd.Series(dtype=float, name="kospi")
+    if df.empty:
+        return pd.Series(dtype=float, name="kospi")
+    s = pd.to_numeric(df["close"], errors="coerce")
+    s.index = pd.to_datetime(df["date"])
+    s = s.dropna()
+    s.name = "kospi"
+    return s.sort_index()
+
+
+def _read_kospi_from_csv() -> pd.Series:
+    """레거시 kospi.csv 폴백 (더 이상 갱신되지 않음)."""
     for path in _KOSPI_CANDIDATES:
         if not path.exists():
             continue
@@ -42,6 +73,13 @@ def _read_kospi() -> pd.Series:
         s.name = "kospi"
         return s.sort_index()
     return pd.Series(dtype=float, name="kospi")
+
+
+def _read_kospi() -> pd.Series:
+    s = _read_kospi_from_macro_db()
+    if not s.empty:
+        return s
+    return _read_kospi_from_csv()
 
 
 def _foreigner_series(df: pd.DataFrame) -> pd.Series:

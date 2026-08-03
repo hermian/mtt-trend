@@ -20,6 +20,8 @@ from app.schemas import (
     WicsIndexMetaResponse,
     MarketFlowResponse,
     MarketFlowPoint,
+    ForeignFlowResponse,
+    ForeignFlowPoint,
 )
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
@@ -27,6 +29,7 @@ from app.utils.wics_index_utils import (
 )
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
+from app.utils.foreign_flow_utils import load_foreign_flow_data
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
@@ -239,6 +242,24 @@ async def get_macro_chart_data(
         for d, p in sorted(merged.items())
     ]
     return MacroDataResponse(data=result)
+
+@router.get("/foreign-flow", response_model=ForeignFlowResponse)
+async def get_foreign_flow_chart_data(
+    start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
+    etf: bool = Query(False, description="True면 KOSPI 현물+ETF 수급 캐시 사용"),
+):
+    """
+    finance_krx 캐시에서 외국인 현·선물 순매수 MA와 KOSPI를 반환합니다 (읽기 전용).
+
+    단위: 순매수/MA = 억원, kospi = 지수.
+    """
+    rows = load_foreign_flow_data(start_date, end_date, etf=etf)
+    return ForeignFlowResponse(
+        etf=etf,
+        data=[ForeignFlowPoint(**row) for row in rows],
+    )
+
 
 @router.get("/market-flow", response_model=MarketFlowResponse)
 async def get_market_flow_chart_data(

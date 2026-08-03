@@ -69,6 +69,22 @@ class MarketFlowPoint(BaseModel):
 class MarketFlowResponse(BaseModel):
     data: List[MarketFlowPoint]
 
+
+# --- Foreign Spot/Futures Flow Schemas (#12) ---
+class ForeignFlowPoint(BaseModel):
+    date: str
+    net: Optional[float] = None
+    ma20: Optional[float] = None
+    ma60: Optional[float] = None
+    ma120: Optional[float] = None
+    kospi: Optional[float] = None
+
+
+class ForeignFlowResponse(BaseModel):
+    etf: bool
+    data: List[ForeignFlowPoint]
+
+
 # --- WICS Ranking Schemas ---
 class WicsMonthResponse(BaseModel):
     months: List[str]

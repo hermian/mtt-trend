@@ -156,6 +156,20 @@ export interface MarketFlowResponse {
   data: MarketFlowPoint[];
 }
 
+export interface ForeignFlowPoint {
+  date: string;
+  net?: number;
+  ma20?: number;
+  ma60?: number;
+  ma120?: number;
+  kospi?: number;
+}
+
+export interface ForeignFlowResponse {
+  etf: boolean;
+  data: ForeignFlowPoint[];
+}
+
 export interface WicsTopStockItem {
   stock_name: string;
   stock_code: string;
@@ -297,6 +311,17 @@ export const api = {
   ): Promise<MacroDataResponse> => {
     const { data } = await apiClient.get<MacroDataResponse>("/api/charts/macro", {
       params: { start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
+  // GET /api/charts/foreign-flow → ForeignFlowResponse
+  getForeignFlowData: async (
+    startDate?: string,
+    endDate?: string,
+    etf: boolean = false
+  ): Promise<ForeignFlowResponse> => {
+    const { data } = await apiClient.get<ForeignFlowResponse>("/api/charts/foreign-flow", {
+      params: { start_date: startDate, end_date: endDate, etf },
     });
     return data;
   },

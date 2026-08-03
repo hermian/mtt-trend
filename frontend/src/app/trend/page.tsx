@@ -14,6 +14,7 @@ import { MacroChart } from "./_components/MacroChart";
 import { WicsRankingPanel } from "./_components/WicsRankingPanel";
 import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
 import { MarketFlowChart } from "./_components/MarketFlowChart";
+import { ForeignFlowChart } from "./_components/ForeignFlowChart";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -65,6 +66,8 @@ function TrendPageContent() {
       ? "wics_index"
       : rawTab === "market_flow"
       ? "market_flow"
+      : rawTab === "foreign_flow"
+      ? "foreign_flow"
       : "overview";
   
   const [source, setSource] = useState<DataSource>("mtt");
@@ -113,7 +116,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && (
+        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-3">
@@ -169,7 +172,7 @@ function TrendPageContent() {
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
         <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" ? (
+          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2 font-medium">
               {datesLoading ? (
                 <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
@@ -454,6 +457,28 @@ function TrendPageContent() {
                        <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db</span></p>
                        <p>Series Included: <span className="text-gray-300 font-bold">SP500 Index, BAMLH0A0HYM2 (High Yield), CNN FGI</span></p>
                        <p>Integration: <span className="text-emerald-400 font-bold">Full Outer Join (Daily Aligned)</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "foreign_flow" && (
+                <div className="w-full h-full flex flex-col gap-6">
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  <ForeignFlowChart />
+                  <div className="p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
+                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Foreign Flow Cache Status</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                      <p>Source: <span className="text-gray-300 font-bold">~/.cache/finance_krx/*.parquet</span></p>
+                      <p>Refresh: <span className="text-gray-300 font-bold">screener cron market_sugeub.py (18:17)</span></p>
+                      <p>Mode: <span className="text-emerald-400 font-bold">Read-only</span></p>
                     </div>
                   </div>
                 </div>

@@ -47,6 +47,10 @@ const MARCAP_PRESETS: Array<{
 const LIMITS: Array<{ id: number; label: string }> = [
   { id: 50, label: "상위 50" },
   { id: 100, label: "상위 100" },
+  { id: 200, label: "상위 200" },
+  { id: 300, label: "상위 300" },
+  { id: 400, label: "상위 400" },
+  { id: 500, label: "상위 500" },
   { id: 0, label: "전체" },
 ];
 

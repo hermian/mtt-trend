@@ -16,6 +16,7 @@ import { useMacroData } from "@/hooks/useMacroData";
 import type { MacroDataPoint } from "@/lib/api";
 
 interface MacroChartProps {
+  /** @deprecated 차트 높이는 컨테이너 flex 영역을 ResizeObserver로 측정합니다 */
   height?: number;
 }
 
@@ -45,6 +46,10 @@ const INDICATORS: IndicatorDef[] = [
   { id: "kr_10y", label: "KR 10Y", color: "#fbbf24", raw: (v) => `KR10 ${v.toFixed(2)}%` },
   { id: "fed_funds", label: "Fed Funds", color: "#67e8f9", raw: (v) => `FF ${v.toFixed(2)}%` },
   { id: "bok_base", label: "BOK Base", color: "#fb7185", raw: (v) => `BOK ${v.toFixed(2)}%` },
+  { id: "wti", label: "WTI", color: "#f97316", raw: (v) => `WTI $${v.toFixed(2)}` },
+  { id: "brent", label: "Brent", color: "#ea580c", raw: (v) => `Brent $${v.toFixed(2)}` },
+  { id: "wti_fred", label: "WTI (FRED)", color: "#fdba74", raw: (v) => `WTI-F $${v.toFixed(2)}` },
+  { id: "brent_fred", label: "Brent (FRED)", color: "#c2410c", raw: (v) => `Brent-F $${v.toFixed(2)}` },
   { id: "usdkrw", label: "USD/KRW", color: "#34d399", raw: (v) => `₩${v.toFixed(1)}` },
   { id: "usdjpy", label: "USD/JPY", color: "#a3e635", raw: (v) => `¥${v.toFixed(2)}` },
   { id: "usdcny", label: "USD/CNY", color: "#facc15", raw: (v) => `¥${v.toFixed(3)}` },
@@ -124,7 +129,7 @@ interface HoveredData {
   values: Record<string, number>;
 }
 
-export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
+export const MacroChart: React.FC<MacroChartProps> = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   /** 레이아웃 폭을 받는 셸 — 차트 호스트와 분리해 ResizeObserver가 실제 가용 폭을 읽게 함 */
   const shellRef = useRef<HTMLDivElement>(null);
@@ -138,8 +143,9 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
   const [selected, setSelected] = useState<Set<string>>(DEFAULT_SELECTED);
   const [period, setPeriod] = useState<Period>("2Y");
   const [normalized, setNormalized] = useState<boolean>(false);
-  /** 셸 폭이 바뀌면 차트를 재생성 (resize API만으로 안 맞는 환경 대비) */
+  /** 셸 크기 추적 — 폭/높이가 바뀌면 차트 재생성 (고정 height prop은 컨트롤 바 확장 시 잘림) */
   const [chartWidth, setChartWidth] = useState(0);
+  const [chartHeight, setChartHeight] = useState(0);
 
   useEffect(() => {
     const checkMobile = () => {
@@ -149,16 +155,18 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     checkMobile();
   }, []);
 
-  /* 레이아웃 폭 추적 — 브라우저/패널 리사이즈 시 chartWidth 갱신 */
+  /* 레이아웃 폭·높이 추적 — 컨트롤 바 줄 수 변화에도 차트 영역이 남은 공간에 맞춤 */
   useEffect(() => {
     const shell = shellRef.current;
     const outer = containerRef.current;
     if (!shell) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const publish = () => {
-      const w = Math.floor(shell.getBoundingClientRect().width);
-      if (w < 10) return;
-      setChartWidth((prev) => (Math.abs(prev - w) <= 1 ? prev : w));
+      const rect = shell.getBoundingClientRect();
+      const w = Math.floor(rect.width);
+      const h = Math.floor(rect.height);
+      if (w >= 10) setChartWidth((prev) => (Math.abs(prev - w) <= 1 ? prev : w));
+      if (h >= 10) setChartHeight((prev) => (Math.abs(prev - h) <= 1 ? prev : h));
     };
     const schedule = () => {
       if (timer) clearTimeout(timer);
@@ -209,14 +217,14 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
   useEffect(() => {
     const shell = shellRef.current;
     const host = hostRef.current;
-    if (!shell || !host || chartWidth < 10) return;
+    if (!shell || !host || chartWidth < 10 || chartHeight < 10) return;
 
     setStatus("Building Charts...");
     seriesRef.current.clear();
     host.replaceChildren();
 
     const initialW = chartWidth;
-    const initialH = Math.max(Math.floor(shell.getBoundingClientRect().height) || height, 1);
+    const initialH = chartHeight;
 
     const chart = createChart(host, {
       autoSize: false,
@@ -360,7 +368,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, normalized, isMobile, height, chartWidth]);
+  }, [selected, normalized, isMobile, chartWidth, chartHeight]);
 
   /* 데이터 갱신 시 기존 시리즈에 반영 */
   useEffect(() => {
@@ -392,18 +400,18 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
   return (
     <div
       ref={containerRef}
-      className={`relative flex flex-col w-full ${isMobile ? "h-[430px]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}
+      className={`relative flex flex-col w-full min-h-0 ${isMobile ? "h-[min(560px,calc(100dvh-10rem))]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}
     >
-      {/* Control bar */}
-      <div className="px-4 py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col md:flex-row md:items-center justify-between gap-2 md:gap-4 shrink-0 min-h-11 md:h-auto">
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className={`w-2.5 h-2.5 rounded-full ${isLoading || isFetching ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
+      {/* Control bar — 지표는 wrap(3줄 등). 차트 높이는 남은 flex 영역으로 맞춤 */}
+      <div className="px-3 py-1.5 md:px-4 md:py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col gap-1.5 md:gap-2 shrink-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className={`w-2.5 h-2.5 shrink-0 rounded-full ${isLoading || isFetching ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
           <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
             Macro & Sentiment Analytics
           </h3>
         </div>
 
-        {/* 지표 토글 */}
+        {/* 지표 토글 — 줄바꿈 허용 (스크롤 없음) */}
         <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="Indicators">
           {INDICATORS.map((ind) => {
             const active = selected.has(ind.id);
@@ -427,7 +435,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
 
         {/* 기간 프리셋 + 정규화 토글 */}
         <div className="flex items-center gap-1 flex-wrap">
-          <div className="flex items-center gap-1 mr-1" role="group" aria-label="Period">
+          <div className="flex items-center gap-1 mr-1 flex-wrap" role="group" aria-label="Period">
             {PERIODS.map((p) => (
               <button
                 key={p}
@@ -465,7 +473,7 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
 
       {/* Hover legend */}
       {hoveredData && activeIndicators.length > 0 && (
-        <div className="px-4 py-1 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
+        <div className="px-3 py-1 md:px-4 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300 shrink-0">
           <span className="text-slate-400 mr-1">{hoveredData.time}</span>
           {activeIndicators.map((ind) => {
             const v = hoveredData.values[ind.id];
@@ -480,8 +488,8 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
         </div>
       )}
 
-      {/* Main chart area */}
-      <div data-scroll-area className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 flex flex-col p-4 gap-4 relative">
+      {/* Main chart area — flex-1로 남은 높이만 사용 (고정 520px 제거) */}
+      <div data-scroll-area className="flex-1 min-h-0 overflow-hidden bg-slate-950 flex flex-col p-2 md:p-4 relative">
         {(isLoading || (isFetching && formattedData.length === 0)) && (
           <div className="absolute inset-0 z-30 bg-slate-950/70 flex items-center justify-center text-slate-400 font-medium animate-pulse">
             차트 데이터를 불러오는 중입니다...
@@ -500,16 +508,16 @@ export const MacroChart: React.FC<MacroChartProps> = ({ height = 520 }) => {
           </div>
         )}
 
-        <div className="relative bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner pb-1.5">
-          <div className="absolute top-2.5 left-3.5 z-20 pointer-events-none">
-            <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+        <div className="relative flex-1 min-h-0 bg-slate-900 border border-slate-800/80 rounded-xl overflow-hidden shadow-inner">
+          <div className="absolute top-2 left-3 z-20 pointer-events-none max-w-[90%]">
+            <span className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest line-clamp-1">
               {normalized
                 ? "Normalized (% change from start) — 공통 % 스케일"
                 : "다중 스케일 오버레이 (각 지표별 Y축) — 하이일드에 200MA 표시"}
             </span>
           </div>
-          {/* 셸=레이아웃 폭 / 호스트=LWC 마운트. 셸 ResizeObserver → chart.resize */}
-          <div ref={shellRef} className="w-full relative" style={{ height }}>
+          {/* 셸이 flex로 남은 높이를 채움 → ResizeObserver가 실제 h를 차트에 전달 */}
+          <div ref={shellRef} className="absolute inset-0 w-full h-full">
             <div ref={hostRef} data-chart-id="macro" className="absolute inset-0" />
           </div>
         </div>

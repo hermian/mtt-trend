@@ -200,3 +200,17 @@ def test_invalid_params(client, heatmap_env):
         client.get("/api/heatmap/stocks?grouping=bogus").status_code == 400
     )
     assert client.get("/api/heatmap/stocks?period=2M").status_code == 400
+
+
+def test_price_db_locked_returns_503(client, heatmap_env, monkeypatch):
+    import app.utils.stock_heatmap_utils as mod
+
+    monkeypatch.setattr(mod, "_cache", {"key": None, "frame": None})
+
+    def boom(*_a, **_k):
+        raise mod.PriceDbLockedError()
+
+    monkeypatch.setattr(mod, "_build_base_frame", boom)
+    res = client.get("/api/heatmap/stocks?grouping=sector&period=1D")
+    assert res.status_code == 503
+    assert "잠겨" in res.json()["detail"]

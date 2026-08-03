@@ -6,6 +6,7 @@ from app.schemas import StockHeatmapResponse
 from app.utils.stock_heatmap_utils import (
     PERIOD_TRADING_DAYS,
     VALID_GROUPINGS,
+    PriceDbLockedError,
     shape_heatmap,
 )
 
@@ -46,3 +47,5 @@ async def get_stock_heatmap(
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"데이터 파일을 찾을 수 없습니다: {e}")
+    except PriceDbLockedError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e

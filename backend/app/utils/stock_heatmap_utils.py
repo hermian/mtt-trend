@@ -9,6 +9,9 @@
 
 기간 수익률은 영업일 기준:
   1D=1, 5D=5, 1M=21, 3M=63, 6M=126, 12M=252 (rn = N+1, parquet 28DChange 와 검증됨)
+
+참고: stock_price.duckdb 가 수집 중(write lock)이면 PriceDbLockedError 를 낸다.
+      (대용량 임시 복사 폴백은 사용하지 않음)
 """
 
 from __future__ import annotations
@@ -31,6 +34,16 @@ PERIOD_TRADING_DAYS = {
 }
 
 VALID_GROUPINGS = ("sector", "industry", "theme")
+
+LOCK_MESSAGE = "주가 DB가 수집 중이라 잠겨 있습니다. 수집이 끝난 뒤 다시 시도해 주세요."
+
+
+class PriceDbLockedError(RuntimeError):
+    """stock_price.duckdb 가 다른 프로세스에 의해 write-only로 잠긴 상태."""
+
+    def __init__(self, message: str = LOCK_MESSAGE):
+        super().__init__(message)
+
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -83,6 +96,11 @@ _cache_lock = threading.Lock()
 _cache: Dict[str, Any] = {"key": None, "frame": None}
 
 
+def _is_duckdb_lock_error(exc: BaseException) -> bool:
+    msg = str(exc).lower()
+    return "conflicting lock" in msg or "could not set lock" in msg
+
+
 def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
     """Read latest RS snapshot + compute 6 period returns from the price DB."""
     part = latest_rs_partition(rs_dir)
@@ -101,11 +119,15 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
             [str(part_path)],
         ).fetchall()
 
-        price_available = price_db.is_file()
         rets_by_code: Dict[str, Dict[str, Optional[float]]] = {}
-        if price_available:
-            escaped = str(price_db).replace("'", "''")
-            con.execute(f"ATTACH '{escaped}' AS sp (READ_ONLY)")
+        if price_db.is_file():
+            escaped = str(Path(price_db).resolve()).replace("'", "''")
+            try:
+                con.execute(f"ATTACH '{escaped}' AS sp (READ_ONLY)")
+            except Exception as exc:  # noqa: BLE001
+                if _is_duckdb_lock_error(exc):
+                    raise PriceDbLockedError() from exc
+                raise
             # rn = N+1 → close N trading days ago (검증: parquet 28DChange == rn=29)
             offsets = ",\n".join(
                 f"MAX(CASE WHEN rn={days + 1} THEN close END) AS c_{key}"

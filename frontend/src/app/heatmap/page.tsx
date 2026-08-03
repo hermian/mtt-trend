@@ -24,13 +24,19 @@ export default function StockHeatmapPage() {
 
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
 
-  const { data, isFetching, isError } = useStockHeatmap({
+  const { data, isFetching, isError, error } = useStockHeatmap({
     grouping: controls.grouping,
     period: controls.period,
     marcapMin: controls.marcapMin,
     marcapMax: controls.marcapMax,
     limit: controls.limit,
   });
+
+  const errorMessage = (() => {
+    if (!isError || !error) return null;
+    const ax = error as { response?: { data?: { detail?: string } }; message?: string };
+    return ax.response?.data?.detail ?? "데이터를 불러오는 중 오류가 발생했습니다.";
+  })();
 
   // Reset drill-down when controls change
   const handleControlChange = (patch: Partial<HeatmapControls>) => {
@@ -101,8 +107,8 @@ export default function StockHeatmapPage() {
         )}
 
         {isError && (
-          <div className="rounded-lg border border-red-800 bg-red-950/50 p-4 text-center text-red-200">
-            데이터를 불러오는 중 오류가 발생했습니다.
+          <div className="rounded-lg border border-amber-800 bg-amber-950/40 p-4 text-center text-amber-100">
+            {errorMessage}
           </div>
         )}
 

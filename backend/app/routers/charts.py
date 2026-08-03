@@ -97,6 +97,10 @@ async def get_macro_chart_data(
       dxy        fx_rate(dxy)
       fed_funds  fred_macro(DFF) — 조회 시 ffill
       bok_base   fred_macro(BOK_BASE) — 조회 시 ffill
+      wti        index_ohlcv(index_name='wti') — Investing CL
+      brent      index_ohlcv(index_name='brent') — Investing LCO
+      wti_fred   fred_macro(DCOILWTICO) — FRED spot
+      brent_fred fred_macro(DCOILBRENTEU) — FRED spot
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -105,6 +109,7 @@ async def get_macro_chart_data(
     effective_start_date = start_date if start_date is not None else "2010-01-01"
 
     # (테이블, 컬럼, 조건절) — 조건절은 시리즈 행을 좁히는 SQL, None이면 전체.
+    # 원유: Investing(wti/brent)과 FRED(wti_fred/brent_fred)는 혼용하지 않음.
     series_defs = {
         "sp500":     ("index_ohlcv",        "close",       "index_name = 'sp500'"),
         "nasdaq100": ("index_ohlcv",        "close",       "index_name = 'nasdaq100'"),
@@ -125,6 +130,10 @@ async def get_macro_chart_data(
         "usdcny":    ("fx_rate",            "usdcny",      None),
         "eurusd":    ("fx_rate",            "eurusd",      None),
         "dxy":       ("fx_rate",            "dxy",         None),
+        "wti":       ("index_ohlcv",        "close",       "index_name = 'wti'"),
+        "brent":     ("index_ohlcv",        "close",       "index_name = 'brent'"),
+        "wti_fred":  ("fred_macro",         "value",       "series_id = 'DCOILWTICO'"),
+        "brent_fred": ("fred_macro",        "value",       "series_id = 'DCOILBRENTEU'"),
     }
     # 정책금리는 관측일이 희소할 수 있어 조회 시 기존 날짜축에 ffill
     ffill_series = {
@@ -238,6 +247,10 @@ async def get_macro_chart_data(
             dxy=p.get("dxy"),
             fed_funds=p.get("fed_funds"),
             bok_base=p.get("bok_base"),
+            wti=p.get("wti"),
+            brent=p.get("brent"),
+            wti_fred=p.get("wti_fred"),
+            brent_fred=p.get("brent_fred"),
         )
         for d, p in sorted(merged.items())
     ]

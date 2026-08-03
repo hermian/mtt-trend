@@ -43,6 +43,10 @@ class MacroDataPoint(BaseModel):
     dxy: Optional[float] = None
     fed_funds: Optional[float] = None
     bok_base: Optional[float] = None
+    wti: Optional[float] = None          # Investing CL → index_ohlcv
+    brent: Optional[float] = None        # Investing LCO → index_ohlcv
+    wti_fred: Optional[float] = None     # FRED DCOILWTICO → fred_macro
+    brent_fred: Optional[float] = None   # FRED DCOILBRENTEU → fred_macro
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

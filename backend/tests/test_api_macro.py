@@ -84,6 +84,13 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "move", 80.0),
         ("2026-06-25", "move", 81.0),
         ("2026-06-26", "move", 82.0),
+        # Investing oil (index_ohlcv) — FRED와 혼용 금지
+        ("2026-06-24", "wti", 78.5),
+        ("2026-06-25", "wti", 79.0),
+        ("2026-06-26", "wti", 79.5),
+        ("2026-06-24", "brent", 82.0),
+        ("2026-06-25", "brent", 82.5),
+        ("2026-06-26", "brent", 83.0),
     ])
     
     cursor.executemany("""
@@ -99,6 +106,13 @@ def temp_macro_db(monkeypatch):
         ("2026-06-20", "BOK_BASE", 2.50),
         ("2026-06-24", "DFF", 4.33),
         ("2026-06-26", "DFF", 4.34),
+        # FRED oil spot — Investing와 혼용 금지
+        ("2026-06-24", "DCOILWTICO", 77.1),
+        ("2026-06-25", "DCOILWTICO", 77.4),
+        ("2026-06-26", "DCOILWTICO", 77.8),
+        ("2026-06-24", "DCOILBRENTEU", 80.2),
+        ("2026-06-25", "DCOILBRENTEU", 80.5),
+        ("2026-06-26", "DCOILBRENTEU", 80.9),
     ])
     
     cursor.executemany("""
@@ -168,11 +182,20 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["kr_10y"] == 3.1
     assert pt["fed_funds"] == 4.33
     assert pt["bok_base"] == 2.50  # 6/20 seed → ffill onto 6/24
+    assert pt["wti"] == 78.5
+    assert pt["brent"] == 82.0
+    assert pt["wti_fred"] == 77.1
+    assert pt["brent_fred"] == 80.2
 
     # DFF 관측 없는 날도 직전값 유지
     assert data["data"][1]["fed_funds"] == 4.33
     assert data["data"][2]["fed_funds"] == 4.34
     assert data["data"][2]["bok_base"] == 2.50
+    # Investing / FRED oil 혼용되지 않음
+    assert data["data"][1]["wti"] == 79.0
+    assert data["data"][1]["wti_fred"] == 77.4
+    assert data["data"][1]["wti"] != data["data"][1]["wti_fred"]
+    assert data["data"][1]["brent"] != data["data"][1]["brent_fred"]
     
     # 날짜 필터 테스트
     response_filtered = client.get("/api/charts/macro?start_date=2026-06-25&end_date=2026-06-25")

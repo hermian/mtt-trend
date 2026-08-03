@@ -127,6 +127,10 @@ export interface MacroDataPoint {
   dxy?: number;
   fed_funds?: number;
   bok_base?: number;
+  wti?: number;
+  brent?: number;
+  wti_fred?: number;
+  brent_fred?: number;
 }
 
 export interface MacroDataResponse {

@@ -447,7 +447,7 @@ function TrendPageContent() {
                     </button>
                   </div>
                   
-                  <div className="flex-1 min-h-[690px]">
+                  <div className="flex-1 min-h-0">
                     <MacroChart />
                   </div>
                   

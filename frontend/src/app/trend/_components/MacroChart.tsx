@@ -14,6 +14,10 @@ import {
 } from "lightweight-charts";
 import { useMacroData } from "@/hooks/useMacroData";
 import type { MacroDataPoint } from "@/lib/api";
+import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
+
+/** HP 장기추세·이탈도를 적용할 지수 (FinJump DSTOA005001 / DSTOA006001) */
+const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "kospi"]);
 
 interface MacroChartProps {
   /** @deprecated 차트 높이는 컨테이너 flex 영역을 ResizeObserver로 측정합니다 */
@@ -65,6 +69,14 @@ const INDICATORS: IndicatorDef[] = [
 
 const DEFAULT_SELECTED = new Set(["sp500", "high_yield", "cnn_fgi"]);
 
+/** HY Spread 이동평균 창 (거래일) */
+const HY_MA_WINDOW = 200;
+/**
+ * API 조회 시 표시 기간보다 앞에 붙일 캘린더 일수.
+ * 200 거래일 ≈ 280캘린더 + 여유. HP 양끝 왜곡 완화에도 사용.
+ */
+const FETCH_WARMUP_DAYS = 320;
+
 /** 기간 프리셋 (단일 선택, 공통 X축 시간 필터) */
 type Period = string;
 const PERIODS: Period[] = ["5D", "1M", "3M", "6M", "YTD", "1Y", "2Y", "5Y", "All"];
@@ -73,7 +85,8 @@ const START_DAYS: Record<string, number> = {
   "5D": 5, "1M": 30, "3M": 90, "6M": 180, "1Y": 365, "2Y": 730, "5Y": 1825,
 };
 
-function startDateFor(period: Period): string | undefined {
+/** 화면에 보여줄 기간의 시작일 */
+function displayStartFor(period: Period): string | undefined {
   if (period === "All") return undefined;
   if (period === "YTD") {
     const now = new Date();
@@ -84,8 +97,27 @@ function startDateFor(period: Period): string | undefined {
   return d.toISOString().slice(0, 10);
 }
 
+/** MA/HP 워밍업을 포함한 API 조회 시작일 */
+function fetchStartFor(period: Period): string | undefined {
+  const display = displayStartFor(period);
+  if (!display) return undefined;
+  const d = new Date(display + "T00:00:00");
+  d.setDate(d.getDate() - FETCH_WARMUP_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+
 function getVal(id: IndicatorDef["id"], p: MacroDataPoint): number | undefined {
   return p[id] as number | undefined;
+}
+
+interface TimePoint {
+  time: string;
+  value: number;
+}
+
+function sliceFrom(data: TimePoint[], fromTime?: string): TimePoint[] {
+  if (!fromTime) return data;
+  return data.filter((p) => p.time >= fromTime);
 }
 
 /** 특정 시점에서 선택된 지표들의 값 맵 구성 (호버/최신 범례) */
@@ -98,16 +130,70 @@ function collectValuesFor(pt: MacroDataPoint, ids: IndicatorDef[]): Record<strin
   return out;
 }
 
-/** 시계열을 (초기값=100) 또는 raw로 변환 */
-function buildSeries(key: IndicatorDef["id"], normalized: boolean, points: FakePoint[]): TimePoint[] {
-  const rows = points
-    .map((p) => ({ time: p.time, raw: getVal(key, p as MacroDataPoint) as number }))
-    .filter((r) => r.raw != null && !Number.isNaN(r.raw));
-  if (normalized && rows.length) {
-    const base = rows[0].raw;
-    return rows.map((r) => ({ time: r.time, value: (r.raw / base) * 100 }));
+/** HP 이탈도 맵 (이미 계산된 deviation 시리즈에서 해당 시각 값 추출) */
+function collectHpDevAt(
+  time: string,
+  hpDevById: Map<string, TimePoint[]>,
+): Record<string, number> | undefined {
+  if (hpDevById.size === 0) return undefined;
+  const out: Record<string, number> = {};
+  hpDevById.forEach((pts, id) => {
+    const hit = pts.find((p) => p.time === time);
+    if (hit) out[id] = hit.value;
+  });
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** raw → 표시용(정규화 시 기준=display 첫값) */
+function toDisplayScale(pts: TimePoint[], base?: number): TimePoint[] {
+  if (base == null || base === 0) return pts;
+  return pts.map((p) => ({ time: p.time, value: (p.value / base) * 100 }));
+}
+
+/**
+ * 시리즈에 원본·MA·HP 반영.
+ * fullPts로 MA/HP를 계산한 뒤 displayStart 이후만 그려 앞구간 잘림을 막는다.
+ */
+function applySeriesData(
+  ind: IndicatorDef,
+  series: {
+    main: ISeriesApi<SeriesType>;
+    ma?: ISeriesApi<SeriesType>;
+    hpTrend?: ISeriesApi<SeriesType>;
+    hpDev?: ISeriesApi<SeriesType>;
+  },
+  fullPts: FakePoint[],
+  displayStart: string | undefined,
+  normalized: boolean,
+  hpEnabled: boolean,
+): TimePoint[] | undefined {
+  const fullRaw = buildSeries(ind.id, fullPts);
+  const displayRaw = sliceFrom(fullRaw, displayStart);
+  const base = normalized && displayRaw.length ? displayRaw[0].value : undefined;
+
+  series.main.setData(toDisplayScale(displayRaw, base) as any);
+
+  if (series.ma) {
+    const maFull = movingAverage(fullRaw, HY_MA_WINDOW);
+    series.ma.setData(toDisplayScale(sliceFrom(maFull, displayStart), base) as any);
   }
-  return rows.map((r) => ({ time: r.time, value: r.raw }));
+
+  if (hpEnabled && INDEX_HP_IDS.has(ind.id) && series.hpTrend && fullRaw.length >= 4) {
+    const { trend, deviation } = hpFilterSeries(fullRaw, HP_LAMBDA_DAILY);
+    series.hpTrend.setData(toDisplayScale(sliceFrom(trend, displayStart), base) as any);
+    const displayDev = sliceFrom(deviation, displayStart);
+    if (series.hpDev) series.hpDev.setData(displayDev as any);
+    return displayDev;
+  }
+  return undefined;
+}
+
+/** 시계열 raw 변환 (정규화는 applySeriesData에서 display 기준으로 처리) */
+function buildSeries(key: IndicatorDef["id"], points: FakePoint[]): TimePoint[] {
+  return points
+    .map((p) => ({ time: p.time, raw: getVal(key, p as MacroDataPoint) as number }))
+    .filter((r) => r.raw != null && !Number.isNaN(r.raw))
+    .map((r) => ({ time: r.time, value: r.raw }));
 }
 
 /** window일 이동평균 */
@@ -122,17 +208,14 @@ function movingAverage(data: TimePoint[], window: number): TimePoint[] {
   return out;
 }
 
-interface TimePoint {
-  time: string;
-  value: number;
-}
-
 /* 호버 범례에 실제 날짜 time을 매핑하기 위한 어댑터 */
 type FakePoint = MacroDataPoint & { time: string };
 
 interface HoveredData {
   time: string;
   values: Record<string, number>;
+  /** HP 이탈도 (지수/추세×100), 키는 지표 id */
+  hpDev?: Record<string, number>;
 }
 
 export const MacroChart: React.FC<MacroChartProps> = () => {
@@ -141,14 +224,31 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   const shellRef = useRef<HTMLDivElement>(null);
   const hostRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const seriesRef = useRef<Map<string, { main: ISeriesApi<SeriesType>; ma?: ISeriesApi<SeriesType> }>>(new Map());
+  const seriesRef = useRef<
+    Map<
+      string,
+      {
+        main: ISeriesApi<SeriesType>;
+        ma?: ISeriesApi<SeriesType>;
+        hpTrend?: ISeriesApi<SeriesType>;
+        hpDev?: ISeriesApi<SeriesType>;
+      }
+    >
+  >(new Map());
   const chartDataRef = useRef<FakePoint[] | null>(null);
+  /** MA/HP 계산용 전체(워밍업 포함) 데이터 */
+  const fullDataRef = useRef<FakePoint[] | null>(null);
+  /** 호버 범례용 HP 이탈도 캐시 (차트 재생성·데이터 갱신 시 갱신) */
+  const hpDevCacheRef = useRef<Map<string, TimePoint[]>>(new Map());
+  const displayStartRef = useRef<string | undefined>(undefined);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [selected, setSelected] = useState<Set<string>>(DEFAULT_SELECTED);
   const [period, setPeriod] = useState<Period>("2Y");
   const [normalized, setNormalized] = useState<boolean>(false);
+  /** HP 필터 ON — 지수에 장기추세 오버레이 + 이탈 패널 (FinJump DSTOA005001/6001) */
+  const [hpEnabled, setHpEnabled] = useState<boolean>(true);
   /** 셸 크기 추적 — 폭/높이가 바뀌면 차트 재생성 (고정 height prop은 컨트롤 바 확장 시 잘림) */
   const [chartWidth, setChartWidth] = useState(0);
   const [chartHeight, setChartHeight] = useState(0);
@@ -190,19 +290,28 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     };
   }, []);
 
-  const startDate = useMemo(() => startDateFor(period), [period]);
-  const { data: chartData, isLoading, error, isFetching } = useMacroData(startDate);
+  const displayStart = useMemo(() => displayStartFor(period), [period]);
+  const fetchStart = useMemo(() => fetchStartFor(period), [period]);
+  const { data: chartData, isLoading, error, isFetching } = useMacroData(fetchStart);
 
-  const formattedData = useMemo<FakePoint[]>(() => {
+  const fullFormattedData = useMemo<FakePoint[]>(() => {
     if (!chartData || !chartData.data) return [];
     return [...chartData.data]
       .sort((a, b) => (a.date > b.date ? 1 : -1))
       .map((p) => ({ ...p, time: p.date }));
   }, [chartData]);
 
+  /** 화면에 그릴 구간 (워밍업 제외) */
+  const formattedData = useMemo<FakePoint[]>(() => {
+    if (!displayStart) return fullFormattedData;
+    return fullFormattedData.filter((p) => p.time >= displayStart);
+  }, [fullFormattedData, displayStart]);
+
   useEffect(() => {
+    displayStartRef.current = displayStart;
+    if (fullFormattedData.length > 0) fullDataRef.current = fullFormattedData;
     if (formattedData.length > 0) chartDataRef.current = formattedData;
-  }, [formattedData]);
+  }, [fullFormattedData, formattedData, displayStart]);
 
   const activeIndicators = useMemo(
     () => INDICATORS.filter((i) => selected.has(i.id)),
@@ -273,20 +382,45 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     });
     chartRef.current = chart;
 
+    const hpActiveIndices = hpEnabled
+      ? activeIndicators.filter((i) => INDEX_HP_IDS.has(i.id))
+      : [];
+    const showHpPane = hpActiveIndices.length > 0;
+
+    // 이탈도 패널 (FinJump DSTOA006001) — 지수 HP ON일 때만
+    let hpDevPaneIndex = 0;
+    if (showHpPane) {
+      const mainPane = chart.panes()[0];
+      mainPane.setStretchFactor(3);
+      const devPane = chart.addPane(true);
+      devPane.setStretchFactor(1);
+      hpDevPaneIndex = devPane.paneIndex();
+    }
+
+    const hpDevCache = hpDevCacheRef.current;
+    hpDevCache.clear();
+
+    const publishHover = (pt: FakePoint | undefined) => {
+      if (!pt) {
+        setHoveredData(null);
+        return;
+      }
+      setHoveredData({
+        time: pt.date,
+        values: collectValuesFor(pt, activeIndicators),
+        hpDev: collectHpDevAt(pt.time, hpDevCacheRef.current),
+      });
+    };
+
     // 호버 시 범례 갱신
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !param.point || param.point.x < 0) {
         const arr = chartDataRef.current;
-        if (arr && arr.length) {
-          const last = arr[arr.length - 1];
-          setHoveredData({ time: last.date, values: collectValuesFor(last, activeIndicators) });
-        } else {
-          setHoveredData(null);
-        }
+        publishHover(arr && arr.length ? arr[arr.length - 1] : undefined);
         return;
       }
       const pt = chartDataRef.current?.find((p) => p.time === param.time);
-      if (pt) setHoveredData({ time: pt.date, values: collectValuesFor(pt, activeIndicators) });
+      publishHover(pt);
     });
 
     // 정규화된 시리즈는 공통 % 축(right)에, raw는 각자 고유 스케일에 배치
@@ -335,35 +469,85 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         });
       }
 
-      // 하이일드 스프레드 200일 이동평균
+      // 하이일드 스프레드 200일 이동평균 (HP 추세와 동일: 분홍 점선)
       let ma: ISeriesApi<SeriesType> | undefined;
       if (ind.id === "high_yield") {
         ma = chart.addSeries(LineSeries, {
-          color: "#94a3b8",
-          lineWidth: 1,
-          lineStyle: LineStyle.Dotted,
+          color: "#f472b6",
+          lineWidth: 2,
+          lineStyle: LineStyle.Dashed,
           priceLineVisible: false,
           priceScaleId: scaleId,
           priceFormat: { type: "custom", formatter },
         });
       }
 
-      seriesRef.current.set(ind.id, { main, ma });
+      // HP 장기추세 (FinJump DSTOA005001: 지수 + 분홍/점선 추세)
+      let hpTrend: ISeriesApi<SeriesType> | undefined;
+      let hpDev: ISeriesApi<SeriesType> | undefined;
+      if (hpEnabled && INDEX_HP_IDS.has(ind.id)) {
+        const isPrimaryHp = hpActiveIndices[0]?.id === ind.id;
+        hpTrend = chart.addSeries(LineSeries, {
+          // FinJump DSTOA005001 분홍 추세 — 첫 지수만 분홍, 나머지는 지표색 점선
+          color: isPrimaryHp ? "#f472b6" : ind.color,
+          lineWidth: isPrimaryHp ? 2 : 1,
+          lineStyle: LineStyle.Dashed,
+          priceLineVisible: false,
+          priceScaleId: scaleId,
+          priceFormat: { type: "custom", formatter },
+        });
+        if (showHpPane) {
+          hpDev = chart.addSeries(
+            LineSeries,
+            {
+              color: ind.color,
+              lineWidth: 2,
+              priceLineVisible: false,
+              priceScaleId: "right",
+              priceFormat: {
+                type: "custom",
+                formatter: (v: number) => `${v.toFixed(1)}`,
+              },
+            },
+            hpDevPaneIndex,
+          );
+          // 기준선 100 (추세 일치)
+          if (hpActiveIndices[0]?.id === ind.id) {
+            hpDev.createPriceLine({
+              price: 100,
+              color: "#64748b",
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: false,
+              title: "",
+            });
+          }
+        }
+      }
+
+      seriesRef.current.set(ind.id, { main, ma, hpTrend, hpDev });
     });
 
-    // 구성 직후 현재 데이터를 즉시 반영
-    const pts = chartDataRef.current || [];
+    // 구성 직후 현재 데이터를 즉시 반영 (full로 MA/HP 계산 → display 구간만 표시)
+    const fullPts = fullDataRef.current || [];
+    const displayPts = chartDataRef.current || [];
+    const dStart = displayStartRef.current;
     activeIndicators.forEach((ind) => {
       const series = seriesRef.current.get(ind.id);
       if (!series) return;
-      const data = buildSeries(ind.id, normalized, pts);
-      series.main.setData(data as any);
-      if (series.ma) series.ma.setData(movingAverage(data, 200) as any);
+      const deviation = applySeriesData(ind, series, fullPts, dStart, normalized, hpEnabled);
+      if (deviation) hpDevCache.set(ind.id, deviation);
     });
 
     setStatus("Ready");
-    const last = pts[pts.length - 1];
-    if (last) setHoveredData({ time: last.date, values: collectValuesFor(last, activeIndicators) });
+    const last = displayPts[displayPts.length - 1];
+    if (last) {
+      setHoveredData({
+        time: last.date,
+        values: collectValuesFor(last, activeIndicators),
+        hpDev: collectHpDevAt(last.time, hpDevCacheRef.current),
+      });
+    }
 
     setTimeout(() => scrollToLatest(), 50);
     return () => {
@@ -374,25 +558,39 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, normalized, isMobile, chartWidth, chartHeight]);
+  }, [selected, normalized, isMobile, chartWidth, chartHeight, hpEnabled, displayStart]);
 
   /* 데이터 갱신 시 기존 시리즈에 반영 */
   useEffect(() => {
     if (formattedData.length === 0 || seriesRef.current.size === 0) return;
+    const hpDevCache = hpDevCacheRef.current;
+    hpDevCache.clear();
     activeIndicators.forEach((ind) => {
       const series = seriesRef.current.get(ind.id);
       if (!series) return;
-      const data = buildSeries(ind.id, normalized, formattedData);
-      series.main.setData(data as any);
-      if (series.ma) series.ma.setData(movingAverage(data, 200) as any);
+      const deviation = applySeriesData(
+        ind,
+        series,
+        fullFormattedData,
+        displayStart,
+        normalized,
+        hpEnabled,
+      );
+      if (deviation) hpDevCache.set(ind.id, deviation);
     });
 
     const last = formattedData[formattedData.length - 1];
-    if (last) setHoveredData({ time: last.date, values: collectValuesFor(last, activeIndicators) });
+    if (last) {
+      setHoveredData({
+        time: last.date,
+        values: collectValuesFor(last, activeIndicators),
+        hpDev: collectHpDevAt(last.time, hpDevCache),
+      });
+    }
 
     setTimeout(() => scrollToLatest(), 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formattedData]);
+  }, [formattedData, fullFormattedData, displayStart]);
 
   const toggleIndicator = (id: string) => {
     setSelected((prev) => {
@@ -469,6 +667,18 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
             {normalized ? "정규화 %" : "원본"}
           </button>
           <button
+            type="button"
+            onClick={() => setHpEnabled((v) => !v)}
+            className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
+              hpEnabled
+                ? "bg-pink-600 text-white border-pink-500"
+                : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+            }`}
+            title="S&P500/NDX/KOSPI에 HP 장기추세(τ)와 추세 대비 이탈(지수/추세×100) 표시 — FinJump DSTOA005001·DSTOA006001"
+          >
+            {hpEnabled ? "HP ON" : "HP OFF"}
+          </button>
+          <button
             onClick={scrollToLatest}
             className="text-[9px] bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-600 transition-all font-bold tracking-tighter uppercase"
           >
@@ -484,13 +694,22 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
           {activeIndicators.map((ind) => {
             const v = hoveredData.values[ind.id];
             if (v == null) return null;
+            const hp = hoveredData.hpDev?.[ind.id];
             return (
               <span key={ind.id} style={{ color: ind.color }} className="font-bold">
                 {ind.label}: <span className="text-slate-100">{ind.raw(v)}</span>
+                {hp != null && (
+                  <span className="text-pink-300 font-normal ml-1">
+                    (이탈 {hp.toFixed(1)})
+                  </span>
+                )}
               </span>
             );
           })}
           {normalized && <span className="text-purple-400 italic">(정규화: 기준일=100)</span>}
+          {hpEnabled && activeIndicators.some((i) => INDEX_HP_IDS.has(i.id)) && (
+            <span className="text-pink-400/80 italic">분홍선=HP추세 · 하단=이탈(100=추세)</span>
+          )}
         </div>
       )}
 
@@ -519,7 +738,9 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
             <span className="text-[9px] md:text-[10px] font-black text-slate-500 uppercase tracking-widest line-clamp-1">
               {normalized
                 ? "Normalized (% change from start) — 공통 % 스케일"
-                : "다중 스케일 오버레이 (각 지표별 Y축) — 하이일드에 200MA 표시"}
+                : hpEnabled
+                  ? "다중 스케일 + HP/200MA 분홍점선 · 하단 이탈=(지수/추세)×100"
+                  : "다중 스케일 오버레이 — HY Spread 200MA(분홍 점선)"}
             </span>
           </div>
           {/* 셸이 flex로 남은 높이를 채움 → ResizeObserver가 실제 h를 차트에 전달 */}

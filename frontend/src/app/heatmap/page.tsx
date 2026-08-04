@@ -11,7 +11,12 @@ const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
   sector: "섹터",
   industry: "업종",
   theme: "테마",
+  kospi: "KOSPI",
+  kosdaq: "KOSDAQ",
 };
+
+/** 시장 단일 그룹은 개요 드릴다운 없이 종목 트리맵을 바로 표시 */
+const MARKET_GROUPINGS = new Set<HeatmapControls["grouping"]>(["kospi", "kosdaq"]);
 
 export default function StockHeatmapPage() {
   const [controls, setControls] = useState<HeatmapControls>({
@@ -23,6 +28,7 @@ export default function StockHeatmapPage() {
   });
 
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
+  const isMarketGrouping = MARKET_GROUPINGS.has(controls.grouping);
 
   const { data, isFetching, isError, error } = useStockHeatmap({
     grouping: controls.grouping,
@@ -56,6 +62,18 @@ export default function StockHeatmapPage() {
     return data.groups.find((g) => g.name === drilledGroup) ?? null;
   }, [drilledGroup, data]);
 
+  // kospi/kosdaq: 단일 그룹 → 종목 트리맵 직행
+  const marketGroupData = useMemo(() => {
+    if (!isMarketGrouping || !data || data.groups.length === 0) return null;
+    return data.groups[0] ?? null;
+  }, [isMarketGrouping, data]);
+
+  const showGroupOverview =
+    !isError && data && data.groups.length > 0 && !drilledGroup && !isMarketGrouping;
+  const showStockTreemap =
+    !isError && (drilledGroupData != null || marketGroupData != null);
+  const stockTreemapGroup = drilledGroupData ?? marketGroupData;
+
   return (
     <div className="flex-1 overflow-y-auto bg-gray-950 p-4 text-gray-100 md:p-6">
       <div className="mb-4 flex flex-col gap-1">
@@ -85,8 +103,8 @@ export default function StockHeatmapPage() {
         <ControlBar value={controls} onChange={handleControlChange} />
         <Legend scale={scale} />
 
-        {/* Breadcrumb for drill-down */}
-        {drilledGroup && (
+        {/* Breadcrumb for drill-down (섹터/업종/테마만) */}
+        {drilledGroup && !isMarketGrouping && (
           <div className="flex items-center gap-2 text-sm">
             <button
               onClick={() => setDrilledGroup(null)}
@@ -112,7 +130,7 @@ export default function StockHeatmapPage() {
           </div>
         )}
 
-        {!isError && data && data.groups.length > 0 && !drilledGroup && (
+        {showGroupOverview && (
           <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-2">
             <GroupTreemap
               groups={data.groups}
@@ -122,9 +140,9 @@ export default function StockHeatmapPage() {
           </div>
         )}
 
-        {!isError && drilledGroupData && (
+        {showStockTreemap && stockTreemapGroup && (
           <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-2">
-            <StockTreemap group={drilledGroupData} scale={scale} />
+            <StockTreemap group={stockTreemapGroup} scale={scale} />
           </div>
         )}
 

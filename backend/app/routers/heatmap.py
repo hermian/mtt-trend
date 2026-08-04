@@ -15,7 +15,10 @@ router = APIRouter(prefix="/heatmap", tags=["heatmap"])
 
 @router.get("/stocks", response_model=StockHeatmapResponse)
 async def get_stock_heatmap(
-    grouping: str = Query("sector", description="그룹 기준: sector | industry | theme"),
+    grouping: str = Query(
+        "sector",
+        description="그룹 기준: sector | industry | theme | kospi | kosdaq",
+    ),
     period: str = Query("1M", description="수익률 기간: 1D | 5D | 1M | 3M | 6M | 12M"),
     marcap_min: Optional[float] = Query(None, description="시가총액 하한 (억원)"),
     marcap_max: Optional[float] = Query(None, description="시가총액 상한 (억원)"),
@@ -24,7 +27,7 @@ async def get_stock_heatmap(
     """
     한국 주식 히트맵 데이터.
 
-    최신 RS 유니버스(~/.cache/db/rs) 기준으로 그룹별(섹터/WICS 산업/테마)
+    최신 RS 유니버스(~/.cache/db/rs) 기준으로 그룹별(섹터/WICS 산업/테마/KOSPI/KOSDAQ)
     종목 목록과 선택 기간의 수익률·RS·시가총액을 반환합니다.
     """
     if grouping not in VALID_GROUPINGS:

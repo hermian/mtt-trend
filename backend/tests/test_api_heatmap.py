@@ -162,6 +162,47 @@ def test_industry_grouping(client, heatmap_env):
     assert set(groups) == {"소프트웨어", "은행"}
 
 
+def test_kospi_grouping(client, heatmap_env):
+    body = client.get("/api/heatmap/stocks?grouping=kospi&period=1D").json()
+    assert body["stock_count"] == 2
+    assert len(body["groups"]) == 1
+    g = body["groups"][0]
+    assert g["name"] == "KOSPI"
+    assert {s["code"] for s in g["stocks"]} == {"000010", "000020"}
+    assert all(s["market"] == "KOSPI" for s in g["stocks"])
+
+
+def test_kosdaq_grouping_normalizes_kq(client, heatmap_env, monkeypatch, tmp_path):
+    """parquet Market='KQ' 도 KOSDAQ 그룹으로 정규화한다."""
+    rs_dir = tmp_path / "rs_kq"
+    part = rs_dir / f"date={AS_OF}"
+    part.mkdir(parents=True)
+    con = duckdb.connect()
+    con.execute(
+        f"""COPY (
+            SELECT * FROM (VALUES
+                ('000010', '에이', 'KOSPI', 'IT', '소프트웨어', '', 2.0, 80),
+                ('000030', '씨',   'KQ',    '금융', '은행',     '', 0.5, 40)
+            ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating)
+        ) TO '{part / "part-0.parquet"}' (FORMAT PARQUET)"""
+    )
+    con.close()
+
+    # 기존 fixture 가격 DB 재사용
+    monkeypatch.setenv("RS_PARQUET_DIR", str(rs_dir))
+    import app.utils.stock_heatmap_utils as mod
+
+    monkeypatch.setattr(mod, "_cache", {"key": None, "frame": None})
+
+    body = client.get("/api/heatmap/stocks?grouping=kosdaq&period=1D").json()
+    assert body["stock_count"] == 1
+    assert len(body["groups"]) == 1
+    g = body["groups"][0]
+    assert g["name"] == "KOSDAQ"
+    assert g["stocks"][0]["code"] == "000030"
+    assert g["stocks"][0]["market"] == "KOSDAQ"
+
+
 def test_marcap_filter_uses_eok_unit(client, heatmap_env):
     # Marcap parquet 값 2.0(천억원) → 2000억원으로 노출
     body = client.get("/api/heatmap/stocks?grouping=sector&period=1D").json()

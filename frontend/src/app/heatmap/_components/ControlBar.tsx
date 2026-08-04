@@ -21,6 +21,8 @@ const GROUPINGS: Array<{ id: HeatmapGrouping; label: string }> = [
   { id: "sector", label: "섹터" },
   { id: "industry", label: "업종" },
   { id: "theme", label: "테마" },
+  { id: "kospi", label: "KOSPI" },
+  { id: "kosdaq", label: "KOSDAQ" },
 ];
 
 const PERIODS: Array<{ id: HeatmapPeriod; label: string }> = [

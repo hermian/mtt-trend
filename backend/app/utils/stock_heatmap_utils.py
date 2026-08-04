@@ -33,7 +33,14 @@ PERIOD_TRADING_DAYS = {
     "12M": 252,
 }
 
-VALID_GROUPINGS = ("sector", "industry", "theme")
+VALID_GROUPINGS = ("sector", "industry", "theme", "kospi", "kosdaq")
+
+# parquet Market 값 → 표시 라벨 (KQ → KOSDAQ)
+_MARKET_LABELS = {
+    "KOSPI": "KOSPI",
+    "KOSDAQ": "KOSDAQ",
+    "KQ": "KOSDAQ",
+}
 
 LOCK_MESSAGE = "주가 DB가 수집 중이라 잠겨 있습니다. 수집이 끝난 뒤 다시 시도해 주세요."
 
@@ -169,11 +176,13 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
         themes_list = (
             [t.strip() for t in str(themes).split(",") if t.strip()] if themes else []
         )
+        market_raw = (str(market).strip().upper() if market else "") or None
         frame_rows.append(
             {
                 "code": code,
                 "name": name,
-                "market": market,
+                "market": market_raw,
+                "market_label": _MARKET_LABELS.get(market_raw or "", market_raw),
                 "sector": sector or "미분류",
                 "wics": wics or "미분류",
                 "themes": themes_list,
@@ -213,7 +222,15 @@ def _group_key(stock: Dict[str, Any], grouping: str) -> List[str]:
         return [stock["sector"]]
     if grouping == "industry":
         return [stock["wics"]]
-    return stock["themes"]  # theme: a stock can belong to several groups
+    if grouping == "theme":
+        return stock["themes"]  # theme: a stock can belong to several groups
+    # kospi / kosdaq: 해당 시장만 단일 그룹 (그 외는 제외)
+    label = stock.get("market_label")
+    if grouping == "kospi" and label == "KOSPI":
+        return ["KOSPI"]
+    if grouping == "kosdaq" and label == "KOSDAQ":
+        return ["KOSDAQ"]
+    return []
 
 
 def shape_heatmap(
@@ -236,6 +253,12 @@ def shape_heatmap(
 
     frame = get_base_frame()
     rows = frame["rows"]
+
+    # 시장 그룹: 해당 Market만 남겨 stock_count·필터가 화면과 일치하도록
+    if grouping == "kospi":
+        rows = [r for r in rows if r.get("market_label") == "KOSPI"]
+    elif grouping == "kosdaq":
+        rows = [r for r in rows if r.get("market_label") == "KOSDAQ"]
 
     if marcap_min is not None:
         rows = [r for r in rows if r["marcap"] >= marcap_min]
@@ -263,7 +286,7 @@ def shape_heatmap(
                 {
                     "code": m["code"],
                     "name": m["name"],
-                    "market": m["market"],
+                    "market": m.get("market_label") or m["market"],
                     "marcap": round(m["marcap"], 1),
                     "ret": m["rets"].get(period),
                     "rs": m["rs"],

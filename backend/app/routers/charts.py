@@ -101,6 +101,7 @@ async def get_macro_chart_data(
       brent      index_ohlcv(index_name='brent') — Investing LCO
       wti_fred   fred_macro(DCOILWTICO) — FRED spot
       brent_fred fred_macro(DCOILBRENTEU) — FRED spot
+      export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -139,6 +140,10 @@ async def get_macro_chart_data(
     ffill_series = {
         "fed_funds": "DFF",
         "bok_base": "BOK_BASE",
+    }
+    # 테이블 기반 희소 시계열 ffill (table, column)
+    ffill_tables = {
+        "export_avg": ("kr_export_avg", "export_avg"),
     }
 
     merged: dict = {}
@@ -188,10 +193,41 @@ async def get_macro_chart_data(
             print(f"Warning: macro ffill source '{key}' failed: {e}")
             return
 
+        _ffill_onto_merged(key, seed, obs)
+
+    def apply_table_ffill(key: str, table: str, col: str) -> None:
+        """희소 테이블 시계열을 merged 날짜축에 forward-fill."""
+        try:
+            seed_row = conn.execute(
+                f'SELECT "{col}" FROM "{table}" '
+                f'WHERE date < ? AND "{col}" IS NOT NULL '
+                "ORDER BY date DESC LIMIT 1",
+                (effective_start_date,),
+            ).fetchone()
+            seed = seed_row[0] if seed_row else None
+
+            where = [f'"{col}" IS NOT NULL', "date >= ?"]
+            params: list = [effective_start_date]
+            if end_date:
+                where.append("date <= ?")
+                params.append(end_date)
+            obs = list(
+                conn.execute(
+                    f'SELECT date, "{col}" FROM "{table}" '
+                    f"WHERE {' AND '.join(where)} ORDER BY date",
+                    params,
+                )
+            )
+        except Exception as e:
+            print(f"Warning: macro table ffill '{key}' ({table}) failed: {e}")
+            return
+
+        _ffill_onto_merged(key, seed, obs)
+
+    def _ffill_onto_merged(key: str, seed, obs: list) -> None:
         if not merged and not obs:
             return
 
-        # 다른 시리즈가 없으면 관측일(+캘린더)로 축 구성
         if not merged and obs:
             start_d = date_cls.fromisoformat(effective_start_date)
             last_d = date_cls.fromisoformat(obs[-1][0])
@@ -217,6 +253,8 @@ async def get_macro_chart_data(
             load_series(key, table, col, cond)
         for key, series_id in ffill_series.items():
             apply_ffill(key, series_id)
+        for key, (table, col) in ffill_tables.items():
+            apply_table_ffill(key, table, col)
     except Exception as e:
         print(f"Error loading macro data: {e}")
         return MacroDataResponse(data=[])
@@ -251,6 +289,7 @@ async def get_macro_chart_data(
             brent=p.get("brent"),
             wti_fred=p.get("wti_fred"),
             brent_fred=p.get("brent_fred"),
+            export_avg=p.get("export_avg"),
         )
         for d, p in sorted(merged.items())
     ]

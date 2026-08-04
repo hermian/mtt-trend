@@ -455,7 +455,7 @@ function TrendPageContent() {
                     <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Macro Database Status</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
                        <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db</span></p>
-                       <p>Series Included: <span className="text-gray-300 font-bold">SP500 Index, BAMLH0A0HYM2 (High Yield), CNN FGI</span></p>
+                       <p>Series: <span className="text-gray-300 font-bold">SP500, HY, FGI, 일평균수출(FinJump·주간·ffill) 등</span></p>
                        <p>Integration: <span className="text-emerald-400 font-bold">Full Outer Join (Daily Aligned)</span></p>
                     </div>
                   </div>

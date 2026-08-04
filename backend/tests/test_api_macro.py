@@ -67,6 +67,15 @@ def temp_macro_db(monkeypatch):
             PRIMARY KEY (date)
         )
     """)
+    cursor.execute("""
+        CREATE TABLE kr_export_avg (
+            date TEXT NOT NULL,
+            export_avg REAL,
+            kospi REAL,
+            source TEXT,
+            PRIMARY KEY (date)
+        )
+    """)
     
     # Mock data 추가
     cursor.executemany("""
@@ -146,6 +155,14 @@ def temp_macro_db(monkeypatch):
         ("2026-06-25", 4.3, 4.6, 0.3, 3.2),
         ("2026-06-26", 4.4, 4.7, 0.3, 3.3),
     ])
+
+    # 주간 일평균수출 — 구간 시작 전 관측 + 주중 1점만 있어도 ffill
+    cursor.executemany("""
+        INSERT INTO kr_export_avg (date, export_avg, kospi, source) VALUES (?, ?, ?, ?)
+    """, [
+        ("2026-06-22", 39.5, 2500.0, "finjump"),
+        ("2026-06-26", 40.1, 2520.0, "finjump"),
+    ])
     
     conn.commit()
     conn.close()
@@ -186,11 +203,15 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["brent"] == 82.0
     assert pt["wti_fred"] == 77.1
     assert pt["brent_fred"] == 80.2
+    assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
 
     # DFF 관측 없는 날도 직전값 유지
     assert data["data"][1]["fed_funds"] == 4.33
     assert data["data"][2]["fed_funds"] == 4.34
     assert data["data"][2]["bok_base"] == 2.50
+    # 일평균수출: 6/24·6/25는 6/22값, 6/26은 새 관측
+    assert data["data"][1]["export_avg"] == 39.5
+    assert data["data"][2]["export_avg"] == 40.1
     # Investing / FRED oil 혼용되지 않음
     assert data["data"][1]["wti"] == 79.0
     assert data["data"][1]["wti_fred"] == 77.4

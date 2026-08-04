@@ -47,6 +47,7 @@ class MacroDataPoint(BaseModel):
     brent: Optional[float] = None        # Investing LCO → index_ohlcv
     wti_fred: Optional[float] = None     # FRED DCOILWTICO → fred_macro
     brent_fred: Optional[float] = None   # FRED DCOILBRENTEU → fred_macro
+    export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

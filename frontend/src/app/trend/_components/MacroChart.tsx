@@ -33,6 +33,12 @@ const INDICATORS: IndicatorDef[] = [
   { id: "sp500", label: "S&P 500", color: "#38bdf8", area: true, raw: (v) => `SPX ${v.toFixed(0)}` },
   { id: "nasdaq100", label: "NDX", color: "#22d3ee", raw: (v) => `NDX ${v.toFixed(0)}` },
   { id: "kospi", label: "KOSPI", color: "#f87171", raw: (v) => `KOSPI ${v.toFixed(0)}` },
+  {
+    id: "export_avg",
+    label: "일평균수출",
+    color: "#6366f1",
+    raw: (v) => `수출 $${v.toFixed(1)}억`,
+  },
   { id: "cnn_fgi", label: "CNN FGI", color: "#eab308", raw: (v) => `FGI ${v.toFixed(0)}` },
   { id: "kr_fgi", label: "K FGI", color: "#f59e0b", raw: (v) => `KFGI ${v.toFixed(0)}` },
   { id: "high_yield", label: "HY Spread", color: "#f43f5e", raw: (v) => `HY ${v.toFixed(2)}%` },

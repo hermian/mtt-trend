@@ -19,12 +19,20 @@ interface MarketFlowChartProps {
 interface HoveredData {
   time: string;
   price?: number;
+  /** 전일 종가 대비 변동률 (%) */
+  changePct?: number | null;
   foreigner?: number;
   institution?: number;
   program?: number;
   individual?: number;
   future_foreigner?: number;
   isKosdaq?: boolean;
+}
+
+/** 전일 종가 대비 일중 변동률 (%) */
+function calcChangePct(price: number | null | undefined, prevClose: number | null | undefined): number | null {
+  if (price == null || prevClose == null || prevClose <= 0 || !Number.isFinite(price)) return null;
+  return ((price - prevClose) / prevClose) * 100;
 }
 
 /** 오른쪽 Y축 라벨 폭 고정 — 지수/수급 pane의 plot·X축 폭을 맞춤 */
@@ -103,7 +111,17 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   }, [dates, selectedDate]);
 
-  const { data: chartData, isLoading, error } = useMarketFlowData(selectedDate);
+  // 전일 종가 산출용: 선택일 직전 거래일 (없으면 선택일만 조회)
+  const prevDate = useMemo(() => {
+    if (!dates || !selectedDate) return undefined;
+    const idx = dates.indexOf(selectedDate);
+    return idx > 0 ? dates[idx - 1] : undefined;
+  }, [dates, selectedDate]);
+
+  const { data: chartData, isLoading, error } = useMarketFlowData(
+    prevDate || selectedDate,
+    selectedDate || undefined
+  );
 
   // 지수별 DB 컬럼 매핑 헬퍼
   const getIndexPrice = (p: any, idx: IndexType) => {
@@ -121,11 +139,34 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   };
 
+  // 전일 종가 (지수별)
+  const prevCloses = useMemo(() => {
+    const empty = { kospi: null as number | null, kospi200: null as number | null, kosdaq: null as number | null, kq150: null as number | null };
+    if (!chartData?.data || !prevDate) return empty;
+    const prevRows = chartData.data.filter((p) => p.date === prevDate);
+    if (prevRows.length === 0) return empty;
+    const last = prevRows[prevRows.length - 1];
+    return {
+      kospi: last.kospi_price ?? null,
+      kospi200: last.kospi200_price ?? null,
+      kosdaq: last.kosdaq_price ?? null,
+      kq150: last.kq150_price ?? null,
+    };
+  }, [chartData, prevDate]);
+
+  const prevClosesRef = useRef(prevCloses);
+  useEffect(() => {
+    prevClosesRef.current = prevCloses;
+  }, [prevCloses]);
+
   const buildHoveredData = (point: any, idx: IndexType): HoveredData => {
     const isKosdaq = idx === "kosdaq" || idx === "kq150";
+    const price = getIndexPrice(point, idx) ?? undefined;
+    const prevClose = prevClosesRef.current[idx];
     return {
       time: point.displayTime,
-      price: getIndexPrice(point, idx) ?? undefined,
+      price,
+      changePct: calcChangePct(price, prevClose),
       foreigner: isKosdaq ? point.kosdaq_foreigner_val ?? undefined : point.kospi_foreigner_val ?? undefined,
       institution: isKosdaq ? point.kosdaq_institution_val ?? undefined : point.kospi_institution_val ?? undefined,
       program: isKosdaq ? undefined : point.kospi_program_val ?? undefined,
@@ -135,15 +176,17 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     };
   };
 
-  // 날짜 내 첫 시점 데이터를 기준으로 0부터 시작하게 가공 (Zero-start)
+  // 날짜 내 첫 시점 데이터를 기준으로 0부터 시작하게 가공 (Zero-start) — 선택일만 차트에 사용
   const formattedData = useMemo(() => {
-    if (!chartData || !chartData.data) return [];
+    if (!chartData || !chartData.data || !selectedDate) return [];
 
-    const sorted = [...chartData.data].sort((a, b) => {
-      const timeA = `${a.date}T${a.time}:00`;
-      const timeB = `${b.date}T${b.time}:00`;
-      return timeA > timeB ? 1 : -1;
-    });
+    const sorted = [...chartData.data]
+      .filter((p) => p.date === selectedDate)
+      .sort((a, b) => {
+        const timeA = `${a.date}T${a.time}:00`;
+        const timeB = `${b.date}T${b.time}:00`;
+        return timeA > timeB ? 1 : -1;
+      });
 
     const dayFirstData: Record<string, {
       f: number; i: number; ind: number; p: number; ff: number;
@@ -181,7 +224,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         kosdaq_individual_val: (p.kosdaq_individual ?? 0) - first.kq_ind,
       };
     });
-  }, [chartData]);
+  }, [chartData, selectedDate]);
 
   useEffect(() => {
     if (formattedData.length > 0) chartDataRef.current = formattedData;
@@ -195,7 +238,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
     const latestPoint = formattedData[formattedData.length - 1];
     setHoveredData(buildHoveredData(latestPoint, selectedIndex));
-  }, [formattedData, selectedIndex]);
+  }, [formattedData, selectedIndex, prevCloses]);
 
   // X축 범위를 09:00 ~ 15:45로 고정
   const setChartVisibleRange = () => {
@@ -649,7 +692,26 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         <div className="flex flex-col" style={{ color: selectedOpt?.color }}>
           <span className="font-medium opacity-90">{selectedOpt?.name}</span>
           <span className="font-semibold">
-            {hoveredData?.price != null ? hoveredData.price.toFixed(2) : "-"}
+            {hoveredData?.price != null ? (
+              <>
+                {hoveredData.price.toFixed(1)}
+                {hoveredData.changePct != null && (
+                  <span
+                    className={
+                      hoveredData.changePct > 0
+                        ? "text-red-400"
+                        : hoveredData.changePct < 0
+                          ? "text-blue-400"
+                          : "text-slate-400"
+                    }
+                  >
+                    ({hoveredData.changePct.toFixed(1)}%)
+                  </span>
+                )}
+              </>
+            ) : (
+              "-"
+            )}
           </span>
         </div>
 

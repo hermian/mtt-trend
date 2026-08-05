@@ -21,9 +21,17 @@ interface AboveMaChartProps {
 interface HoveredData {
   time: string;
   close: number;
+  /** 전일 종가 대비 변동률 (%) */
+  changePct: number | null;
   above_sma10: number;
   above_sma20: number;
   above_sma50: number;
+}
+
+/** 전일 종가 대비 일중 변동률 (%) */
+function calcChangePct(close: number, prevClose: number | null | undefined): number | null {
+  if (prevClose == null || prevClose <= 0 || !Number.isFinite(close)) return null;
+  return ((close - prevClose) / prevClose) * 100;
 }
 
 export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700 }) => {
@@ -48,13 +56,36 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
 
   const formattedData = useMemo(() => {
     if (!chartData || !chartData.data) return [];
-    return [...chartData.data]
+    const sorted = [...chartData.data]
       .sort((a, b) => (a.time > b.time ? 1 : -1))
       .map(p => ({
         ...p,
         time: Math.floor(new Date(p.time.replace(" ", "T")).getTime() / 1000),
-        originalTime: p.time
+        originalTime: p.time,
       }));
+
+    // 일자별 마지막 종가 → 다음 거래일의 전일 종가 기준
+    const lastCloseByDate = new Map<string, number>();
+    for (const p of sorted) {
+      const dateStr = p.originalTime.split(" ")[0];
+      if (p.close != null && p.close > 0) {
+        lastCloseByDate.set(dateStr, p.close);
+      }
+    }
+    const dateKeys = Array.from(lastCloseByDate.keys());
+    const prevCloseByDate = new Map<string, number>();
+    for (let i = 1; i < dateKeys.length; i++) {
+      prevCloseByDate.set(dateKeys[i], lastCloseByDate.get(dateKeys[i - 1])!);
+    }
+
+    return sorted.map((p) => {
+      const dateStr = p.originalTime.split(" ")[0];
+      const close = p.close || 0;
+      return {
+        ...p,
+        changePct: calcChangePct(close, prevCloseByDate.get(dateStr)),
+      };
+    });
   }, [chartData]);
 
   useEffect(() => {
@@ -287,6 +318,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
               setHoveredData({
                 time: latestPoint.originalTime,
                 close: latestPoint.close || 0,
+                changePct: latestPoint.changePct ?? null,
                 above_sma10: latestPoint.indicators?.above_sma10 || 0,
                 above_sma20: latestPoint.indicators?.above_sma20 || 0,
                 above_sma50: latestPoint.indicators?.above_sma50 || 0,
@@ -300,6 +332,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
               setHoveredData({
                 time: currentPoint.originalTime,
                 close: currentPoint.close || 0,
+                changePct: currentPoint.changePct ?? null,
                 above_sma10: currentPoint.indicators?.above_sma10 || 0,
                 above_sma20: currentPoint.indicators?.above_sma20 || 0,
                 above_sma50: currentPoint.indicators?.above_sma50 || 0,
@@ -358,6 +391,7 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
       setHoveredData({
         time: latestPoint.originalTime,
         close: latestPoint.close || 0,
+        changePct: latestPoint.changePct ?? null,
         above_sma10: latestPoint.indicators?.above_sma10 || 0,
         above_sma20: latestPoint.indicators?.above_sma20 || 0,
         above_sma50: latestPoint.indicators?.above_sma50 || 0,
@@ -419,7 +453,23 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300">
             <span className="text-slate-400 mr-1">{hoveredData.time}</span>
             <span className="text-[#38bdf8] font-bold">
-              IDX: <span className="text-slate-100">{hoveredData.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+              {market}{" "}
+              <span className="text-slate-100">
+                {hoveredData.close.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                {hoveredData.changePct != null && (
+                  <span
+                    className={
+                      hoveredData.changePct > 0
+                        ? "text-red-400"
+                        : hoveredData.changePct < 0
+                          ? "text-blue-400"
+                          : "text-slate-400"
+                    }
+                  >
+                    ({hoveredData.changePct.toFixed(1)}%)
+                  </span>
+                )}
+              </span>
             </span>
             <span className="text-[#ff3b30] font-bold">
               10MA: <span className="text-slate-100">{hoveredData.above_sma10.toFixed(1)}%</span>

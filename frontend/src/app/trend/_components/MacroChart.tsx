@@ -140,12 +140,31 @@ function sliceFrom(data: TimePoint[], fromTime?: string): TimePoint[] {
   return data.filter((p) => p.time >= fromTime);
 }
 
-/** 특정 시점에서 선택된 지표들의 값 맵 구성 (호버/최신 범례) */
-function collectValuesFor(pt: MacroDataPoint, ids: IndicatorDef[]): Record<string, number> {
-  const out: Record<string, number> = {};
+interface LegendValue {
+  value: number;
+  /** 실제 관측일 — 호버 시점과 다르면 범례에 as-of 날짜로 표기 */
+  date: string;
+}
+
+/**
+ * 특정 시점에서 선택된 지표들의 값 맵 구성 (호버/최신 범례).
+ * 신용잔고·반대매매처럼 발표가 늦는 지표는 해당 시점에 값이 없으므로
+ * 그 이전 마지막 관측값으로 폴백하고 실제 관측일을 함께 기록한다.
+ */
+function collectValuesFor(
+  data: FakePoint[],
+  idx: number,
+  ids: IndicatorDef[],
+): Record<string, LegendValue> {
+  const out: Record<string, LegendValue> = {};
   ids.forEach((ind) => {
-    const v = getVal(ind.id, pt);
-    if (v != null) out[ind.id] = v;
+    for (let i = idx; i >= 0; i--) {
+      const v = getVal(ind.id, data[i]);
+      if (v != null) {
+        out[ind.id] = { value: v, date: data[i].date };
+        break;
+      }
+    }
   });
   return out;
 }
@@ -250,7 +269,7 @@ type FakePoint = MacroDataPoint & { time: string };
 
 interface HoveredData {
   time: string;
-  values: Record<string, number>;
+  values: Record<string, LegendValue>;
   /** HP 이탈도 (지수/추세×100), 키는 지표 id */
   hpDev?: Record<string, number>;
 }
@@ -437,27 +456,28 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     const hpDevCache = hpDevCacheRef.current;
     hpDevCache.clear();
 
-    const publishHover = (pt: FakePoint | undefined) => {
-      if (!pt) {
+    const publishHover = (idx: number | undefined) => {
+      const arr = chartDataRef.current;
+      if (idx == null || !arr || idx < 0 || idx >= arr.length) {
         setHoveredData(null);
         return;
       }
+      const pt = arr[idx];
       setHoveredData({
         time: pt.date,
-        values: collectValuesFor(pt, activeIndicators),
+        values: collectValuesFor(arr, idx, activeIndicators),
         hpDev: collectHpDevAt(pt.time, hpDevCacheRef.current),
       });
     };
 
     // 호버 시 범례 갱신
     chart.subscribeCrosshairMove((param) => {
+      const arr = chartDataRef.current;
       if (!param.time || !param.point || param.point.x < 0) {
-        const arr = chartDataRef.current;
-        publishHover(arr && arr.length ? arr[arr.length - 1] : undefined);
+        publishHover(arr && arr.length ? arr.length - 1 : undefined);
         return;
       }
-      const pt = chartDataRef.current?.find((p) => p.time === param.time);
-      publishHover(pt);
+      publishHover(arr ? arr.findIndex((p) => p.time === param.time) : undefined);
     });
 
     // 정규화된 시리즈는 공통 % 축(right)에, raw는 각자 고유 스케일에 배치
@@ -613,7 +633,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     if (last) {
       setHoveredData({
         time: last.date,
-        values: collectValuesFor(last, activeIndicators),
+        values: collectValuesFor(displayPts, displayPts.length - 1, activeIndicators),
         hpDev: collectHpDevAt(last.time, hpDevCacheRef.current),
       });
     }
@@ -652,7 +672,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     if (last) {
       setHoveredData({
         time: last.date,
-        values: collectValuesFor(last, activeIndicators),
+        values: collectValuesFor(formattedData, formattedData.length - 1, activeIndicators),
         hpDev: collectHpDevAt(last.time, hpDevCache),
       });
     }
@@ -761,12 +781,16 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         <div className="px-3 py-1 md:px-4 border-b border-slate-800 bg-slate-900 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-mono text-slate-300 shrink-0">
           <span className="text-slate-400 mr-1">{hoveredData.time}</span>
           {activeIndicators.map((ind) => {
-            const v = hoveredData.values[ind.id];
-            if (v == null) return null;
+            const entry = hoveredData.values[ind.id];
+            if (entry == null) return null;
             const hp = hoveredData.hpDev?.[ind.id];
+            const isStale = entry.date !== hoveredData.time;
             return (
               <span key={ind.id} style={{ color: ind.color }} className="font-bold">
-                {ind.label}: <span className="text-slate-100">{ind.raw(v)}</span>
+                {ind.label}: <span className="text-slate-100">{ind.raw(entry.value)}</span>
+                {isStale && (
+                  <span className="text-slate-500 font-normal ml-0.5">({entry.date.slice(5)})</span>
+                )}
                 {hp != null && (
                   <span className="text-pink-300 font-normal ml-1">
                     (이탈 {hp.toFixed(1)})

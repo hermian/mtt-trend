@@ -31,6 +31,7 @@ const CHART_CONFIGS: IndicatorConfig[] = [
   { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 2, color: "#fbbf24" },
   { id: "stochastic", name: "Stochastic (5,3,3)", type: "line", heightRatio: 2 },
   { id: "macd", name: "MACD (12,26,9)", type: "line", heightRatio: 2, color: "#3b82f6" },
+  { id: "vix_fix", name: "VIX Fix (22) & Fear", type: "line", heightRatio: 2, color: "#ef4444" },
 ];
 
 const REAL_DATA_THEMES = [

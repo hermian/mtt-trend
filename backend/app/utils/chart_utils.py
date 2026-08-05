@@ -85,6 +85,13 @@ def load_chart_data(
 
             # disparity_sma50: 종가 대비 50일선 이격도 (100 = 50일 이동평균과 동일)
             disparity_sma50 = (close / price_sma50_raw.clip(1e-10, None) * 100).fill_null(100.0)
+
+            # VIX Fix (Williams): 22일 종가 최고값 대비 당일 저가 낙폭 (%)
+            close_max22 = close.rolling_max(window_size=22)
+            vix_fix = (close_max22 - df["Low"]) / close_max22.clip(1e-10, None) * 100
+            # Fear: VIX Fix가 자신의 22일 볼린저 상단(평균+2σ)을 돌파한 날만 값 유지, 그 외 0
+            vix_fix_upper = vix_fix.rolling_mean(window_size=22) + vix_fix.rolling_std(window_size=22) * 2
+            vix_fix_fear = vix_fix * (vix_fix > vix_fix_upper).cast(pl.Float64)
             
             # 2. 데이터 통합 및 행 단위 추출
             raw_data = df.to_dicts()
@@ -96,6 +103,8 @@ def load_chart_data(
             calculated_ma50 = price_sma50.to_list()
             calculated_ma200 = price_sma200.to_list()
             calculated_disparity_sma50 = disparity_sma50.to_list()
+            calculated_vix_fix = vix_fix.to_list()
+            calculated_vix_fix_fear = vix_fix_fear.to_list()
             
             new_data_points = []
             for i, row in enumerate(raw_data):
@@ -115,6 +124,8 @@ def load_chart_data(
                     "disparity_sma50": calculated_disparity_sma50[i],
                     "adr14": row.get("ADR14"),
                     "adr20": row.get("ADR20"),
+                    "vix_fix": calculated_vix_fix[i],
+                    "vix_fix_fear": calculated_vix_fix_fear[i],
                 }
                 
                 new_data_points.append(ChartDataPoint(

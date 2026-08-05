@@ -55,6 +55,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     if (configs.some(c => c.id === "above_sma_group")) names.push("above_sma10", "above_sma20", "above_sma50");
     if (configs.some(c => c.id === "adr_group")) names.push("adr14", "adr20");
     if (configs.some(c => c.id === "disparity_sma50")) names.push("disparity_sma50");
+    if (configs.some(c => c.id === "vix_fix")) names.push("vix_fix_fear");
     names.push("price_sma50", "price_sma200");
     return names.join(",");
   }, [configs]);
@@ -158,6 +159,10 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         } else if (config.id === "macd") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f97316", lineWidth: 2, lineStyle: 2 }));
+        } else if (config.id === "vix_fix") {
+          // Fear 히스토그램을 먼저 추가해 라인이 위에 그려지도록 함
+          activeSeries.push(chart.addSeries(HistogramSeries, { color: "rgba(249, 115, 22, 0.65)" }));
+          activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 1 }));
         } else if (config.id === "stochastic") {
           activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(239, 68, 68, 0.4)", bottomColor: "rgba(239, 68, 68, 0.0)", lineVisible: false, crosshairMarkerVisible: false }));
           activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(59, 130, 246, 0.0)", bottomColor: "rgba(59, 130, 246, 0.4)", lineVisible: false, crosshairMarkerVisible: false }));
@@ -231,6 +236,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       } else if (config.id === "macd") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.macd || 0 })));
         if (activeSeries[1]) activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.macd_signal || 0 })));
+      } else if (config.id === "vix_fix") {
+        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.vix_fix_fear || 0 })));
+        activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.vix_fix || 0 })));
       } else if (config.id === "stochastic") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: Math.max(80, p.indicators?.stoch_k || 50) })));
         activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: Math.min(20, p.indicators?.stoch_k || 50) })));
@@ -266,6 +274,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           <><span className="text-blue-400">M:{hoveredData.indicators["macd"]?.toFixed(1)}</span><span className="text-orange-400">S:{hoveredData.indicators["macd_signal"]?.toFixed(1)}</span></>
         ) : config.id === "stochastic" ? (
            <><span className="text-amber-400">K:{hoveredData.indicators["stoch_k"]?.toFixed(1)}</span><span className="text-slate-100">D:{hoveredData.indicators["stoch_d"]?.toFixed(1)}</span></>
+        ) : config.id === "vix_fix" ? (
+           <><span className="text-red-400">VF:{hoveredData.indicators["vix_fix"]?.toFixed(1)}</span>{(hoveredData.indicators["vix_fix_fear"] ?? 0) > 0 && <span className="text-orange-400 font-bold">FEAR:{hoveredData.indicators["vix_fix_fear"]?.toFixed(1)}</span>}</>
         ) : (
           <span className="text-blue-300">{config.name}:{hoveredData.indicators[config.id]?.toFixed(1)}</span>
         )}

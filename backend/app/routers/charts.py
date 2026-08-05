@@ -112,6 +112,17 @@ async def get_macro_chart_data(
     """
     ~/.cache/db/macro.db에서 주요 매크로 지표 시계열을 날짜 기준으로 병합해 반환합니다.
 
+    [데이터 수집 경로 — 값이 이상하면 여기부터 추적]
+      - 이 API는 DB를 읽기만 함. 수집(쓰기)은 screener 저장소가 담당:
+        수집기: ~/workspace/git/screener/mmt/macro_collector/ (oil.py, fx.py 등)
+        스케줄: crontab 평일 18:27 KST — screener/script/run_put_call_ratio.sh 가
+                `python -m mmt.macro_collector refresh --days 10` 실행 (최근 10일 덮어씀)
+      - 미국 장 데이터(wti/brent/sp500 등)는 18:27 KST 수집 시점에 당일(미국) 장이
+        끝나기 전이므로 마지막 행이 1영업일 전(미국 기준)인 것이 정상.
+      - 2026-08 사고: Investing 심볼 검색이 "CL"을 Colgate-Palmolive 주식으로
+        오해석해 wti 전 구간 오염 → 소스를 Yahoo(CL=F/BZ=F)로 전환하고 재백필.
+        상세: screener/mmt/macro_collector/oil.py docstring.
+
     지표별 소스:
       sp500      index_ohlcv(index_name='sp500')
       nasdaq100  index_ohlcv(index_name='nasdaq100')
@@ -134,8 +145,8 @@ async def get_macro_chart_data(
       dxy        fx_rate(dxy)
       fed_funds  fred_macro(DFF) — 조회 시 ffill
       bok_base   fred_macro(BOK_BASE) — 조회 시 ffill
-      wti        index_ohlcv(index_name='wti') — Investing CL
-      brent      index_ohlcv(index_name='brent') — Investing LCO
+      wti        index_ohlcv(index_name='wti') — Yahoo CL=F 선물 (2000-08~)
+      brent      index_ohlcv(index_name='brent') — Yahoo BZ=F 선물 (2007-07~; 이전 구간은 구 Investing LCO)
       wti_fred   fred_macro(DCOILWTICO) — FRED spot
       brent_fred fred_macro(DCOILBRENTEU) — FRED spot
       export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
@@ -151,7 +162,7 @@ async def get_macro_chart_data(
     effective_start_date = start_date if start_date is not None else "2010-01-01"
 
     # (테이블, 컬럼, 조건절) — 조건절은 시리즈 행을 좁히는 SQL, None이면 전체.
-    # 원유: Investing(wti/brent)과 FRED(wti_fred/brent_fred)는 혼용하지 않음.
+    # 원유: Yahoo 선물(wti/brent)과 FRED 스팟(wti_fred/brent_fred)은 혼용하지 않음.
     series_defs = {
         "sp500":     ("index_ohlcv",        "close",       "index_name = 'sp500'"),
         "nasdaq100": ("index_ohlcv",        "close",       "index_name = 'nasdaq100'"),

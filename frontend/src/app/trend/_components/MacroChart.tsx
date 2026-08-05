@@ -7,6 +7,7 @@ import {
   CrosshairMode,
   LineSeries,
   AreaSeries,
+  HistogramSeries,
   IChartApi,
   ISeriesApi,
   SeriesType,
@@ -19,6 +20,10 @@ import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
 /** HP 장기추세·이탈도를 적용할 지수 (FinJump DSTOA005001 / DSTOA006001) */
 const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "kospi"]);
 
+/** ISM PMI histogram: 확장(>=50) / 수축(<50) */
+const ISM_EXPAND_COLOR = "#a855f7";
+const ISM_CONTRACT_COLOR = "#f43f5e";
+
 interface MacroChartProps {
   /** @deprecated 차트 높이는 컨테이너 flex 영역을 ResizeObserver로 측정합니다 */
   height?: number;
@@ -30,6 +35,8 @@ interface IndicatorDef {
   label: string;
   color: string;
   area?: boolean;
+  /** 월간 등 희소 지표 — 값 변경일만 Histogram (normalized 시 Line 폴백) */
+  histogram?: boolean;
   raw: (v: number) => string;
 }
 
@@ -42,6 +49,13 @@ const INDICATORS: IndicatorDef[] = [
     label: "일평균수출",
     color: "#6366f1",
     raw: (v) => `수출 $${v.toFixed(1)}억`,
+  },
+  {
+    id: "ism_pmi",
+    label: "ISM PMI",
+    color: ISM_EXPAND_COLOR,
+    histogram: true,
+    raw: (v) => `ISM ${v.toFixed(1)}`,
   },
   { id: "cnn_fgi", label: "CNN FGI", color: "#eab308", raw: (v) => `FGI ${v.toFixed(0)}` },
   { id: "kr_fgi", label: "K FGI", color: "#f59e0b", raw: (v) => `KFGI ${v.toFixed(0)}` },
@@ -150,6 +164,16 @@ function toDisplayScale(pts: TimePoint[], base?: number): TimePoint[] {
   return pts.map((p) => ({ time: p.time, value: (p.value / base) * 100 }));
 }
 
+function toIsmHistogramData(
+  pts: TimePoint[],
+): { time: string; value: number; color: string }[] {
+  return pts.map((p) => ({
+    time: p.time,
+    value: p.value,
+    color: p.value >= 50 ? ISM_EXPAND_COLOR : ISM_CONTRACT_COLOR,
+  }));
+}
+
 /**
  * 시리즈에 원본·MA·HP 반영.
  * fullPts로 MA/HP를 계산한 뒤 displayStart 이후만 그려 앞구간 잘림을 막는다.
@@ -168,10 +192,17 @@ function applySeriesData(
   hpEnabled: boolean,
 ): TimePoint[] | undefined {
   const fullRaw = buildSeries(ind.id, fullPts);
+  const useHistogram = !!ind.histogram && !normalized;
+  // Histogram은 일별 ffill을 그대로 그려 인접 bar가 월 단위 블록으로 보이게 함.
+  // (월 1포인트만 쓰면 일봉 축에서 bar가 하루 폭으로 너무 얇음)
   const displayRaw = sliceFrom(fullRaw, displayStart);
   const base = normalized && displayRaw.length ? displayRaw[0].value : undefined;
 
-  series.main.setData(toDisplayScale(displayRaw, base) as any);
+  if (useHistogram) {
+    series.main.setData(toIsmHistogramData(displayRaw) as any);
+  } else {
+    series.main.setData(toDisplayScale(displayRaw, base) as any);
+  }
 
   if (series.ma) {
     const maFull = movingAverage(fullRaw, HY_MA_WINDOW);
@@ -428,6 +459,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
       const scaleId = normalized ? "right" : i === 0 ? "right" : i === 1 ? "left" : `macro_overlay_${i}`;
 
       const isArea = !!ind.area && !normalized; // 면적은 raw 상태에서만 가독성 있음
+      const isHistogram = !!ind.histogram && !normalized;
       const formatter = normalized ? (v: number) => `${v.toFixed(1)}%` : ind.raw;
       const commonOpts: any = {
         color: ind.color,
@@ -437,18 +469,37 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         priceFormat: { type: "custom", formatter },
       };
 
-      const main = isArea
-        ? chart.addSeries(AreaSeries, {
-            ...commonOpts,
-            topColor: `${ind.color}40`,
-            bottomColor: `${ind.color}00`,
+      const main = isHistogram
+        ? chart.addSeries(HistogramSeries, {
+            priceLineVisible: false,
+            priceScaleId: scaleId,
+            priceFormat: { type: "custom", formatter },
+            base: 0,
           })
-        : chart.addSeries(LineSeries, commonOpts);
+        : isArea
+          ? chart.addSeries(AreaSeries, {
+              ...commonOpts,
+              topColor: `${ind.color}40`,
+              bottomColor: `${ind.color}00`,
+            })
+          : chart.addSeries(LineSeries, commonOpts);
 
       if (!normalized && scaleId !== "right") {
         chart.priceScale(scaleId).applyOptions({
           autoScale: true,
           scaleMargins: { top: 0.15, bottom: 0.15 },
+        });
+      }
+
+      // ISM PMI: 확장/수축 기준선 50 (축 라벨은 차트 안을 가리므로 숨김)
+      if (ind.id === "ism_pmi" && !normalized) {
+        main.createPriceLine({
+          price: 50,
+          color: "#94a3b8",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: false,
+          title: "",
         });
       }
 

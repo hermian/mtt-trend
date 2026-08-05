@@ -133,6 +133,8 @@ export interface MacroDataPoint {
   brent_fred?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
+  /** ISM 제조업 PMI — Investing(월간), API ffill */
+  ism_pmi?: number;
 }
 
 export interface MacroDataResponse {

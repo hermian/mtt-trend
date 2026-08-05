@@ -122,6 +122,10 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "DCOILBRENTEU", 80.2),
         ("2026-06-25", "DCOILBRENTEU", 80.5),
         ("2026-06-26", "DCOILBRENTEU", 80.9),
+        # ISM PMI: DB는 발표일 원본 (6/1 → 차트에서 5월 참조월로 정규화)
+        ("2026-06-01", "ISM_PMI", 48.5),
+        # 8/3 발표 = 7월치 → 차트 정규화 후 7/1부터 55.6
+        ("2026-08-03", "ISM_PMI", 55.6),
     ])
     
     cursor.executemany("""
@@ -204,11 +208,14 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["wti_fred"] == 77.1
     assert pt["brent_fred"] == 80.2
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
+    # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
+    assert pt["ism_pmi"] == 48.5
 
     # DFF 관측 없는 날도 직전값 유지
     assert data["data"][1]["fed_funds"] == 4.33
     assert data["data"][2]["fed_funds"] == 4.34
     assert data["data"][2]["bok_base"] == 2.50
+    assert data["data"][2]["ism_pmi"] == 48.5
     # 일평균수출: 6/24·6/25는 6/22값, 6/26은 새 관측
     assert data["data"][1]["export_avg"] == 39.5
     assert data["data"][2]["export_avg"] == 40.1
@@ -226,3 +233,31 @@ def test_get_macro_chart_data(temp_macro_db):
     assert data_filtered["data"][0]["date"] == "2026-06-25"
     assert data_filtered["data"][0]["fed_funds"] == 4.33
     assert data_filtered["data"][0]["bok_base"] == 2.50
+    assert data_filtered["data"][0]["ism_pmi"] == 48.5
+
+
+def test_ism_pmi_release_normalized_to_ref_month(temp_macro_db):
+    """Investing 발표일 → 참조월 정규화 후 차트에 반영."""
+    # 축에 7월·8월 날짜를 추가 (기존 fixture의 6월 + ISM 8/3 발표)
+    import sqlite3 as _sqlite3
+
+    conn = _sqlite3.connect(temp_macro_db)
+    conn.executemany(
+        "INSERT INTO index_ohlcv (date, index_name, close) VALUES (?, ?, ?)",
+        [
+            ("2026-07-15", "sp500", 5100.0),
+            ("2026-08-04", "sp500", 5110.0),
+        ],
+    )
+    conn.commit()
+    conn.close()
+
+    response = client.get(
+        "/api/charts/macro?start_date=2026-06-24&end_date=2026-08-04"
+    )
+    assert response.status_code == 200
+    by_date = {p["date"]: p for p in response.json()["data"]}
+
+    assert by_date["2026-06-24"]["ism_pmi"] == 48.5  # 5월 참조 (6/1 발표)
+    assert by_date["2026-07-15"]["ism_pmi"] == 55.6  # 7월 참조 (8/3 발표)
+    assert by_date["2026-08-04"]["ism_pmi"] == 55.6

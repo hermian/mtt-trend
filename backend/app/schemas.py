@@ -48,6 +48,7 @@ class MacroDataPoint(BaseModel):
     wti_fred: Optional[float] = None     # FRED DCOILWTICO → fred_macro
     brent_fred: Optional[float] = None   # FRED DCOILBRENTEU → fred_macro
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
+    ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

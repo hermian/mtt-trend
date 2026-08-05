@@ -33,6 +33,43 @@ from app.utils.foreign_flow_utils import load_foreign_flow_data
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
+# Investing ISM 발표일 → 참조월 룩백 (seed·구간 경계용)
+_ISM_RELEASE_LOOKBACK_DAYS = 90
+
+
+def _ism_release_to_ref_month(d: date_cls) -> date_cls:
+    """Investing 발표일 → 참조월 1일.
+
+    DB는 발표일 원본을 유지하고, 차트 조회 시에만 정규화한다.
+    day <= 15 이면 전월(통상 월초 발표), 아니면 당월 1일.
+    """
+    if d.day <= 15:
+        if d.month == 1:
+            return date_cls(d.year - 1, 12, 1)
+        return date_cls(d.year, d.month - 1, 1)
+    return date_cls(d.year, d.month, 1)
+
+
+def _normalize_ism_observations(
+    raw_rows: list[tuple],
+) -> list[tuple[str, float]]:
+    """(발표일, value) → (참조월1일, value). 동일 참조월은 최신 발표 우선."""
+    by_ref: dict[str, tuple[str, float]] = {}
+    for release_s, value in raw_rows:
+        if value is None:
+            continue
+        try:
+            release_d = date_cls.fromisoformat(release_s)
+        except ValueError:
+            continue
+        ref_s = _ism_release_to_ref_month(release_d).isoformat()
+        prev = by_ref.get(ref_s)
+        # 같은 참조월에 여러 발표점이 있으면 더 늦은 발표일 유지
+        if prev is None or release_s >= prev[0]:
+            by_ref[ref_s] = (release_s, float(value))
+    return [(ref, val) for ref, (_rel, val) in sorted(by_ref.items())]
+
+
 @router.get("/data", response_model=ChartDataResponse)
 async def get_chart_data(
     symbol: str = Query("kodex_leverage", description="차트 종목명 (kodex_leverage, kosdaq_leverage 등)"),
@@ -102,6 +139,7 @@ async def get_macro_chart_data(
       wti_fred   fred_macro(DCOILWTICO) — FRED spot
       brent_fred fred_macro(DCOILBRENTEU) — FRED spot
       export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
+      ism_pmi    fred_macro(ISM_PMI) — Investing 발표일 원본; 조회 시 참조월 정규화 후 ffill
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -136,11 +174,13 @@ async def get_macro_chart_data(
         "wti_fred":  ("fred_macro",         "value",       "series_id = 'DCOILWTICO'"),
         "brent_fred": ("fred_macro",        "value",       "series_id = 'DCOILBRENTEU'"),
     }
-    # 정책금리는 관측일이 희소할 수 있어 조회 시 기존 날짜축에 ffill
+    # 정책금리 등은 관측일이 희소해 조회 시 기존 날짜축에 ffill
     ffill_series = {
         "fed_funds": "DFF",
         "bok_base": "BOK_BASE",
     }
+    # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
+    ism_ffill_series_id = "ISM_PMI"
     # 테이블 기반 희소 시계열 ffill (table, column)
     ffill_tables = {
         "export_avg": ("kr_export_avg", "export_avg"),
@@ -193,6 +233,51 @@ async def get_macro_chart_data(
             print(f"Warning: macro ffill source '{key}' failed: {e}")
             return
 
+        _ffill_onto_merged(key, seed, obs)
+
+    def apply_ism_ffill(key: str, series_id: str) -> None:
+        """Investing 발표일 → 참조월 정규화 후 merged 축에 ffill.
+
+        DB 원본 날짜는 바꾸지 않는다. 발표일이 구간 시작 직후여도
+        참조월이 구간 안/전이면 반영되도록 lookback을 둔다.
+        """
+        try:
+            start_d = date_cls.fromisoformat(effective_start_date)
+            load_from = (start_d - timedelta(days=_ISM_RELEASE_LOOKBACK_DAYS)).isoformat()
+            where = ["series_id = ?", "date >= ?", "value IS NOT NULL"]
+            params: list = [series_id, load_from]
+            if end_date:
+                where.append("date <= ?")
+                params.append(end_date)
+            raw = list(
+                conn.execute(
+                    f"SELECT date, value FROM fred_macro WHERE {' AND '.join(where)} ORDER BY date",
+                    params,
+                )
+            )
+            # lookback 이전 마지막 발표도 seed용으로 1건
+            pre = conn.execute(
+                "SELECT date, value FROM fred_macro "
+                "WHERE series_id = ? AND date < ? AND value IS NOT NULL "
+                "ORDER BY date DESC LIMIT 1",
+                (series_id, load_from),
+            ).fetchone()
+            if pre:
+                raw = [pre, *raw]
+        except Exception as e:
+            print(f"Warning: macro ism ffill source '{key}' failed: {e}")
+            return
+
+        normalized = _normalize_ism_observations(raw)
+        seed = None
+        obs: list[tuple[str, float]] = []
+        for ref_s, val in normalized:
+            if ref_s < effective_start_date:
+                seed = val
+            else:
+                if end_date and ref_s > end_date:
+                    continue
+                obs.append((ref_s, val))
         _ffill_onto_merged(key, seed, obs)
 
     def apply_table_ffill(key: str, table: str, col: str) -> None:
@@ -253,6 +338,7 @@ async def get_macro_chart_data(
             load_series(key, table, col, cond)
         for key, series_id in ffill_series.items():
             apply_ffill(key, series_id)
+        apply_ism_ffill("ism_pmi", ism_ffill_series_id)
         for key, (table, col) in ffill_tables.items():
             apply_table_ffill(key, table, col)
     except Exception as e:
@@ -290,6 +376,7 @@ async def get_macro_chart_data(
             wti_fred=p.get("wti_fred"),
             brent_fred=p.get("brent_fred"),
             export_avg=p.get("export_avg"),
+            ism_pmi=p.get("ism_pmi"),
         )
         for d, p in sorted(merged.items())
     ]

@@ -38,6 +38,12 @@ function TestWrapper({ children }: { children: React.ReactNode }) {
 describe("ThemeTrendChart Component - Unit Tests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 거래일 X축용 기본 mock
+    vi.spyOn(useThemes, "useDates").mockReturnValue({
+      data: ["2024-01-01", "2024-01-02", "2024-01-03"],
+      isLoading: false,
+      error: null,
+    } as any);
   });
 
   /**

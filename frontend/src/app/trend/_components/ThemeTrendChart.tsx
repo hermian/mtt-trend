@@ -11,10 +11,11 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { useThemesDaily, useMultipleThemeHistories } from "@/hooks/useThemes";
+import { useDates, useThemesDaily, useMultipleThemeHistories } from "@/hooks/useThemes";
 import { DataSource } from "@/lib/api";
 import clsx from "clsx";
 import { Tooltip as TooltipComponent } from "./Tooltip";
+import { buildThemeTrendChartData } from "./buildThemeTrendChartData";
 
 interface ThemeTrendChartProps {
   date: string;
@@ -100,16 +101,23 @@ const LINE_COLORS = [
 
 interface CustomTooltipProps {
   active?: boolean;
-  payload?: Array<{ color: string; name: string; value: number }>;
+  payload?: Array<{ color: string; name: string; value: number | null }>;
   label?: string;
 }
 
 function CustomTooltip({ active, payload, label }: CustomTooltipProps) {
   if (active && payload && payload.length) {
+    // null/undefined 값은 표시하지 않음 (데이터 공백 구간)
+    const validEntries = payload.filter(
+      (entry): entry is { color: string; name: string; value: number } =>
+        entry.value !== null && entry.value !== undefined && !Number.isNaN(entry.value)
+    );
+    if (validEntries.length === 0) return null;
+
     return (
       <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl max-w-xs">
         <p className="text-gray-400 text-xs mb-2">{label}</p>
-        {payload.map((entry) => (
+        {validEntries.map((entry) => (
           <div key={entry.name} className="flex items-center gap-2 text-sm">
             <span
               className="inline-block w-2 h-2 rounded-full flex-shrink-0"
@@ -191,10 +199,12 @@ export function ThemeTrendChart({ date, source = "mtt" }: ThemeTrendChartProps) 
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const { data: dailyThemes, isLoading: themesLoading } = useThemesDaily(date, source);
+  // @MX:NOTE: 거래일 X축용 — 희소 테마 공백이 연속처럼 보이지 않도록 전체 일자로 축을 채움
+  const { data: availableDates } = useDates(source);
 
   // @MX:NOTE: 소스 변경 시 상태 복원 및 초기 로드 시 자동 선택
   useEffect(() => {
-    // 해당 소스의 현재 선택 상태를 가져옴�
+    // 해당 소스의 현재 선택 상태를 가져옴
     const currentThemes = selectedThemesBySource[source] || [];
     const currentIsUserModified = isUserModifiedBySource[source] || false;
 
@@ -224,33 +234,20 @@ export function ThemeTrendChart({ date, source = "mtt" }: ThemeTrendChartProps) 
   const { data: historiesData, isLoading: historiesLoading } =
     useMultipleThemeHistories(selectedThemes, period, source);
 
-  // Merge all theme histories into a single dataset for recharts
-  const chartData = useMemo(() => {
-    if (!historiesData || selectedThemes.length === 0) return [];
-
-    // Collect all unique dates
-    const allDates = new Set<string>();
-    selectedThemes.forEach((theme) => {
-      const history = historiesData[theme] || [];
-      history.forEach((h) => allDates.add(h.date));
-    });
-
-    // Sort dates ascending
-    const sortedDates = Array.from(allDates).sort();
-
-    // Build chart data points
-    return sortedDates.map((date) => {
-      const point: { date: string; [key: string]: number | string } = { date };
-      selectedThemes.forEach((theme) => {
-        const history = historiesData[theme] || [];
-        const entry = history.find((h) => h.date === date);
-        if (entry) {
-          point[theme] = entry.avg_rs ?? "";
-        }
-      });
-      return point;
-    });
-  }, [historiesData, selectedThemes]);
+  // @MX:NOTE: 데이터 없는 날은 null → connectNulls=false로 선 끊김 (SPEC-MTT-005)
+  // @MX:WARN: availableDates로 X축을 채우지 않으면 희소 테마가 연속처럼 보임
+  // @MX:REASON: 카테고리 축은 포인트 간 간격을 균등 처리하므로 중간 거래일이 필수
+  const chartData = useMemo(
+    () =>
+      buildThemeTrendChartData(
+        selectedThemes,
+        historiesData,
+        availableDates,
+        date,
+        period
+      ),
+    [historiesData, selectedThemes, availableDates, date, period]
+  );
 
   const toggleTheme = (theme: string) => {
     // 사용자가 수동으로 변경했음을 표시 (현재 소스에 대해서만)
@@ -546,10 +543,13 @@ export function ThemeTrendChart({ date, source = "mtt" }: ThemeTrendChartProps) 
                     stroke={LINE_COLORS[index % LINE_COLORS.length]}
                     strokeWidth={2}
                     strokeOpacity={isDisabled ? 0.2 : 1}
-                    // @MX:NOTE: F-04 단일 데이터 포인트는 dot 표시, 다중 포인트는 dot=false
-                    dot={isSinglePoint ? { r: 8, strokeWidth: 2 } : false}
+                    // @MX:NOTE: F-04 단일 포인트는 큰 dot, 다중/희소 포인트도 작은 dot으로 공백 구간 가시화
+                    dot={isSinglePoint ? { r: 8, strokeWidth: 2 } : { r: 3 }}
                     activeDot={{ r: 4 }}
-                    connectNulls
+                    // @MX:NOTE: SPEC-MTT-005 — 데이터 공백을 이어 그리지 않음
+                    connectNulls={false}
+                    // @MX:NOTE: 거래일 축 채운 뒤 포인트 증가로 기본 애니메이션이 과도하게 느려져 비활성화
+                    isAnimationActive={false}
                   />
                 );
               })}

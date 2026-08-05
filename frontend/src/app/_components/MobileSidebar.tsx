@@ -103,6 +103,8 @@ const navItems: NavItem[] = [
 export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // 52주 트렌드(오버뷰)는 탭 없는 /trend에서만 활성 — 다른 탭 선택 시 원래 상태로 복귀
+  const isOverviewActive = pathname.startsWith("/trend") && !searchParams.get("tab");
   const isChartActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "chart";
   const isAboveMaActive =
@@ -169,18 +171,19 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map((item) => {
             const isActive =
-              pathname.startsWith(item.href) &&
-              (!item.href.includes("tab=chart") || isChartActive);
+              item.href === "/trend"
+                ? isOverviewActive
+                : pathname.startsWith(item.href);
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={onClose}
                 className={clsx(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm",
+                  "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full",
                   isActive
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:text-white hover:bg-gray-700"
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
                 )}
               >
                 <span className="flex-shrink-0">{item.icon}</span>

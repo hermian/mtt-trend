@@ -8,6 +8,7 @@ import { Sidebar } from "../Sidebar";
 // Next.js 라우터 mock
 vi.mock("next/navigation", () => ({
   usePathname: () => "/trend",
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 // SyncButton mock

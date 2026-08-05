@@ -2,13 +2,30 @@
 // 모바일 오버레이 사이드바 - isOpen 상태에 따라 표시/숨김
 
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MobileSidebar } from "../MobileSidebar";
+import { ToastProvider } from "@/contexts/ToastContext";
 
 // Next.js 라우터 mock
 vi.mock("next/navigation", () => ({
   usePathname: () => "/trend",
+  useSearchParams: () => new URLSearchParams(),
 }));
+
+// SyncButton이 useQueryClient/useToast를 사용하므로 프로바이더로 감싼 render
+function Providers({ children }: { children: React.ReactNode }) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+
+const render = (ui: React.ReactElement) => rtlRender(ui, { wrapper: Providers });
 
 // Next.js Link mock
 vi.mock("next/link", () => ({

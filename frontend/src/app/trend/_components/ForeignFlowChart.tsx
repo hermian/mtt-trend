@@ -149,23 +149,28 @@ export const ForeignFlowChart: React.FC<ForeignFlowChartProps> = ({ height = 560
       priceScaleId: "left",
       priceFormat: { type: "volume" },
     });
+    // title을 넣으면 가격축 last-value 라벨이 차트 안쪽에 겹쳐 표시되므로 제외
+    // (상단 색상 범례로 구분)
     const ma60 = chart.addSeries(LineSeries, {
       color: "#f97316",
       lineWidth: 2,
       priceScaleId: "left",
-      title: "60MA",
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     const ma120 = chart.addSeries(LineSeries, {
       color: "#22d3ee",
       lineWidth: 2,
       priceScaleId: "left",
-      title: "120MA",
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     const kospi = chart.addSeries(LineSeries, {
       color: "#e5e7eb",
       lineWidth: 2,
       priceScaleId: "right",
-      title: "KOSPI",
+      lastValueVisible: false,
+      priceLineVisible: false,
     });
     seriesRef.current = [hist, ma60, ma120, kospi];
 

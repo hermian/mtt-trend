@@ -42,6 +42,50 @@ _temp_db_path = tempfile.mktemp(suffix=".db")
 TEST_DATABASE_URL = f"sqlite:///{_temp_db_path}"
 
 
+@pytest.fixture(autouse=True)
+def _isolate_production_db(monkeypatch, tmp_path):
+    """모든 테스트에서 실운영 trends.sqlite 접근을 원천 차단 (autouse).
+
+    @MX:WARN: 일부 테스트가 `from app.database import SessionLocal`으로 실DB에
+    setup/teardown마다 `theme_daily` 전체 delete를 수행해, pytest를 돌릴 때마다
+    운영 데이터가 삭제되는 사고가 있었다 (2026-08-05 MTT 데이터 소실 원인).
+    @MX:REASON: app.database의 engine/SessionLocal을 임시 DB로 교체하고,
+    이미 from-import로 원본을 바인딩한 모듈들(테스트 모듈, app.file_watcher,
+    scripts.ingest 등)의 이름도 함께 교체한다.
+    """
+    import app.database as app_db
+
+    test_db_path = tmp_path / "isolated_trends.sqlite"
+    engine = create_engine(
+        f"sqlite:///{test_db_path}",
+        connect_args={"check_same_thread": False},
+    )
+    test_session_local = sessionmaker(
+        autocommit=False, autoflush=False, bind=engine
+    )
+    app_db.Base.metadata.create_all(bind=engine)
+
+    original_engine = app_db.engine
+    original_session = app_db.SessionLocal
+
+    monkeypatch.setattr(app_db, "engine", engine)
+    monkeypatch.setattr(app_db, "SessionLocal", test_session_local)
+    monkeypatch.setattr(app_db, "DB_PATH", test_db_path)
+
+    # from-import로 원본 engine/SessionLocal을 바인딩해 둔 모듈도 전부 교체
+    for module in list(sys.modules.values()):
+        if module is None or module is app_db:
+            continue
+        try:
+            if getattr(module, "SessionLocal", None) is original_session:
+                monkeypatch.setattr(module, "SessionLocal", test_session_local)
+            if getattr(module, "engine", None) is original_engine:
+                monkeypatch.setattr(module, "engine", engine)
+        except Exception:
+            continue
+    yield
+
+
 @pytest.fixture(scope="function")
 def test_db_engine():
     """

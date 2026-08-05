@@ -5,7 +5,7 @@ SQLite database stored at backend/db/trends.sqlite.
 
 from pathlib import Path
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, DeclarativeBase
 
 # Resolve DB path relative to this file's location (backend/app/database.py)
@@ -20,6 +20,22 @@ engine = create_engine(
     connect_args={"check_same_thread": False},
     echo=False,
 )
+
+
+@event.listens_for(engine, "connect")
+def _set_sqlite_pragma(dbapi_connection, _connection_record):
+    """SQLite 성능·동시성 설정.
+
+    - WAL: 대량 적재(동기화) 중에도 읽기가 차단되지 않음 (기존 delete 저널은
+      쓰기 트랜잭션 동안 'database is locked' 발생)
+    - synchronous=NORMAL: WAL에서 안전한 수준으로 fsync 비용 절감
+    - busy_timeout: 잠깐의 잠김은 대기 후 재시도 (동시 적재 경합 완화)
+    """
+    cursor = dbapi_connection.cursor()
+    cursor.execute("PRAGMA journal_mode=WAL")
+    cursor.execute("PRAGMA synchronous=NORMAL")
+    cursor.execute("PRAGMA busy_timeout=5000")
+    cursor.close()
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

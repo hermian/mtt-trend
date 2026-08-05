@@ -3,16 +3,32 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/contexts/ToastContext";
 import { api } from "@/lib/api";
+import axios from "axios";
 
 // @MX:ANCHOR: SyncButton 컴포넌트 (fan_in: Sidebar)
 export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
   const [isSyncing, setIsSyncing] = useState(false);
   const toast = useToast();
+  const queryClient = useQueryClient();
   // @MX:FIX: 컴포넌트 unmount 후 상태 업데이트 방지
   const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const refreshThemeQueries = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["dates"] });
+    await queryClient.invalidateQueries({ queryKey: ["themes"] });
+    await queryClient.invalidateQueries({ queryKey: ["stocks"] });
+  };
 
   // 동기화 핸들러 구현
   const handleSync = async () => {
@@ -37,13 +53,17 @@ export function SyncButton({ collapsed = false }: { collapsed?: boolean }) {
         // 성공한 경우 성공 토스트
         toast.success(`${response.files_processed}개 파일 처리 완료`);
       }
+      await refreshThemeQueries();
     } catch (error) {
-      // 네트워크 오류 처리
       console.error("Sync error:", error);
-      // @MX:FIX: unmount 체크
-      if (isMountedRef.current) {
-        toast.error("동기화 실패: 네트워크 오류가 발생했습니다");
+      if (!isMountedRef.current) return;
+
+      // 서버 시작 시 초기 동기화 중이면 409 — 네트워크 오류가 아님
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        toast.warning("이미 동기화가 진행 중입니다. 완료될 때까지 기다려 주세요.");
+        return;
       }
+      toast.error("동기화 실패: 네트워크 오류가 발생했습니다");
     } finally {
       // @MX:FIX: unmount 체크
       if (isMountedRef.current) {

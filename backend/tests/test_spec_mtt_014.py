@@ -100,14 +100,14 @@ class TestSpecMTT014_ACC01_LastDateReingestion:
                     assert result.files_skipped == 0
 
                     # DB 데이터 확인 (업데이트된 내용)
-                    # ingest_file()은 theme_name을 기준으로 upsert하므로,
-                    # "구테마"는 유지되고 "신규테마"가 새로 추가됨
+                    # ingest_file()은 (date, source) 스냅샷 교체 방식이므로,
+                    # 새 파일에 없는 "구테마"는 제거되고 "신규테마"만 남음
                     themes = db.query(ThemeDaily).filter(
                         ThemeDaily.date == "2024-01-15",
                         ThemeDaily.data_source == SOURCE_52W,
                     ).all()
 
-                    assert len(themes) == 2  # "구테마" + "신규테마"
+                    assert len(themes) == 1  # 새 파일 스냅샷 = "신규테마"만
 
                     # 새로운 테마가 추가되었는지 확인
                     new_theme = next((t for t in themes if t.theme_name == "신규테마"), None)

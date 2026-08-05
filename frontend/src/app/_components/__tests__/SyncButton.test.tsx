@@ -4,6 +4,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import axios from "axios";
 import { SyncButton } from "../SyncButton";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { api } from "@/lib/api";
@@ -16,12 +18,15 @@ const mockToast = {
   info: vi.fn(),
 };
 
-// ToastProvider wrapper with mock toast
-function MockToastProvider({ children }: { children: React.ReactNode }) {
+// ToastProvider + QueryClient wrapper
+function TestWrapper({ children }: { children: React.ReactNode }) {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return (
-    <ToastProvider>
-      {children}
-    </ToastProvider>
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
   );
 }
 
@@ -53,7 +58,24 @@ describe("SyncButton", () => {
 
   // ACC-05-1 시나리오: 성공 케이스 테스트
   it("ACC-05-1: 버튼 클릭 시 비활성화 상태로 전환되고 로딩 스피너가 표시된다", async () => {
-    const mockResponse = {
+    let resolveSync: (value: any) => void;
+    const syncPromise = new Promise((resolve) => {
+      resolveSync = resolve;
+    });
+    vi.mocked(api.syncData).mockReturnValue(syncPromise as any);
+
+    render(<SyncButton />, { wrapper: TestWrapper });
+
+    const button = screen.getByRole("button", { name: "DB 동기화" });
+    expect(button).not.toBeDisabled();
+
+    await userEvent.click(button);
+
+    // 버튼이 비활성화되고 로딩 스피너가 표시됨
+    expect(button).toBeDisabled();
+    expect(screen.getByText("DB 동기화 중...")).toBeInTheDocument();
+
+    resolveSync!({
       status: "completed",
       total_files_scanned: 5,
       files_processed: 3,
@@ -62,20 +84,11 @@ describe("SyncButton", () => {
       errors: [],
       started_at: "2026-03-15T10:30:00Z",
       completed_at: "2026-03-15T10:30:05Z",
-    };
+    });
 
-    vi.mocked(api.syncData).mockResolvedValue(mockResponse);
-
-    render(<SyncButton />, { wrapper: MockToastProvider });
-
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
-    expect(button).not.toBeDisabled();
-
-    await userEvent.click(button);
-
-    // 버튼이 비활성화되고 로딩 스피너가 표시됨
-    expect(button).toBeDisabled();
-    expect(screen.getByText("동기화 중...")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(button).not.toBeDisabled();
+    });
   });
 
   // ACC-05-1 시나리오: API 호출 검증
@@ -93,9 +106,9 @@ describe("SyncButton", () => {
 
     vi.mocked(api.syncData).mockResolvedValue(mockResponse);
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     await userEvent.click(button);
 
     expect(api.syncData).toHaveBeenCalledTimes(1);
@@ -116,9 +129,9 @@ describe("SyncButton", () => {
 
     vi.mocked(api.syncData).mockResolvedValue(mockResponse);
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     await userEvent.click(button);
 
     await waitFor(() => {
@@ -141,14 +154,14 @@ describe("SyncButton", () => {
 
     vi.mocked(api.syncData).mockResolvedValue(mockResponse);
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     await userEvent.click(button);
 
     await waitFor(() => {
       expect(button).not.toBeDisabled();
-      expect(screen.getByText("동기화")).toBeInTheDocument();
+      expect(screen.getByText("DB 동기화")).toBeInTheDocument();
     });
   });
 
@@ -161,9 +174,9 @@ describe("SyncButton", () => {
 
     vi.mocked(api.syncData).mockReturnValue(syncPromise as any);
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
 
     // 첫 번째 클릭
     await userEvent.click(button);
@@ -204,9 +217,9 @@ describe("SyncButton", () => {
 
     vi.mocked(api.syncData).mockResolvedValue(mockResponse);
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     await userEvent.click(button);
 
     await waitFor(() => {
@@ -218,9 +231,9 @@ describe("SyncButton", () => {
   it("ACC-05-4: 네트워크 오류 시 오류 토스트가 표시된다", async () => {
     vi.mocked(api.syncData).mockRejectedValue(new Error("Network error"));
 
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     await userEvent.click(button);
 
     await waitFor(() => {
@@ -228,12 +241,30 @@ describe("SyncButton", () => {
     });
   });
 
+  it("동기화 진행 중(409)이면 경고 토스트를 표시한다", async () => {
+    const conflict = new axios.AxiosError("Conflict");
+    conflict.response = { status: 409, data: { detail: "Sync already in progress" }, statusText: "Conflict", headers: {}, config: {} as any };
+    vi.mocked(api.syncData).mockRejectedValue(conflict);
+
+    render(<SyncButton />, { wrapper: TestWrapper });
+
+    const button = screen.getByRole("button", { name: "DB 동기화" });
+    await userEvent.click(button);
+
+    await waitFor(() => {
+      expect(mockToast.warning).toHaveBeenCalledWith(
+        "이미 동기화가 진행 중입니다. 완료될 때까지 기다려 주세요."
+      );
+    });
+    expect(mockToast.error).not.toHaveBeenCalled();
+  });
+
   // 접근성 테스트
   it("버튼에 적절한 aria-label이 포함된다", () => {
-    render(<SyncButton />, { wrapper: MockToastProvider });
+    render(<SyncButton />, { wrapper: TestWrapper });
 
-    const button = screen.getByRole("button", { name: "데이터 동기화" });
+    const button = screen.getByRole("button", { name: "DB 동기화" });
     expect(button).toBeInTheDocument();
-    expect(button).toHaveAttribute("aria-label", "데이터 동기화");
+    expect(button).toHaveAttribute("aria-label", "DB 동기화");
   });
 });

@@ -140,6 +140,9 @@ async def get_macro_chart_data(
       brent_fred fred_macro(DCOILBRENTEU) — FRED spot
       export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
       ism_pmi    fred_macro(ISM_PMI) — Investing 발표일 원본; 조회 시 참조월 정규화 후 ffill
+      credit_kospi / credit_kosdaq          kofia_credit_loan — 신용잔고 (조원)
+      credit_kospi_pct / credit_kosdaq_pct  신용잔고 ÷ index_ohlcv.marcap (%)
+      forced_sell / forced_sell_ratio       kofia_stock_money — 미수금 반대매매 (억원, %)
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -173,6 +176,13 @@ async def get_macro_chart_data(
         "brent":     ("index_ohlcv",        "close",       "index_name = 'brent'"),
         "wti_fred":  ("fred_macro",         "value",       "series_id = 'DCOILWTICO'"),
         "brent_fred": ("fred_macro",        "value",       "series_id = 'DCOILBRENTEU'"),
+        # KOFIA 신용잔고(백만원 원본) + 미수금 반대매매. '_' 접두 키는 파생 계산용 내부 시리즈.
+        "credit_kospi":  ("kofia_credit_loan",  "kospi",             None),
+        "credit_kosdaq": ("kofia_credit_loan",  "kosdaq",            None),
+        "forced_sell":   ("kofia_stock_money",  "forced_sell",       None),
+        "forced_sell_ratio": ("kofia_stock_money", "forced_sell_ratio", None),
+        "_kospi_marcap":  ("index_ohlcv",       "marcap",            "index_name = 'kospi'"),
+        "_kosdaq_marcap": ("index_ohlcv",       "marcap",            "index_name = 'kosdaq'"),
     }
     # 정책금리 등은 관측일이 희소해 조회 시 기존 날짜축에 ffill
     ffill_series = {
@@ -347,6 +357,23 @@ async def get_macro_chart_data(
     finally:
         conn.close()
 
+    # 신용잔고 파생 계산: 시총 대비 %(marcap은 원 단위, 신용잔고는 백만원 단위) 후
+    # 표시 단위 변환 (신용잔고 백만원→조원, 반대매매 백만원→억원)
+    _MILLION_KRW = 1_000_000
+    for p in merged.values():
+        for credit_key, marcap_key, pct_key in (
+            ("credit_kospi", "_kospi_marcap", "credit_kospi_pct"),
+            ("credit_kosdaq", "_kosdaq_marcap", "credit_kosdaq_pct"),
+        ):
+            credit = p.get(credit_key)
+            marcap = p.get(marcap_key)
+            if credit is not None and marcap:
+                p[pct_key] = 100.0 * credit * _MILLION_KRW / marcap
+            if credit is not None:
+                p[credit_key] = credit / 1_000_000  # 백만원 → 조원
+        if p.get("forced_sell") is not None:
+            p["forced_sell"] = p["forced_sell"] / 100.0  # 백만원 → 억원
+
     result = [
         MacroDataPoint(
             date=d,
@@ -377,6 +404,12 @@ async def get_macro_chart_data(
             brent_fred=p.get("brent_fred"),
             export_avg=p.get("export_avg"),
             ism_pmi=p.get("ism_pmi"),
+            credit_kospi=p.get("credit_kospi"),
+            credit_kosdaq=p.get("credit_kosdaq"),
+            credit_kospi_pct=p.get("credit_kospi_pct"),
+            credit_kosdaq_pct=p.get("credit_kosdaq_pct"),
+            forced_sell=p.get("forced_sell"),
+            forced_sell_ratio=p.get("forced_sell_ratio"),
         )
         for d, p in sorted(merged.items())
     ]

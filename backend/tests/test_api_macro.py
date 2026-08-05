@@ -24,6 +24,7 @@ def temp_macro_db(monkeypatch):
             date TEXT NOT NULL,
             index_name TEXT NOT NULL,
             close REAL,
+            marcap INTEGER,
             PRIMARY KEY (date, index_name)
         )
     """)
@@ -76,6 +77,27 @@ def temp_macro_db(monkeypatch):
             PRIMARY KEY (date)
         )
     """)
+    cursor.execute("""
+        CREATE TABLE kofia_credit_loan (
+            date TEXT NOT NULL,
+            total REAL,
+            kospi REAL,
+            kosdaq REAL,
+            PRIMARY KEY (date)
+        )
+    """)
+    cursor.execute("""
+        CREATE TABLE kofia_stock_money (
+            date TEXT NOT NULL,
+            deposit REAL,
+            deriv_deposit REAL,
+            rp_balance REAL,
+            unpaid_balance REAL,
+            forced_sell REAL,
+            forced_sell_ratio REAL,
+            PRIMARY KEY (date)
+        )
+    """)
     
     # Mock data 추가
     cursor.executemany("""
@@ -100,6 +122,42 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "brent", 82.0),
         ("2026-06-25", "brent", 82.5),
         ("2026-06-26", "brent", 83.0),
+    ])
+
+    # 시가총액(원) — 신용잔고/시총 % 계산용
+    cursor.executemany("""
+        UPDATE index_ohlcv SET marcap = ? WHERE date = ? AND index_name = ?
+    """, [
+        (2_000_000_000_000_000, "2026-06-24", "kospi"),
+        (2_000_000_000_000_000, "2026-06-25", "kospi"),
+        (2_500_000_000_000_000, "2026-06-26", "kospi"),
+    ])
+    cursor.executemany("""
+        INSERT INTO index_ohlcv (date, index_name, close, marcap) VALUES (?, ?, ?, ?)
+    """, [
+        ("2026-06-24", "kosdaq", 850.0, 400_000_000_000_000),
+        ("2026-06-25", "kosdaq", 855.0, 400_000_000_000_000),
+        ("2026-06-26", "kosdaq", 860.0, 400_000_000_000_000),
+    ])
+
+    # KOFIA 신용잔고 (백만원) — API에서 조원·시총% 로 변환됨
+    cursor.executemany("""
+        INSERT INTO kofia_credit_loan (date, total, kospi, kosdaq) VALUES (?, ?, ?, ?)
+    """, [
+        ("2026-06-24", 26_000_000, 20_000_000, 6_000_000),
+        ("2026-06-25", 26_500_000, 20_400_000, 6_100_000),
+        ("2026-06-26", 27_000_000, 20_800_000, 6_200_000),
+    ])
+
+    # KOFIA 증시자금 (백만원, 비중 %) — forced_sell은 API에서 억원으로 변환됨
+    cursor.executemany("""
+        INSERT INTO kofia_stock_money
+        (date, deposit, deriv_deposit, rp_balance, unpaid_balance, forced_sell, forced_sell_ratio)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, [
+        ("2026-06-24", 120_000_000, 50_000_000, 110_000_000, 1_200_000, 12_000, 1.0),
+        ("2026-06-25", 121_000_000, 51_000_000, 111_000_000, 1_250_000, 25_000, 2.0),
+        ("2026-06-26", 122_000_000, 52_000_000, 112_000_000, 1_300_000, 50_000, 4.0),
     ])
     
     cursor.executemany("""
@@ -210,6 +268,14 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5
+    # 신용잔고: 백만원 → 조원, 시총(원) 대비 %
+    assert pt["credit_kospi"] == 20.0    # 20,000,000백만원 = 20조원
+    assert pt["credit_kosdaq"] == 6.0
+    assert pt["credit_kospi_pct"] == 1.0   # 2e13원 / 2e15원 × 100
+    assert pt["credit_kosdaq_pct"] == 1.5  # 6e12원 / 4e14원 × 100
+    # 반대매매: 백만원 → 억원
+    assert pt["forced_sell"] == 120.0
+    assert pt["forced_sell_ratio"] == 1.0
 
     # DFF 관측 없는 날도 직전값 유지
     assert data["data"][1]["fed_funds"] == 4.33
@@ -224,6 +290,10 @@ def test_get_macro_chart_data(temp_macro_db):
     assert data["data"][1]["wti_fred"] == 77.4
     assert data["data"][1]["wti"] != data["data"][1]["wti_fred"]
     assert data["data"][1]["brent"] != data["data"][1]["brent_fred"]
+    # 신용잔고 %: 6/26은 시총 증가(2.5e15) 반영 → 20.8조/2500조 = 0.832%
+    assert data["data"][2]["credit_kospi"] == 20.8
+    assert data["data"][2]["credit_kospi_pct"] == pytest.approx(0.832)
+    assert data["data"][2]["forced_sell"] == 500.0
     
     # 날짜 필터 테스트
     response_filtered = client.get("/api/charts/macro?start_date=2026-06-25&end_date=2026-06-25")

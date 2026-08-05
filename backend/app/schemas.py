@@ -49,6 +49,12 @@ class MacroDataPoint(BaseModel):
     brent_fred: Optional[float] = None   # FRED DCOILBRENTEU → fred_macro
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
     ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
+    credit_kospi: Optional[float] = None       # KOSPI 신용잔고 (조원) — kofia_credit_loan
+    credit_kosdaq: Optional[float] = None      # KOSDAQ 신용잔고 (조원) — kofia_credit_loan
+    credit_kospi_pct: Optional[float] = None   # KOSPI 신용잔고/시가총액 (%)
+    credit_kosdaq_pct: Optional[float] = None  # KOSDAQ 신용잔고/시가총액 (%)
+    forced_sell: Optional[float] = None        # 미수금 반대매매 금액 (억원) — kofia_stock_money
+    forced_sell_ratio: Optional[float] = None  # 미수금 대비 반대매매 비중 (%)
 
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]

@@ -135,6 +135,18 @@ export interface MacroDataPoint {
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */
   ism_pmi?: number;
+  /** KOSPI 신용잔고 (조원) — KOFIA */
+  credit_kospi?: number;
+  /** KOSDAQ 신용잔고 (조원) — KOFIA */
+  credit_kosdaq?: number;
+  /** KOSPI 신용잔고/시가총액 (%) */
+  credit_kospi_pct?: number;
+  /** KOSDAQ 신용잔고/시가총액 (%) */
+  credit_kosdaq_pct?: number;
+  /** 미수금 반대매매 금액 (억원) — 신용융자 담보부족분 미포함 */
+  forced_sell?: number;
+  /** 미수금 대비 반대매매 비중 (%) */
+  forced_sell_ratio?: number;
 }
 
 export interface MacroDataResponse {
@@ -513,8 +525,11 @@ export const api = {
 
   // @MX:NOTE: SPEC-MTT-009 동기화 API
   // POST /api/sync → SyncResponse
+  // 대량 HTML 적재는 수분 걸릴 수 있어 전역 10s 타임아웃을 덮어쓴다.
   syncData: async (): Promise<SyncResponse> => {
-    const { data } = await apiClient.post<SyncResponse>("/api/sync");
+    const { data } = await apiClient.post<SyncResponse>("/api/sync", null, {
+      timeout: 10 * 60 * 1000,
+    });
     return data;
   },
 

@@ -63,6 +63,12 @@ const INDICATORS: IndicatorDef[] = [
   { id: "vix", label: "VIX", color: "#a78bfa", raw: (v) => `VIX ${v.toFixed(1)}` },
   { id: "vkospi", label: "VKOSPI", color: "#2dd4bf", raw: (v) => `VKOSPI ${v.toFixed(1)}` },
   { id: "pcr", label: "PCR", color: "#fb923c", raw: (v) => `PCR ${v.toFixed(2)}` },
+  { id: "credit_kospi", label: "신용 KP", color: "#e879f9", raw: (v) => `KP신용 ${v.toFixed(1)}조` },
+  { id: "credit_kosdaq", label: "신용 KQ", color: "#c026d3", raw: (v) => `KQ신용 ${v.toFixed(1)}조` },
+  { id: "credit_kospi_pct", label: "신용/시총 KP", color: "#10b981", raw: (v) => `KP신용 ${v.toFixed(2)}%` },
+  { id: "credit_kosdaq_pct", label: "신용/시총 KQ", color: "#84cc16", raw: (v) => `KQ신용 ${v.toFixed(2)}%` },
+  { id: "forced_sell", label: "반대매매", color: "#ef4444", raw: (v) => `반대 ${v.toFixed(0)}억` },
+  { id: "forced_sell_ratio", label: "반대매매 %", color: "#fda4af", raw: (v) => `반대 ${v.toFixed(1)}%` },
   { id: "move", label: "MOVE", color: "#f472b6", raw: (v) => `MOVE ${v.toFixed(0)}` },
   { id: "us_2y", label: "US 2Y", color: "#60a5fa", raw: (v) => `2Y ${v.toFixed(2)}%` },
   { id: "us_10y", label: "US 10Y", color: "#818cf8", raw: (v) => `10Y ${v.toFixed(2)}%` },
@@ -500,6 +506,18 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: false,
           title: "",
+        });
+      }
+
+      // KOSDAQ 신용잔고/시총 위험 기준선 2% (telegram_bot 신용공여 차트와 동일)
+      if (ind.id === "credit_kosdaq_pct" && !normalized) {
+        main.createPriceLine({
+          price: 2,
+          color: "#22c55e",
+          lineWidth: 1,
+          lineStyle: LineStyle.Dashed,
+          axisLabelVisible: true,
+          title: "위험 2%",
         });
       }
 

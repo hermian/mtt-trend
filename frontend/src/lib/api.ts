@@ -302,6 +302,30 @@ export interface StockHeatmapParams {
   limit: number;
 }
 
+export interface StockbeeMmRow {
+  date: string;
+  bo_up?: number | null;
+  bo_dn?: number | null;
+  five_d_r?: number | null;
+  ten_d_r?: number | null;
+  q_up_25p?: number | null;
+  q_dn_25p?: number | null;
+  m_up_25p?: number | null;
+  m_dn_25p?: number | null;
+  m_up_50p?: number | null;
+  m_dn_50p?: number | null;
+  d34_up_13p?: number | null;
+  d34_dn_13p?: number | null;
+  t2108?: number | null;
+  stock_count?: number | null;
+  kospi?: number | null;
+}
+
+export interface StockbeeMmResponse {
+  data: StockbeeMmRow[];
+  years: number[];
+}
+
 export type DataSource = "52w_high" | "mtt";
 
 // API functions for each endpoint
@@ -326,6 +350,19 @@ export const api = {
   ): Promise<ChartDataResponse> => {
     const { data } = await apiClient.get<ChartDataResponse>("/api/charts/above-ma", {
       params: { market, start_date: startDate, end_date: endDate },
+    });
+    return data;
+  },
+  // GET /api/charts/stockbee-mm → StockbeeMmResponse
+  getStockbeeMm: async (params?: {
+    year?: number;
+    limit?: number;
+  }): Promise<StockbeeMmResponse> => {
+    const { data } = await apiClient.get<StockbeeMmResponse>("/api/charts/stockbee-mm", {
+      params: {
+        year: params?.year,
+        limit: params?.limit,
+      },
     });
     return data;
   },

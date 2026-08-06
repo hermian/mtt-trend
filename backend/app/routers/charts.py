@@ -7,6 +7,8 @@ from app.schemas import (
     ChartDataResponse,
     MacroDataResponse,
     MacroDataPoint,
+    StockbeeMmResponse,
+    StockbeeMmRow,
     WicsMonthResponse,
     WicsWeekResponse,
     WicsRankingsResponse,
@@ -30,6 +32,7 @@ from app.utils.wics_index_utils import (
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
+from app.utils.stockbee_mm_utils import load_stockbee_mm
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
@@ -103,6 +106,27 @@ async def get_above_ma_chart_data(
     
     # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
     return ChartDataResponse(symbol=market.upper(), data=[])
+
+
+@router.get("/stockbee-mm", response_model=StockbeeMmResponse)
+async def get_stockbee_mm_data(
+    year: Optional[int] = Query(
+        None, ge=1990, le=2100, description="연도(YYYY). 미지정 시 DB 최신일 기준 최근 1년"
+    ),
+    limit: Optional[int] = Query(
+        None, ge=1, le=10000, description="선택적 행 상한(테스트용)"
+    ),
+):
+    """
+    ~/.cache/db/stockbee_mm.db 의 한국 Stockbee Market Monitor 일별 지표를 반환합니다.
+    기본: 최근 1년. year 지정 시 해당 연도 전체.
+    """
+    result = load_stockbee_mm(year=year, limit=limit)
+    if result is None:
+        return StockbeeMmResponse(data=[], years=[])
+    rows, years = result
+    return StockbeeMmResponse(data=[StockbeeMmRow(**r) for r in rows], years=years)
+
 
 @router.get("/macro", response_model=MacroDataResponse)
 async def get_macro_chart_data(

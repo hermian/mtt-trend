@@ -59,6 +59,32 @@ class MacroDataPoint(BaseModel):
 class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]
 
+
+# --- Stockbee Market Monitor ---
+class StockbeeMmRow(BaseModel):
+    date: str
+    bo_up: Optional[float] = None
+    bo_dn: Optional[float] = None
+    five_d_r: Optional[float] = None
+    ten_d_r: Optional[float] = None
+    q_up_25p: Optional[float] = None
+    q_dn_25p: Optional[float] = None
+    m_up_25p: Optional[float] = None
+    m_dn_25p: Optional[float] = None
+    m_up_50p: Optional[float] = None
+    m_dn_50p: Optional[float] = None
+    d34_up_13p: Optional[float] = None
+    d34_dn_13p: Optional[float] = None
+    t2108: Optional[float] = None
+    stock_count: Optional[float] = None
+    kospi: Optional[float] = None
+
+
+class StockbeeMmResponse(BaseModel):
+    data: List[StockbeeMmRow]
+    years: List[int] = []
+
+
 # --- Market Flow Schemas ---
 class MarketFlowPoint(BaseModel):
     date: str

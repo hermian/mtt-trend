@@ -15,6 +15,7 @@ import { WicsRankingPanel } from "./_components/WicsRankingPanel";
 import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
 import { MarketFlowChart } from "./_components/MarketFlowChart";
 import { ForeignFlowChart } from "./_components/ForeignFlowChart";
+import { StockbeeMmPanel } from "./_components/StockbeeMmPanel";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -69,6 +70,8 @@ function TrendPageContent() {
       ? "market_flow"
       : rawTab === "foreign_flow"
       ? "foreign_flow"
+      : rawTab === "stockbee_mm"
+      ? "stockbee_mm"
       : "overview";
   
   const [source, setSource] = useState<DataSource>("mtt");
@@ -117,7 +120,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && (
+        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && activeTab !== "stockbee_mm" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-3">
@@ -172,8 +175,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "stockbee_mm" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" && activeTab !== "stockbee_mm" ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2 font-medium">
               {datesLoading ? (
                 <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
@@ -520,6 +523,28 @@ function TrendPageContent() {
                   </div>
                   <div className="flex-1 min-h-0">
                     <WicsIndexExplorer />
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "stockbee_mm" && (
+                <div className="h-full flex flex-col px-3 md:px-6 pr-[20px] md:pr-6 gap-4 pt-3 md:pt-4">
+                  <div className="flex flex-col lg:flex-row lg:justify-between lg:items-end border-b border-gray-800 pb-4 gap-3">
+                    <div>
+                      <h3 className="text-2xl font-extrabold text-white tracking-tight">Stockbee Market Monitor</h3>
+                      <p className="text-gray-400 text-sm mt-1">
+                        한국: marcap 계산 DB · 미국: Stockbee 공개 스프레드시트
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 self-start lg:self-end shrink-0"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-0 overflow-hidden">
+                    <StockbeeMmPanel />
                   </div>
                 </div>
               )}

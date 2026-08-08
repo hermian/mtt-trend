@@ -2,11 +2,13 @@ import os
 import sqlite3
 from datetime import date as date_cls, timedelta
 from typing import Optional
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from app.schemas import (
     ChartDataResponse,
     MacroDataResponse,
     MacroDataPoint,
+    ValuationBandsResponse,
+    ValuationBandPoint,
     StockbeeMmResponse,
     StockbeeMmRow,
     WicsMonthResponse,
@@ -33,6 +35,11 @@ from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
+from app.utils.valuation_band_utils import (
+    ALLOWED_INDEXES,
+    compute_band_levels,
+    parse_multiples,
+)
 
 router = APIRouter(prefix="/charts", tags=["charts"])
 
@@ -139,7 +146,7 @@ async def get_macro_chart_data(
     [데이터 수집 경로 — 값이 이상하면 여기부터 추적]
       - 이 API는 DB를 읽기만 함. 수집(쓰기)은 screener 저장소가 담당:
         수집기: ~/workspace/git/screener/mmt/macro_collector/ (oil.py, fx.py 등)
-        스케줄: crontab 평일 18:27 KST — screener/script/run_put_call_ratio.sh 가
+        스케줄: crontab 평일 18:27 KST — screener/script/run_macro_refresh.sh 가
                 `python -m mmt.macro_collector refresh --days 10` 실행 (최근 10일 덮어씀)
       - 미국 장 데이터(wti/brent/sp500 등)는 18:27 KST 수집 시점에 당일(미국) 장이
         끝나기 전이므로 마지막 행이 1영업일 전(미국 기준)인 것이 정상.
@@ -449,6 +456,89 @@ async def get_macro_chart_data(
         for d, p in sorted(merged.items())
     ]
     return MacroDataResponse(data=result)
+
+
+@router.get("/valuation-bands", response_model=ValuationBandsResponse)
+async def get_valuation_bands(
+    index: str = Query("kospi", description="kospi | kospi200 | kosdaq | kosdaq150"),
+    mode: str = Query("pbr", description="pbr | per"),
+    multiples: Optional[str] = Query(
+        None,
+        description="콤마 구분 배수. 미지정 시 PBR 0.8,1,1.2,1.5,2 / PER 8,10,12,15,20",
+    ),
+    start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
+):
+    """
+    macro.db index_fundamental 기반 PER/PBR 밸류에이션 밴드.
+
+    BPS≈Close/PBR, EPS≈Close/PER. 밴드=배수×BPS|EPS. 결측 구간은 보간하지 않음.
+    """
+    index_name = index.strip().lower()
+    mode_norm = mode.strip().lower()
+    if index_name not in ALLOWED_INDEXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"unsupported index: {index}. allowed={sorted(ALLOWED_INDEXES)}",
+        )
+    if mode_norm not in ("pbr", "per"):
+        raise HTTPException(status_code=400, detail="mode must be 'pbr' or 'per'")
+
+    try:
+        mults = parse_multiples(multiples, mode_norm)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    db_path = os.path.expanduser("~/.cache/db/macro.db")
+    if not os.path.exists(db_path):
+        return ValuationBandsResponse(
+            index_name=index_name, mode=mode_norm, multiples=mults, data=[]
+        )
+
+    query = """
+        SELECT date, close, per, pbr, div_yd
+        FROM index_fundamental
+        WHERE index_name = ?
+    """
+    params: list = [index_name]
+    if start_date:
+        query += " AND date >= ?"
+        params.append(start_date)
+    if end_date:
+        query += " AND date <= ?"
+        params.append(end_date)
+    query += " ORDER BY date ASC"
+
+    try:
+        with sqlite3.connect(db_path) as conn:
+            rows = conn.execute(query, params).fetchall()
+    except sqlite3.OperationalError:
+        # 테이블 미생성 등
+        return ValuationBandsResponse(
+            index_name=index_name, mode=mode_norm, multiples=mults, data=[]
+        )
+
+    points: list[ValuationBandPoint] = []
+    for date_s, close, per, pbr, div_yd in rows:
+        bands = compute_band_levels(close, per, pbr, mode_norm, mults)
+        points.append(
+            ValuationBandPoint(
+                date=date_s,
+                close=close,
+                per=per,
+                pbr=pbr,
+                div_yd=div_yd,
+                bands=bands,
+            )
+        )
+
+    return ValuationBandsResponse(
+        index_name=index_name,
+        mode=mode_norm,
+        multiples=mults,
+        data=points,
+    )
+
 
 @router.get("/foreign-flow", response_model=ForeignFlowResponse)
 async def get_foreign_flow_chart_data(

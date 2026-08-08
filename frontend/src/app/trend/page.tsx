@@ -11,6 +11,7 @@ import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
 import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
 import { AboveMaChart } from "./_components/AboveMaChart";
 import { MacroChart } from "./_components/MacroChart";
+import { ValuationBandChart } from "./_components/ValuationBandChart";
 import { WicsRankingPanel } from "./_components/WicsRankingPanel";
 import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
 import { MarketFlowChart } from "./_components/MarketFlowChart";
@@ -62,6 +63,8 @@ function TrendPageContent() {
       ? "above_ma"
       : rawTab === "macro"
       ? "macro"
+      : rawTab === "valuation"
+      ? "valuation"
       : rawTab === "wics_ranking"
       ? "wics_ranking"
       : rawTab === "wics_index"
@@ -461,6 +464,30 @@ function TrendPageContent() {
                        <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db</span></p>
                        <p>Series: <span className="text-gray-300 font-bold">SP500, HY, FGI, 일평균수출(FinJump·주간·ffill) 등</span></p>
                        <p>Integration: <span className="text-emerald-400 font-bold">Full Outer Join (Daily Aligned)</span></p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === "valuation" && (
+                <div className="w-full h-full flex flex-col gap-6">
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => router.push("/trend")}
+                      className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-4 py-2 rounded-lg border border-blue-900/30 transition-all"
+                    >
+                      ← 대시보드 요약보기
+                    </button>
+                  </div>
+                  <div className="flex-1 min-h-[560px]">
+                    <ValuationBandChart />
+                  </div>
+                  <div className="p-6 bg-gray-900/40 border border-gray-800 rounded-2xl mb-10">
+                    <h4 className="text-blue-400 font-bold text-xs mb-3 font-mono tracking-tighter uppercase">Valuation Database Status</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-[11px] text-gray-500">
+                      <p>Source DB: <span className="text-gray-300 font-bold">~/.cache/db/macro.db (index_fundamental)</span></p>
+                      <p>Formula: <span className="text-gray-300 font-bold">BPS≈Close/PBR · EPS≈Close/PER</span></p>
+                      <p>Refresh: <span className="text-emerald-400 font-bold">screener run_macro_refresh.sh (평일 18:27)</span></p>
                     </div>
                   </div>
                 </div>

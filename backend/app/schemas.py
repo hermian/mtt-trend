@@ -60,6 +60,23 @@ class MacroDataResponse(BaseModel):
     data: List[MacroDataPoint]
 
 
+# --- Valuation Bands (PER/PBR) ---
+class ValuationBandPoint(BaseModel):
+    date: str
+    close: Optional[float] = None
+    per: Optional[float] = None
+    pbr: Optional[float] = None
+    div_yd: Optional[float] = None
+    bands: Dict[str, Optional[float]]
+
+
+class ValuationBandsResponse(BaseModel):
+    index_name: str
+    mode: str  # 'pbr' | 'per'
+    multiples: List[float]
+    data: List[ValuationBandPoint]
+
+
 # --- Stockbee Market Monitor ---
 class StockbeeMmRow(BaseModel):
     date: str

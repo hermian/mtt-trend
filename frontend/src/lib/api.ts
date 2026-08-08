@@ -153,6 +153,25 @@ export interface MacroDataResponse {
   data: MacroDataPoint[];
 }
 
+export interface ValuationBandPoint {
+  date: string;
+  close?: number;
+  per?: number;
+  pbr?: number;
+  div_yd?: number;
+  bands: Record<string, number | null>;
+}
+
+export interface ValuationBandsResponse {
+  index_name: string;
+  mode: "pbr" | "per" | string;
+  multiples: number[];
+  data: ValuationBandPoint[];
+}
+
+export type ValuationIndex = "kospi" | "kospi200" | "kosdaq" | "kosdaq150";
+export type ValuationMode = "pbr" | "per";
+
 export interface MarketFlowPoint {
   date: string;
   time: string;
@@ -374,6 +393,28 @@ export const api = {
     const { data } = await apiClient.get<MacroDataResponse>("/api/charts/macro", {
       params: { start_date: startDate, end_date: endDate },
     });
+    return data;
+  },
+  // GET /api/charts/valuation-bands → ValuationBandsResponse
+  getValuationBands: async (params: {
+    index?: ValuationIndex | string;
+    mode?: ValuationMode | string;
+    multiples?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<ValuationBandsResponse> => {
+    const { data } = await apiClient.get<ValuationBandsResponse>(
+      "/api/charts/valuation-bands",
+      {
+        params: {
+          index: params.index,
+          mode: params.mode,
+          multiples: params.multiples,
+          start_date: params.startDate,
+          end_date: params.endDate,
+        },
+      }
+    );
     return data;
   },
   // GET /api/charts/foreign-flow → ForeignFlowResponse

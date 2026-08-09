@@ -286,11 +286,17 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   return (
     <div ref={containerRef} className="relative flex flex-col w-full h-screen bg-slate-900 overflow-hidden border-t border-slate-800">
       <style jsx global>{`
-        .indicator-scroll-area::-webkit-scrollbar { width: 12px; display: block !important; } 
-        .indicator-scroll-area::-webkit-scrollbar-track { background: #1e293b; } 
-        .indicator-scroll-area::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #1e293b; } 
-        .indicator-scroll-area::-webkit-scrollbar-thumb:hover { background: #64748b; }
-        .indicator-scroll-area { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+        @media (max-width: 767px) {
+          .indicator-scroll-area::-webkit-scrollbar { width: 12px; display: block !important; } 
+          .indicator-scroll-area::-webkit-scrollbar-track { background: #1e293b; } 
+          .indicator-scroll-area::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #1e293b; } 
+          .indicator-scroll-area::-webkit-scrollbar-thumb:hover { background: #64748b; }
+          .indicator-scroll-area { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+        }
+        @media (min-width: 768px) {
+          .indicator-scroll-area::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
+          .indicator-scroll-area { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
+        }
       `}</style>
       <div className="px-3 py-1 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between gap-4 shrink-0 h-9">
         <div className="flex items-center gap-3">
@@ -315,7 +321,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         )}
       </div>
 
-      <div data-scroll-area className="flex-1 overflow-y-scroll indicator-scroll-area bg-slate-950 relative">
+      <div data-scroll-area className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 relative">
         {(isLoading || (!chartData && status === "Initializing...")) && (
           <div className="absolute inset-0 z-30 bg-slate-950/70 flex items-center justify-center text-slate-400 font-medium animate-pulse">
             차트 데이터를 불러오는 중입니다...

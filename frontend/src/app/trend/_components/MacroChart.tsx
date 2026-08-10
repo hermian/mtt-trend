@@ -18,7 +18,7 @@ import type { MacroDataPoint } from "@/lib/api";
 import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
 
 /** HP 장기추세·이탈도를 적용할 지수 (FinJump DSTOA005001 / DSTOA006001) */
-const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "kospi"]);
+const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "dow30", "kospi"]);
 
 /** ISM PMI histogram: 확장(>=50) / 수축(<50) */
 const ISM_EXPAND_COLOR = "#a855f7";
@@ -43,7 +43,7 @@ interface IndicatorDef {
 const INDICATORS: IndicatorDef[] = [
   { id: "sp500", label: "S&P 500", color: "#38bdf8", area: true, raw: (v) => `SPX ${v.toFixed(0)}` },
   { id: "nasdaq100", label: "NDX", color: "#22d3ee", raw: (v) => `NDX ${v.toFixed(0)}` },
-  { id: "dow30", label: "DOW 30", color: "#60a5fa", raw: (v) => `DOW ${v.toFixed(0)}` },
+  { id: "dow30", label: "Dow", color: "#60a5fa", raw: (v) => `DOW ${v.toFixed(0)}` },
   { id: "kospi", label: "KOSPI", color: "#f87171", raw: (v) => `KOSPI ${v.toFixed(0)}` },
   {
     id: "export_avg",

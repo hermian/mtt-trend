@@ -19,8 +19,10 @@ from __future__ import annotations
 import math
 import os
 import threading
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from zoneinfo import ZoneInfo
 
 import duckdb
 
@@ -112,8 +114,19 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
     """Read latest RS snapshot + compute 6 period returns from the price DB."""
     part = latest_rs_partition(rs_dir)
     if part is None:
-        return {"as_of_date": None, "rows": []}
+        return {"as_of_date": None, "as_of_time": None, "rows": []}
     as_of, part_path = part
+
+    as_of_time: Optional[str] = None
+    if part_path and part_path.is_file():
+        mtime = part_path.stat().st_mtime
+        if price_db.is_file():
+            mtime = max(mtime, price_db.stat().st_mtime)
+        try:
+            dt = datetime.fromtimestamp(mtime, tz=ZoneInfo("Asia/Seoul"))
+        except Exception:
+            dt = datetime.fromtimestamp(mtime)
+        as_of_time = dt.strftime("%H:%M")
 
     con = duckdb.connect(":memory:")
     try:
@@ -192,7 +205,7 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
             }
         )
 
-    return {"as_of_date": as_of, "rows": frame_rows}
+    return {"as_of_date": as_of, "as_of_time": as_of_time, "rows": frame_rows}
 
 
 def get_base_frame() -> Dict[str, Any]:
@@ -318,6 +331,7 @@ def shape_heatmap(
 
     return {
         "as_of_date": frame["as_of_date"],
+        "as_of_time": frame.get("as_of_time"),
         "grouping": grouping,
         "period": period,
         "marcap_min": marcap_min,

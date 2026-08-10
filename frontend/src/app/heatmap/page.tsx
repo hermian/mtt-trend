@@ -84,7 +84,9 @@ export default function StockHeatmapPage() {
         </h1>
         <p className="text-xs text-gray-400 md:text-sm">
           {GROUPING_TITLES[controls.grouping]}별 한국 주식 수익률 ·{" "}
-          {data?.as_of_date ?? "-"} 기준 · {data?.stock_count ?? 0}종목
+          {data?.as_of_date ?? "-"}
+          {data?.as_of_time ? ` ${data.as_of_time}` : ""} 기준 ·{" "}
+          {data?.stock_count ?? 0}종목
           {isFetching && <span className="ml-2 text-gray-500">갱신 중…</span>}
         </p>
         <p className="text-[11px] text-gray-500">

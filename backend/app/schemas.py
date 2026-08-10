@@ -337,6 +337,7 @@ class HeatmapGroupItem(BaseModel):
 
 class StockHeatmapResponse(BaseModel):
     as_of_date: Optional[str] = None
+    as_of_time: Optional[str] = None
     grouping: str
     period: str
     marcap_min: Optional[float] = None

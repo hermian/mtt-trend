@@ -304,6 +304,7 @@ export interface StockHeatmapGroup {
 
 export interface StockHeatmapResponse {
   as_of_date: string | null;
+  as_of_time?: string | null;
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
   marcap_min: number | null;

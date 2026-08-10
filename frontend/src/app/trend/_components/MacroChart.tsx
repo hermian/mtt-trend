@@ -24,6 +24,64 @@ const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "dow30", "kospi"]);
 const ISM_EXPAND_COLOR = "#a855f7";
 const ISM_CONTRACT_COLOR = "#f43f5e";
 
+export type CategoryKey = "all" | "indices" | "rates" | "fx" | "commodities" | "macro_sentiment";
+
+export const CATEGORIES: { key: CategoryKey; label: string }[] = [
+  { key: "all", label: "전체" },
+  { key: "indices", label: "주가지수" },
+  { key: "rates", label: "금리/채권" },
+  { key: "fx", label: "환율" },
+  { key: "commodities", label: "원자재" },
+  { key: "macro_sentiment", label: "수급/경제/심리" },
+];
+
+const INDICATOR_CATEGORIES: Record<string, CategoryKey> = {
+  sp500: "indices",
+  nasdaq100: "indices",
+  dow30: "indices",
+  kospi: "indices",
+
+  us_2y: "rates",
+  us_10y: "rates",
+  us_spread: "rates",
+  kr_10y: "rates",
+  fed_funds: "rates",
+  bok_base: "rates",
+  high_yield: "rates",
+
+  usdkrw: "fx",
+  usdjpy: "fx",
+  usdcny: "fx",
+  eurusd: "fx",
+  dxy: "fx",
+
+  wti: "commodities",
+  brent: "commodities",
+  wti_fred: "commodities",
+  brent_fred: "commodities",
+  copper: "commodities",
+  gold: "commodities",
+  silver: "commodities",
+
+  m2: "macro_sentiment",
+  gdp: "macro_sentiment",
+  gdp_real: "macro_sentiment",
+  cnn_fgi: "macro_sentiment",
+  kr_fgi: "macro_sentiment",
+  vix: "macro_sentiment",
+  vkospi: "macro_sentiment",
+  pcr: "macro_sentiment",
+  move: "macro_sentiment",
+  export_avg: "macro_sentiment",
+  ism_pmi: "macro_sentiment",
+  credit_kospi: "macro_sentiment",
+  credit_kosdaq: "macro_sentiment",
+  credit_kospi_pct: "macro_sentiment",
+  credit_kosdaq_pct: "macro_sentiment",
+  forced_sell: "macro_sentiment",
+  forced_sell_ratio: "macro_sentiment",
+};
+
 interface MacroChartProps {
   /** @deprecated 차트 높이는 컨테이너 flex 영역을 ResizeObserver로 측정합니다 */
   height?: number;
@@ -312,6 +370,8 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   const [normalized, setNormalized] = useState<boolean>(false);
   /** HP 필터 ON — 지수에 장기추세 오버레이 + 이탈 패널 (FinJump DSTOA005001/6001) */
   const [hpEnabled, setHpEnabled] = useState<boolean>(true);
+  const [selectedCategory, setSelectedCategory] = useState<CategoryKey>("all");
+  const [isPickerOpen, setIsPickerOpen] = useState<boolean>(true);
   /** 셸 크기 추적 — 폭/높이가 바뀌면 차트 재생성 (고정 height prop은 컨트롤 바 확장 시 잘림) */
   const [chartWidth, setChartWidth] = useState(0);
   const [chartHeight, setChartHeight] = useState(0);
@@ -381,9 +441,13 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     [selected],
   );
 
+  const filteredIndicators = useMemo(() => {
+    if (selectedCategory === "all") return INDICATORS;
+    return INDICATORS.filter((ind) => INDICATOR_CATEGORIES[ind.id] === selectedCategory);
+  }, [selectedCategory]);
+
   const scrollToLatest = () => {
     if (!chartDataRef.current?.length || !chartRef.current) return;
-    // 기간 프리셋으로 이미 필터된 데이터를 전체 표시 (고정 250봉 뷰포트는 2Y 등을 잘라먹음)
     try {
       chartRef.current.timeScale().fitContent();
     } catch {
@@ -700,87 +764,122 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   return (
     <div
       ref={containerRef}
-      className={`relative flex flex-col w-full min-h-0 ${isMobile ? "h-[min(560px,calc(100dvh-10rem))]" : "h-[650px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}
+      className={`relative flex flex-col w-full ${isMobile ? "min-h-[580px] h-[calc(100dvh-8rem)]" : "min-h-[720px] h-[750px]"} bg-slate-900 overflow-hidden border border-slate-800 rounded-xl shadow-2xl`}
     >
-      {/* Control bar — 지표는 wrap(3줄 등). 차트 높이는 남은 flex 영역으로 맞춤 */}
+      {/* Control bar */}
       <div className="px-3 py-1.5 md:px-4 md:py-2 border-b border-slate-800 bg-slate-800/40 flex flex-col gap-1.5 md:gap-2 shrink-0">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-2.5 h-2.5 shrink-0 rounded-full ${isLoading || isFetching ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
-          <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
-            Macro & Sentiment Analytics
-          </h3>
-        </div>
-
-        {/* 지표 토글 — 줄바꿈 허용 (스크롤 없음) */}
-        <div className="flex items-center gap-1 flex-wrap" role="group" aria-label="Indicators">
-          {INDICATORS.map((ind) => {
-            const active = selected.has(ind.id);
-            return (
-              <button
-                key={ind.id}
-                type="button"
-                onClick={() => toggleIndicator(ind.id)}
-                style={{
-                  borderColor: active ? ind.color : "#475569",
-                  color: active ? ind.color : "#94a3b8",
-                  backgroundColor: active ? `${ind.color}1a` : "transparent",
-                }}
-                className="text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all"
-              >
-                {ind.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* 기간 프리셋 + 정규화 토글 */}
-        <div className="flex items-center gap-1 flex-wrap">
-          <div className="flex items-center gap-1 mr-1 flex-wrap" role="group" aria-label="Period">
-            {PERIODS.map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriod(p)}
-                className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
-                  period === p
-                    ? "bg-blue-600 text-white border-blue-500"
-                    : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
+        <div className="flex items-center justify-between gap-2 min-w-0 flex-wrap">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`w-2.5 h-2.5 shrink-0 rounded-full ${isLoading || isFetching ? "bg-blue-500 animate-pulse" : error ? "bg-red-500" : "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.8)]"}`}></div>
+            <h3 className="font-bold text-slate-200 text-sm uppercase tracking-tighter truncate">
+              Macro & Sentiment Analytics
+            </h3>
           </div>
-          <button
-            onClick={() => setNormalized((v) => !v)}
-            className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
-              normalized
-                ? "bg-purple-600 text-white border-purple-500"
-                : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
-            }`}
-            title="각 지표를 시작=100(%)로 리베이스해 공통 % 축에 겹쳐 비교"
-          >
-            {normalized ? "정규화 %" : "원본"}
-          </button>
-          <button
-            type="button"
-            onClick={() => setHpEnabled((v) => !v)}
-            className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
-              hpEnabled
-                ? "bg-pink-600 text-white border-pink-500"
-                : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
-            }`}
-            title="S&P500/NDX/KOSPI에 HP 장기추세(τ)와 추세 대비 이탈(지수/추세×100) 표시 — FinJump DSTOA005001·DSTOA006001"
-          >
-            {hpEnabled ? "HP ON" : "HP OFF"}
-          </button>
-          <button
-            onClick={scrollToLatest}
-            className="text-[9px] bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-600 transition-all font-bold tracking-tighter uppercase"
-          >
-            Sync
-          </button>
+
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setIsPickerOpen((v) => !v)}
+              className="text-[9px] md:text-[10px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-blue-400 font-bold border border-slate-700 flex items-center gap-1 transition-all"
+            >
+              지표 선택 ({selected.size}) {isPickerOpen ? "▲" : "▼"}
+            </button>
+            <div className="flex items-center gap-1" role="group" aria-label="Period">
+              {PERIODS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setPeriod(p)}
+                  className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
+                    period === p
+                      ? "bg-blue-600 text-white border-blue-500"
+                      : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setNormalized((v) => !v)}
+              className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
+                normalized
+                  ? "bg-purple-600 text-white border-purple-500"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+              }`}
+              title="각 지표를 시작=100(%)로 리베이스해 공통 % 축에 겹쳐 비교"
+            >
+              {normalized ? "정규화 %" : "원본"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setHpEnabled((v) => !v)}
+              className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
+                hpEnabled
+                  ? "bg-pink-600 text-white border-pink-500"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+              }`}
+              title="S&P500/NDX/DOW/KOSPI에 HP 장기추세(τ)와 추세 대비 이탈(지수/추세×100) 표시"
+            >
+              {hpEnabled ? "HP ON" : "HP OFF"}
+            </button>
+            <button
+              type="button"
+              onClick={scrollToLatest}
+              className="text-[9px] bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-600 transition-all font-bold tracking-tighter uppercase"
+            >
+              Sync
+            </button>
+          </div>
         </div>
+
+        {/* 지표 선택 영역 (펼침 상태 시 카테고리 탭 + 최대높이 스크롤 칩 박스) */}
+        {isPickerOpen && (
+          <div className="flex flex-col gap-1.5 pt-1.5 border-t border-slate-800/60">
+            <div className="flex items-center gap-1 flex-wrap text-[10px]">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.key}
+                  type="button"
+                  onClick={() => setSelectedCategory(cat.key)}
+                  className={`px-2.5 py-0.5 rounded-full font-bold transition-all ${
+                    selectedCategory === cat.key
+                      ? "bg-blue-600 text-white shadow-sm"
+                      : "bg-slate-800 hover:bg-slate-700 text-slate-400"
+                  }`}
+                >
+                  {cat.label}
+                </button>
+              ))}
+            </div>
+
+            <div
+              className="max-h-24 md:max-h-28 overflow-y-auto custom-scrollbar flex items-center gap-1 flex-wrap p-1.5 bg-slate-950/40 rounded-lg border border-slate-800/80"
+              role="group"
+              aria-label="Indicators"
+            >
+              {filteredIndicators.map((ind) => {
+                const active = selected.has(ind.id);
+                return (
+                  <button
+                    key={ind.id}
+                    type="button"
+                    onClick={() => toggleIndicator(ind.id)}
+                    style={{
+                      borderColor: active ? ind.color : "#334155",
+                      color: active ? ind.color : "#94a3b8",
+                      backgroundColor: active ? `${ind.color}1a` : "transparent",
+                    }}
+                    className="text-[9px] md:text-[10px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all shrink-0 hover:border-slate-500"
+                  >
+                    {ind.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Hover legend */}

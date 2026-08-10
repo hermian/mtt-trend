@@ -47,6 +47,9 @@ class MacroDataPoint(BaseModel):
     brent: Optional[float] = None        # Investing LCO → index_ohlcv
     wti_fred: Optional[float] = None     # FRED DCOILWTICO → fred_macro
     brent_fred: Optional[float] = None   # FRED DCOILBRENTEU → fred_macro
+    copper: Optional[float] = None       # Yahoo HG=F → index_ohlcv
+    gold: Optional[float] = None         # Yahoo GC=F → index_ohlcv
+    silver: Optional[float] = None       # Yahoo SI=F → index_ohlcv
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
     ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
     credit_kospi: Optional[float] = None       # KOSPI 신용잔고 (조원) — kofia_credit_loan

@@ -131,6 +131,9 @@ export interface MacroDataPoint {
   brent?: number;
   wti_fred?: number;
   brent_fred?: number;
+  copper?: number;
+  gold?: number;
+  silver?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

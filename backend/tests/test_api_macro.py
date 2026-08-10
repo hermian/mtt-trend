@@ -122,6 +122,15 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "brent", 82.0),
         ("2026-06-25", "brent", 82.5),
         ("2026-06-26", "brent", 83.0),
+        ("2026-06-24", "copper", 4.50),
+        ("2026-06-25", "copper", 4.55),
+        ("2026-06-26", "copper", 4.60),
+        ("2026-06-24", "gold", 2300.0),
+        ("2026-06-25", "gold", 2310.0),
+        ("2026-06-26", "gold", 2320.0),
+        ("2026-06-24", "silver", 28.5),
+        ("2026-06-25", "silver", 29.0),
+        ("2026-06-26", "silver", 29.5),
     ])
 
     # 시가총액(원) — 신용잔고/시총 % 계산용
@@ -265,6 +274,9 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["brent"] == 82.0
     assert pt["wti_fred"] == 77.1
     assert pt["brent_fred"] == 80.2
+    assert pt["copper"] == 4.50
+    assert pt["gold"] == 2300.0
+    assert pt["silver"] == 28.5
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5

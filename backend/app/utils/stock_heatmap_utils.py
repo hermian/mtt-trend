@@ -238,6 +238,7 @@ def shape_heatmap(
     period: str,
     marcap_min: Optional[float] = None,
     marcap_max: Optional[float] = None,
+    min_ret: Optional[float] = None,
     limit: int = 0,
 ) -> Dict[str, Any]:
     """
@@ -264,6 +265,12 @@ def shape_heatmap(
         rows = [r for r in rows if r["marcap"] >= marcap_min]
     if marcap_max is not None:
         rows = [r for r in rows if r["marcap"] <= marcap_max]
+    if min_ret is not None:
+        rows = [
+            r
+            for r in rows
+            if r["rets"].get(period) is not None and r["rets"].get(period) >= min_ret
+        ]
     if limit and limit > 0:
         rows = sorted(rows, key=lambda r: r["marcap"], reverse=True)[:limit]
 
@@ -315,6 +322,7 @@ def shape_heatmap(
         "period": period,
         "marcap_min": marcap_min,
         "marcap_max": marcap_max,
+        "min_ret": min_ret,
         "limit": limit,
         "stock_count": len(rows),
         "groups": group_payloads,

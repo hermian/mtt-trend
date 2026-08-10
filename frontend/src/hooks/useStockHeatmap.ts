@@ -9,6 +9,7 @@ export const useStockHeatmap = (params: StockHeatmapParams) => {
       params.period,
       params.marcapMin ?? null,
       params.marcapMax ?? null,
+      params.minRet ?? null,
       params.limit,
     ],
     queryFn: () => api.getStockHeatmap(params),

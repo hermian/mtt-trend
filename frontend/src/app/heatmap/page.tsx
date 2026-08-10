@@ -24,6 +24,7 @@ export default function StockHeatmapPage() {
     period: "1D",
     marcapMin: null,
     marcapMax: null,
+    minRet: null,
     limit: 0,
   });
 
@@ -35,6 +36,7 @@ export default function StockHeatmapPage() {
     period: controls.period,
     marcapMin: controls.marcapMin,
     marcapMax: controls.marcapMax,
+    minRet: controls.minRet,
     limit: controls.limit,
   });
 

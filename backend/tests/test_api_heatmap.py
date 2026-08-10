@@ -255,3 +255,12 @@ def test_price_db_locked_returns_503(client, heatmap_env, monkeypatch):
     res = client.get("/api/heatmap/stocks?grouping=sector&period=1D")
     assert res.status_code == 503
     assert "잠겨" in res.json()["detail"]
+
+
+def test_min_ret_filter(client, heatmap_env):
+    # min_ret=4.0 필터링 테스트
+    body = client.get("/api/heatmap/stocks?grouping=sector&period=1D&min_ret=4.0").json()
+    for group in body["groups"]:
+        for stock in group["stocks"]:
+            assert stock["ret"] is not None and stock["ret"] >= 4.0
+

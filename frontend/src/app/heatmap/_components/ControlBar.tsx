@@ -9,6 +9,7 @@ export interface HeatmapControls {
   period: HeatmapPeriod;
   marcapMin: number | null;
   marcapMax: number | null;
+  minRet: number | null;
   limit: number;
 }
 
@@ -46,6 +47,15 @@ const MARCAP_PRESETS: Array<{
   { label: "5조+", min: 50000, max: null },
 ];
 
+const MIN_RET_PRESETS: Array<{ label: string; value: number | null }> = [
+  { label: "전체", value: null },
+  { label: "2%+", value: 2 },
+  { label: "3%+", value: 3 },
+  { label: "4%+", value: 4 },
+  { label: "5%+", value: 5 },
+  { label: "10%+", value: 10 },
+];
+
 const LIMITS: Array<{ id: number; label: string }> = [
   { id: 50, label: "상위 50" },
   { id: 100, label: "상위 100" },
@@ -68,6 +78,7 @@ function btnClass(active: boolean): string {
 export function ControlBar({ value, onChange }: ControlBarProps) {
   const [minInput, setMinInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
+  const [retInput, setRetInput] = useState("");
 
   const applyCustom = () => {
     const min = minInput.trim() === "" ? null : Number(minInput);
@@ -75,6 +86,13 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
     onChange({
       marcapMin: min !== null && Number.isFinite(min) && min >= 0 ? min : null,
       marcapMax: max !== null && Number.isFinite(max) && max > 0 ? max : null,
+    });
+  };
+
+  const applyCustomRet = () => {
+    const ret = retInput.trim() === "" ? null : Number(retInput);
+    onChange({
+      minRet: ret !== null && Number.isFinite(ret) ? ret : null,
     });
   };
 
@@ -145,6 +163,44 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
         <button
           type="button"
           onClick={applyCustom}
+          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+        >
+          적용
+        </button>
+      </div>
+
+      {/* 수익률 */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">수익률</span>
+        {MIN_RET_PRESETS.map((r) => (
+          <button
+            key={r.label}
+            type="button"
+            className={btnClass(value.minRet === r.value)}
+            onClick={() => {
+              setRetInput("");
+              onChange({ minRet: r.value });
+            }}
+          >
+            {r.label}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-gray-500">직접입력</span>
+        <input
+          type="number"
+          step="any"
+          placeholder="최저"
+          value={retInput}
+          onChange={(e) => setRetInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyCustomRet();
+          }}
+          className="w-16 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+        />
+        <span className="text-xs text-gray-500">% 이상</span>
+        <button
+          type="button"
+          onClick={applyCustomRet}
           className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
         >
           적용

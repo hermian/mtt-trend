@@ -264,3 +264,26 @@ def test_min_ret_filter(client, heatmap_env):
         for stock in group["stocks"]:
             assert stock["ret"] is not None and stock["ret"] >= 4.0
 
+
+def test_custom_date_range(client, heatmap_env):
+    # 시작일과 종료일 직접 지정 테스트 (10일 전 ~ AS_OF)
+    from datetime import datetime, timedelta
+
+    as_of_dt = datetime.strptime(AS_OF, "%Y-%m-%d")
+    start_str = (as_of_dt - timedelta(days=10)).strftime("%Y-%m-%d")
+
+    res = client.get(f"/api/heatmap/stocks?grouping=sector&start_date={start_str}&end_date={AS_OF}")
+    assert res.status_code == 200
+    body = res.json()
+
+    assert body["period"] == "CUSTOM"
+    assert body["start_date"] == start_str
+    assert body["end_date"] == AS_OF
+    assert body["effective_start_date"] is not None
+    assert body["effective_end_date"] is not None
+
+    stocks = _stocks_by_code(body)
+    assert stocks["000010"]["ret"] == 0.0
+    assert stocks["000020"]["ret"] is not None
+
+

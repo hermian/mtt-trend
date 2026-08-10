@@ -22,6 +22,8 @@ export default function StockHeatmapPage() {
   const [controls, setControls] = useState<HeatmapControls>({
     grouping: "sector",
     period: "1D",
+    startDate: null,
+    endDate: null,
     marcapMin: null,
     marcapMax: null,
     minRet: null,
@@ -34,6 +36,8 @@ export default function StockHeatmapPage() {
   const { data, isFetching, isError, error } = useStockHeatmap({
     grouping: controls.grouping,
     period: controls.period,
+    startDate: controls.startDate,
+    endDate: controls.endDate,
     marcapMin: controls.marcapMin,
     marcapMax: controls.marcapMax,
     minRet: controls.minRet,
@@ -84,9 +88,17 @@ export default function StockHeatmapPage() {
         </h1>
         <p className="text-xs text-gray-400 md:text-sm">
           {GROUPING_TITLES[controls.grouping]}별 한국 주식 수익률 ·{" "}
-          {data?.as_of_date ?? "-"}
-          {data?.as_of_time ? ` ${data.as_of_time}` : ""} 기준 ·{" "}
-          {data?.stock_count ?? 0}종목
+          {data?.period === "CUSTOM" && data?.effective_start_date && data?.effective_end_date ? (
+            <span className="font-medium text-sky-400">
+              지정 기간 ({data.effective_start_date} ~ {data.effective_end_date})
+            </span>
+          ) : (
+            <>
+              {data?.as_of_date ?? "-"}
+              {data?.as_of_time ? ` ${data.as_of_time}` : ""} 기준
+            </>
+          )}{" "}
+          · {data?.stock_count ?? 0}종목
           {isFetching && <span className="ml-2 text-gray-500">갱신 중…</span>}
         </p>
         <p className="text-[11px] text-gray-500">

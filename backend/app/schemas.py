@@ -347,9 +347,14 @@ class StockHeatmapResponse(BaseModel):
     as_of_time: Optional[str] = None
     grouping: str
     period: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    effective_start_date: Optional[str] = None
+    effective_end_date: Optional[str] = None
     marcap_min: Optional[float] = None
     marcap_max: Optional[float] = None
     min_ret: Optional[float] = None
     limit: int = 0
     stock_count: int
     groups: List[HeatmapGroupItem]
+

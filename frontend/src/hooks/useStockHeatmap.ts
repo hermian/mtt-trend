@@ -7,6 +7,8 @@ export const useStockHeatmap = (params: StockHeatmapParams) => {
       "stockHeatmap",
       params.grouping,
       params.period,
+      params.startDate ?? null,
+      params.endDate ?? null,
       params.marcapMin ?? null,
       params.marcapMax ?? null,
       params.minRet ?? null,

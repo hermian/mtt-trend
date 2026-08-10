@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 import math
 import os
 import threading
@@ -108,6 +109,71 @@ _cache: Dict[str, Any] = {"key": None, "frame": None}
 def _is_duckdb_lock_error(exc: BaseException) -> bool:
     msg = str(exc).lower()
     return "conflicting lock" in msg or "could not set lock" in msg
+
+
+@lru_cache(maxsize=128)
+def _compute_custom_period_returns_cached(
+    price_db_str: str, price_db_mtime: float, start_date_str: str, end_date_str: str
+) -> tuple[Optional[str], Optional[str], Dict[str, Optional[float]]]:
+    price_db = Path(price_db_str)
+    if not price_db.is_file():
+        return None, None, {}
+
+    escaped = str(price_db.resolve()).replace("'", "''")
+    con = duckdb.connect(":memory:")
+    try:
+        try:
+            con.execute(f"ATTACH '{escaped}' AS sp (READ_ONLY)")
+        except Exception as exc:  # noqa: BLE001
+            if _is_duckdb_lock_error(exc):
+                raise PriceDbLockedError() from exc
+            raise
+
+        eff_row = con.execute(
+            """
+            SELECT
+                (SELECT MAX(날짜)::VARCHAR FROM sp.stock_price WHERE 날짜 <= ?) AS eff_end,
+                (SELECT MAX(날짜)::VARCHAR FROM sp.stock_price WHERE 날짜 <= ?) AS eff_start
+            """,
+            [end_date_str, start_date_str],
+        ).fetchone()
+
+        if not eff_row or not eff_row[0] or not eff_row[1]:
+            return None, None, {}
+
+        eff_end, eff_start = str(eff_row[0]), str(eff_row[1])
+
+        rows = con.execute(
+            """
+            WITH end_p AS (
+                SELECT 종목코드 AS code, 종가 AS close_end,
+                       ROW_NUMBER() OVER (PARTITION BY 종목코드 ORDER BY 날짜 DESC) AS rn
+                FROM sp.stock_price
+                WHERE 날짜 <= ?
+            ),
+            start_p AS (
+                SELECT 종목코드 AS code, 종가 AS close_start,
+                       ROW_NUMBER() OVER (PARTITION BY 종목코드 ORDER BY 날짜 DESC) AS rn
+                FROM sp.stock_price
+                WHERE 날짜 <= ?
+            )
+            SELECT e.code, s.close_start, e.close_end
+            FROM (SELECT code, close_end FROM end_p WHERE rn = 1) e
+            JOIN (SELECT code, close_start FROM start_p WHERE rn = 1) s ON e.code = s.code
+            """,
+            [eff_end, eff_start],
+        ).fetchall()
+
+        rets: Dict[str, Optional[float]] = {}
+        for code, c_start, c_end in rows:
+            if c_start and c_end and c_start > 0:
+                rets[code] = round((c_end - c_start) / c_start * 100, 2)
+            else:
+                rets[code] = None
+
+        return eff_start, eff_end, rets
+    finally:
+        con.close()
 
 
 def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
@@ -248,7 +314,9 @@ def _group_key(stock: Dict[str, Any], grouping: str) -> List[str]:
 
 def shape_heatmap(
     grouping: str,
-    period: str,
+    period: str = "1M",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     marcap_min: Optional[float] = None,
     marcap_max: Optional[float] = None,
     min_ret: Optional[float] = None,
@@ -262,11 +330,38 @@ def shape_heatmap(
     """
     if grouping not in VALID_GROUPINGS:
         raise ValueError(f"invalid grouping: {grouping}")
-    if period not in PERIOD_TRADING_DAYS:
+    if period != "CUSTOM" and period not in PERIOD_TRADING_DAYS:
         raise ValueError(f"invalid period: {period}")
 
     frame = get_base_frame()
     rows = frame["rows"]
+
+    effective_start_date: Optional[str] = None
+    effective_end_date: Optional[str] = None
+
+    if start_date or period == "CUSTOM":
+        period = "CUSTOM"
+        as_of = frame["as_of_date"] or datetime.now().strftime("%Y-%m-%d")
+        req_start = start_date or as_of
+        req_end = end_date or as_of
+
+        price_db = get_stock_price_db_path()
+        price_mtime = price_db.stat().st_mtime if price_db.is_file() else 0.0
+
+        eff_start, eff_end, custom_rets = _compute_custom_period_returns_cached(
+            str(price_db), price_mtime, req_start, req_end
+        )
+        effective_start_date = eff_start
+        effective_end_date = eff_end
+
+        new_rows = []
+        for r in rows:
+            r_copy = dict(r)
+            rets_copy = dict(r["rets"])
+            rets_copy["CUSTOM"] = custom_rets.get(r["code"])
+            r_copy["rets"] = rets_copy
+            new_rows.append(r_copy)
+        rows = new_rows
 
     # 시장 그룹: 해당 Market만 남겨 stock_count·필터가 화면과 일치하도록
     if grouping == "kospi":
@@ -334,6 +429,10 @@ def shape_heatmap(
         "as_of_time": frame.get("as_of_time"),
         "grouping": grouping,
         "period": period,
+        "start_date": start_date,
+        "end_date": end_date,
+        "effective_start_date": effective_start_date,
+        "effective_end_date": effective_end_date,
         "marcap_min": marcap_min,
         "marcap_max": marcap_max,
         "min_ret": min_ret,
@@ -341,3 +440,4 @@ def shape_heatmap(
         "stock_count": len(rows),
         "groups": group_payloads,
     }
+

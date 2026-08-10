@@ -7,6 +7,8 @@ import type { HeatmapGrouping, HeatmapPeriod } from "@/lib/api";
 export interface HeatmapControls {
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  startDate: string | null;
+  endDate: string | null;
   marcapMin: number | null;
   marcapMax: number | null;
   minRet: number | null;
@@ -33,6 +35,7 @@ const PERIODS: Array<{ id: HeatmapPeriod; label: string }> = [
   { id: "3M", label: "3M" },
   { id: "6M", label: "6M" },
   { id: "12M", label: "12M" },
+  { id: "CUSTOM", label: "기간 지정" },
 ];
 
 const MARCAP_PRESETS: Array<{
@@ -66,6 +69,35 @@ const LIMITS: Array<{ id: number; label: string }> = [
   { id: 0, label: "전체" },
 ];
 
+function formatDate(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function getDefaultDates(): { start: string; end: string } {
+  const now = new Date();
+  const end = formatDate(now);
+  const d = new Date(now);
+  d.setMonth(d.getMonth() - 1);
+  const start = formatDate(d);
+  return { start, end };
+}
+
+function getPresetDates(preset: "1M" | "3M" | "YTD" | "1Y"): { start: string; end: string } {
+  const now = new Date();
+  const end = formatDate(now);
+  if (preset === "YTD") {
+    return { start: `${now.getFullYear()}-01-01`, end };
+  }
+  const d = new Date(now);
+  if (preset === "1M") d.setMonth(d.getMonth() - 1);
+  if (preset === "3M") d.setMonth(d.getMonth() - 3);
+  if (preset === "1Y") d.setFullYear(d.getFullYear() - 1);
+  return { start: formatDate(d), end };
+}
+
 function btnClass(active: boolean): string {
   return clsx(
     "px-3 py-1.5 rounded-md text-xs font-semibold transition-colors whitespace-nowrap",
@@ -79,6 +111,9 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
   const [minInput, setMinInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
   const [retInput, setRetInput] = useState("");
+
+  const [customStart, setCustomStart] = useState(value.startDate ?? "");
+  const [customEnd, setCustomEnd] = useState(value.endDate ?? "");
 
   const applyCustom = () => {
     const min = minInput.trim() === "" ? null : Number(minInput);
@@ -94,6 +129,35 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
     onChange({
       minRet: ret !== null && Number.isFinite(ret) ? ret : null,
     });
+  };
+
+  const applyDateRange = () => {
+    if (!customStart.trim()) return;
+    onChange({
+      period: "CUSTOM",
+      startDate: customStart.trim(),
+      endDate: customEnd.trim() || null,
+    });
+  };
+
+  const handleSelectPeriod = (pId: HeatmapPeriod) => {
+    if (pId !== "CUSTOM") {
+      onChange({ period: pId, startDate: null, endDate: null });
+    } else {
+      const defaults = getDefaultDates();
+      const start = customStart || defaults.start;
+      const end = customEnd || defaults.end;
+      setCustomStart(start);
+      setCustomEnd(end);
+      onChange({ period: "CUSTOM", startDate: start, endDate: end });
+    }
+  };
+
+  const handleApplyPreset = (preset: "1M" | "3M" | "YTD" | "1Y") => {
+    const { start, end } = getPresetDates(preset);
+    setCustomStart(start);
+    setCustomEnd(end);
+    onChange({ period: "CUSTOM", startDate: start, endDate: end });
   };
 
   return (
@@ -113,17 +177,88 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
       </div>
 
       {/* 기간 */}
-      <div className="flex items-center gap-1">
-        {PERIODS.map((p) => (
-          <button
-            key={p.id}
-            type="button"
-            className={btnClass(value.period === p.id)}
-            onClick={() => onChange({ period: p.id })}
-          >
-            {p.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1">
+          {PERIODS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              className={btnClass(value.period === p.id)}
+              onClick={() => handleSelectPeriod(p.id)}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+
+        {value.period === "CUSTOM" && (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-gray-700 bg-gray-800/80 px-2.5 py-1 text-xs">
+            <div className="flex items-center gap-1.5">
+              <span className="font-medium text-gray-400">시작</span>
+              <input
+                type="date"
+                value={customStart}
+                onChange={(e) => setCustomStart(e.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {}
+                }}
+                className="cursor-pointer rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-100 focus:border-sky-500 focus:outline-none [color-scheme:dark]"
+              />
+              <span className="font-medium text-gray-400">~ 종료</span>
+              <input
+                type="date"
+                value={customEnd}
+                onChange={(e) => setCustomEnd(e.target.value)}
+                onClick={(e) => {
+                  try {
+                    e.currentTarget.showPicker?.();
+                  } catch {}
+                }}
+                className="cursor-pointer rounded border border-gray-600 bg-gray-900 px-2 py-1 text-xs text-gray-100 focus:border-sky-500 focus:outline-none [color-scheme:dark]"
+              />
+              <button
+                type="button"
+                onClick={applyDateRange}
+                className="rounded bg-sky-600 px-2.5 py-1 text-xs font-semibold text-white transition-colors hover:bg-sky-500"
+              >
+                조회
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 border-l border-gray-700 pl-2">
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("1M")}
+                className="rounded bg-gray-700 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-gray-600 hover:text-white"
+              >
+                1개월전
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("3M")}
+                className="rounded bg-gray-700 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-gray-600 hover:text-white"
+              >
+                3개월전
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("YTD")}
+                className="rounded bg-gray-700 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-gray-600 hover:text-white"
+              >
+                YTD(올해)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApplyPreset("1Y")}
+                className="rounded bg-gray-700 px-1.5 py-0.5 text-[11px] text-gray-300 hover:bg-gray-600 hover:text-white"
+              >
+                1년전
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 시가총액 */}
@@ -163,7 +298,7 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
         <button
           type="button"
           onClick={applyCustom}
-          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+          className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
         >
           적용
         </button>
@@ -201,7 +336,7 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
         <button
           type="button"
           onClick={applyCustomRet}
-          className="px-2.5 py-1.5 rounded-md text-xs font-semibold bg-gray-700 text-gray-200 hover:bg-gray-600 transition-colors"
+          className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
         >
           적용
         </button>

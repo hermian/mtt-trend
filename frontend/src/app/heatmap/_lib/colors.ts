@@ -14,6 +14,7 @@ export const NEUTRAL: Record<HeatmapPeriod, number> = {
   "3M": 6.0,
   "6M": 9.0,
   "12M": 13.0,
+  CUSTOM: 3.3,
 };
 
 export interface ColorScale {
@@ -40,7 +41,7 @@ export function buildColorScale(
   rets: Array<number | null>,
   period: HeatmapPeriod
 ): ColorScale {
-  const neutral = NEUTRAL[period];
+  const neutral = NEUTRAL[period] ?? 3.3;
   const valid = rets
     .filter((r): r is number => r !== null)
     .sort((a, b) => a - b);

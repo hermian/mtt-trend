@@ -291,7 +291,15 @@ export type HeatmapGrouping =
   | "theme"
   | "kospi"
   | "kosdaq";
-export type HeatmapPeriod = "1D" | "5D" | "1M" | "3M" | "6M" | "12M";
+
+export type HeatmapPeriod =
+  | "1D"
+  | "5D"
+  | "1M"
+  | "3M"
+  | "6M"
+  | "12M"
+  | "CUSTOM";
 
 export interface StockHeatmapItem {
   code: string;
@@ -317,6 +325,10 @@ export interface StockHeatmapResponse {
   as_of_time?: string | null;
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  start_date?: string | null;
+  end_date?: string | null;
+  effective_start_date?: string | null;
+  effective_end_date?: string | null;
   marcap_min: number | null;
   marcap_max: number | null;
   min_ret?: number | null;
@@ -328,6 +340,8 @@ export interface StockHeatmapResponse {
 export interface StockHeatmapParams {
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  startDate?: string | null;
+  endDate?: string | null;
   marcapMin?: number | null;
   marcapMax?: number | null;
   minRet?: number | null;
@@ -656,6 +670,8 @@ export const api = {
         params: {
           grouping: params.grouping,
           period: params.period,
+          start_date: params.startDate ?? undefined,
+          end_date: params.endDate ?? undefined,
           marcap_min: params.marcapMin ?? undefined,
           marcap_max: params.marcapMax ?? undefined,
           min_ret: params.minRet ?? undefined,

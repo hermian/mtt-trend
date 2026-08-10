@@ -108,6 +108,7 @@ export interface MacroDataPoint {
   date: string;
   sp500?: number;
   nasdaq100?: number;
+  dow30?: number;
   kospi?: number;
   high_yield?: number;
   cnn_fgi?: number;

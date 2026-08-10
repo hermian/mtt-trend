@@ -43,6 +43,7 @@ interface IndicatorDef {
 const INDICATORS: IndicatorDef[] = [
   { id: "sp500", label: "S&P 500", color: "#38bdf8", area: true, raw: (v) => `SPX ${v.toFixed(0)}` },
   { id: "nasdaq100", label: "NDX", color: "#22d3ee", raw: (v) => `NDX ${v.toFixed(0)}` },
+  { id: "dow30", label: "DOW 30", color: "#60a5fa", raw: (v) => `DOW ${v.toFixed(0)}` },
   { id: "kospi", label: "KOSPI", color: "#f87171", raw: (v) => `KOSPI ${v.toFixed(0)}` },
   {
     id: "export_avg",

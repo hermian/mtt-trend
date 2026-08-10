@@ -24,6 +24,7 @@ class MacroDataPoint(BaseModel):
     date: str
     sp500: Optional[float] = None
     nasdaq100: Optional[float] = None
+    dow30: Optional[float] = None
     kospi: Optional[float] = None
     high_yield: Optional[float] = None
     cnn_fgi: Optional[float] = None

@@ -197,6 +197,7 @@ async def get_macro_chart_data(
     series_defs = {
         "sp500":     ("index_ohlcv",        "close",       "index_name = 'sp500'"),
         "nasdaq100": ("index_ohlcv",        "close",       "index_name = 'nasdaq100'"),
+        "dow30":     ("index_ohlcv",        "close",       "index_name = 'dow30'"),
         "kospi":     ("index_ohlcv",        "close",       "index_name = 'kospi'"),
         "high_yield": ("fred_macro",        "value",       "series_id = 'BAMLH0A0HYM2'"),
         "vix":       ("fred_macro",         "value",       "series_id = 'VIX'"),
@@ -427,6 +428,7 @@ async def get_macro_chart_data(
             date=d,
             sp500=p.get("sp500"),
             nasdaq100=p.get("nasdaq100"),
+            dow30=p.get("dow30"),
             kospi=p.get("kospi"),
             high_yield=p.get("high_yield"),
             cnn_fgi=p.get("cnn_fgi"),

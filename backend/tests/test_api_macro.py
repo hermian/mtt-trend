@@ -109,6 +109,9 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "nasdaq100", 18000.0),
         ("2026-06-25", "nasdaq100", 18100.0),
         ("2026-06-26", "nasdaq100", 18200.0),
+        ("2026-06-24", "dow30", 39000.0),
+        ("2026-06-25", "dow30", 39100.0),
+        ("2026-06-26", "dow30", 39200.0),
         ("2026-06-24", "kospi", 2500.0),
         ("2026-06-25", "kospi", 2510.0),
         ("2026-06-26", "kospi", 2520.0),
@@ -261,6 +264,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["date"] == "2026-06-24"
     assert pt["sp500"] == 5000.0
     assert pt["nasdaq100"] == 18000.0
+    assert pt["dow30"] == 39000.0
     assert pt["kospi"] == 2500.0
     assert pt["high_yield"] == 3.1
     assert pt["cnn_fgi"] == 45.0

@@ -134,6 +134,12 @@ export interface MacroDataPoint {
   copper?: number;
   gold?: number;
   silver?: number;
+  /** US M2 통화량 (십억 USD) — FRED M2SL */
+  m2?: number;
+  /** US 명목 GDP (십억 USD) — FRED GDP */
+  gdp?: number;
+  /** US 실질 GDP (십억 USD) — FRED GDPC1 */
+  gdp_real?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

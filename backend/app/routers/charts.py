@@ -233,6 +233,9 @@ async def get_macro_chart_data(
     ffill_series = {
         "fed_funds": "DFF",
         "bok_base": "BOK_BASE",
+        "m2": "M2SL",
+        "gdp": "GDP",
+        "gdp_real": "GDPC1",
     }
     # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
     ism_ffill_series_id = "ISM_PMI"
@@ -450,6 +453,9 @@ async def get_macro_chart_data(
             copper=p.get("copper"),
             gold=p.get("gold"),
             silver=p.get("silver"),
+            m2=p.get("m2"),
+            gdp=p.get("gdp"),
+            gdp_real=p.get("gdp_real"),
             export_avg=p.get("export_avg"),
             ism_pmi=p.get("ism_pmi"),
             credit_kospi=p.get("credit_kospi"),

@@ -50,6 +50,9 @@ class MacroDataPoint(BaseModel):
     copper: Optional[float] = None       # Yahoo HG=F → index_ohlcv
     gold: Optional[float] = None         # Yahoo GC=F → index_ohlcv
     silver: Optional[float] = None       # Yahoo SI=F → index_ohlcv
+    m2: Optional[float] = None           # FRED M2SL (월간 M2 통화량, 십억 달러) → fred_macro
+    gdp: Optional[float] = None          # FRED GDP (명목 GDP, 십억 달러) → fred_macro
+    gdp_real: Optional[float] = None     # FRED GDPC1 (실질 GDP, 십억 달러) → fred_macro
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
     ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
     credit_kospi: Optional[float] = None       # KOSPI 신용잔고 (조원) — kofia_credit_loan

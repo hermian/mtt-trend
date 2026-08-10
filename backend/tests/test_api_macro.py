@@ -193,6 +193,10 @@ def temp_macro_db(monkeypatch):
         ("2026-06-01", "ISM_PMI", 48.5),
         # 8/3 발표 = 7월치 → 차트 정규화 후 7/1부터 55.6
         ("2026-08-03", "ISM_PMI", 55.6),
+        # US GDP & M2 (월간/분기 → ffill)
+        ("2026-06-01", "M2SL", 21000.5),
+        ("2026-04-01", "GDP", 28000.0),
+        ("2026-04-01", "GDPC1", 22500.0),
     ])
     
     cursor.executemany("""
@@ -277,6 +281,9 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["copper"] == 4.50
     assert pt["gold"] == 2300.0
     assert pt["silver"] == 28.5
+    assert pt["m2"] == 21000.5
+    assert pt["gdp"] == 28000.0
+    assert pt["gdp_real"] == 22500.0
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5

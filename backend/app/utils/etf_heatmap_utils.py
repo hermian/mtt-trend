@@ -119,7 +119,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
 
             # Period Target Dates
             d_1d = (target_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-            d_1w = (target_dt - datetime.timedelta(days=target_dt.weekday())).strftime("%Y-%m-%d")
+            d_1w = (target_dt - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
             d_mtd = (target_dt.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
             d_ytd = (target_dt.replace(month=1, day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
             d_3m = (target_dt - datetime.timedelta(days=90)).strftime("%Y-%m-%d")
@@ -245,7 +245,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
 
         # Period Target Dates
         d_1d = (target_dt - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        d_1w = (target_dt - datetime.timedelta(days=target_dt.weekday())).strftime("%Y-%m-%d")
+        d_1w = (target_dt - datetime.timedelta(days=7)).strftime("%Y-%m-%d")
         d_mtd = (target_dt.replace(day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         d_ytd = (target_dt.replace(month=1, day=1) - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
         d_3m = (target_dt - datetime.timedelta(days=90)).strftime("%Y-%m-%d")

@@ -65,6 +65,7 @@ export const KR_SECTIONS: HeatmapSection[] = [
     title: "산업별",
     column: "right",
     categories: [
+      "대표 섹터(23종)",
       "에너지소재",
       "소재2",
       "산업재",

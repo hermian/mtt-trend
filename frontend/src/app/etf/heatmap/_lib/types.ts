@@ -15,6 +15,10 @@ export interface ETFItem {
   name: string;
   /** 네이버 worldstock 종목 코드(예: QQQ.O, SCHD.K). 없으면 code 사용. */
   url?: string;
+  /** 업종/섹터명 (대표 23종 섹터 ETF용) */
+  sector?: string;
+  /** 시가총액 (억원 단위) */
+  marcap?: number;
   returns: ReturnData;
 }
 

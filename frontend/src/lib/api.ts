@@ -118,6 +118,7 @@ export interface MacroDataPoint {
   pcr?: number;
   move?: number;
   vxsmh?: number;
+  vxn?: number;
   us_2y?: number;
   us_10y?: number;
   us_spread?: number;

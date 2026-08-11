@@ -121,6 +121,9 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "vxsmh", 35.0),
         ("2026-06-25", "vxsmh", 36.0),
         ("2026-06-26", "vxsmh", 37.0),
+        ("2026-06-24", "vxn", 22.0),
+        ("2026-06-25", "vxn", 23.0),
+        ("2026-06-26", "vxn", 24.0),
         # Investing oil (index_ohlcv) — FRED와 혼용 금지
         ("2026-06-24", "wti", 78.5),
         ("2026-06-25", "wti", 79.0),
@@ -276,6 +279,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["pcr"] == 0.90
     assert pt["move"] == 80.0
     assert pt["vxsmh"] == 35.0
+    assert pt["vxn"] == 22.0
     assert pt["us_2y"] == 4.2
     assert pt["us_10y"] == 4.5
     assert pt["us_spread"] == 0.3

@@ -6,16 +6,17 @@
 
 ### 추가된 기능
 
-#### VXSMH (Cboe SMH 반도체 ETF 변동성 지수) 매크로 지표 추가
+#### VXSMH 및 VXN (반도체 & 나스닥 100 변동성 지수) 매크로 지표 추가
 - **데이터 수집 및 백필**:
-  - Cboe 공식 CDN(`https://cdn.cboe.com/api/global/us_indices/daily_prices/VXSMH_History.csv`) 기반 백필(226개일) 완료 및 `screener/mmt/macro_collector/indices.py` 수집기 등록
-  - `~/.cache/db/macro.db` 의 `index_ohlcv` 테이블(`index_name = 'vxsmh'`) 관리
+  - `VXSMH`: Cboe 공식 CDN(`https://cdn.cboe.com/api/global/us_indices/daily_prices/VXSMH_History.csv`) 기반 백필(226개일) 완료 및 `screener/mmt/macro_collector/indices.py` 수집기 등록
+  - `VXN`: Yahoo Finance `^VXN` 기반 2001년부터 현재까지 최대 기간 6,425개 거래일 백필 연동
+  - `~/.cache/db/macro.db` 의 `index_ohlcv` 테이블(`index_name = 'vxsmh'`, `'vxn'`) 관리
 - **백엔드 변경**:
-  - `backend/app/schemas.py`: `MacroDataPoint` 스키마에 `vxsmh: Optional[float] = None` 추가
-  - `backend/app/routers/charts.py`: `series_defs`에 `"vxsmh": ("index_ohlcv", "close", "index_name = 'vxsmh'")` 매핑 등록 및 응답 반환
+  - `backend/app/schemas.py`: `MacroDataPoint` 스키마에 `vxsmh`, `vxn` 필드 추가
+  - `backend/app/routers/charts.py`: `series_defs`에 `"vxsmh"`, `"vxn"` 매핑 등록 및 API 응답 반환
 - **프론트엔드 변경**:
-  - `frontend/src/lib/api.ts`: `MacroDataPoint` 인터페이스에 `vxsmh?: number;` 추가
-  - `frontend/src/app/trend/_components/MacroChart.tsx`: `INDICATOR_GROUPS` (`macro_sentiment`) 및 `INDICATORS` 배열에 VXSMH 지표 추가 (라벨 `VXSMH`, 색상 `#d946ef`)
+  - `frontend/src/lib/api.ts`: `MacroDataPoint` 인터페이스에 `vxsmh?: number;`, `vxn?: number;` 추가
+  - `frontend/src/app/trend/_components/MacroChart.tsx`: `INDICATOR_GROUPS` (`macro_sentiment`) 및 `INDICATORS` 배열에 VXSMH, VXN 지표 추가
 - **테스트**:
   - `backend/tests/test_api_macro.py` mock 데이터 및 assertion 테스트 추가 (백엔드 패스 100%)
   - 프론트엔드 TypeScript 타입 검사 및 프로덕션 빌드 성공 확인

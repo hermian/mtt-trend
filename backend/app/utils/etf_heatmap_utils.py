@@ -92,6 +92,23 @@ def get_us_db_code(conn_master: sqlite3.Connection, symbol: str) -> str:
         return row[0]
     return symbol
 
+def format_as_of_datetime(raw_date_str: str, db_path: Path) -> str:
+    if not raw_date_str:
+        raw_date_str = datetime.date.today().strftime("%Y-%m-%d")
+    
+    parts = raw_date_str.strip().split(" ")
+    date_part = parts[0]
+    time_part = parts[1][:5] if len(parts) > 1 and parts[1] else ""
+    
+    if time_part and time_part != "00:00":
+        return f"{date_part} {time_part}"
+    
+    if db_path and db_path.exists():
+        mtime = datetime.datetime.fromtimestamp(db_path.stat().st_mtime)
+        return f"{date_part} {mtime.strftime('%H:%M')}"
+    
+    return f"{date_part} 00:00"
+
 def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None) -> dict:
     etf_price_db, macro_db = get_db_paths()
     
@@ -104,17 +121,19 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
         conn_macro = sqlite3.connect(str(macro_db))
         
         try:
+            raw_target_date_str = target_date_str
             # Determine target date
-            if not target_date_str:
+            if not raw_target_date_str:
                 cursor = conn_etf.cursor()
                 cursor.execute("SELECT MAX(Date) FROM etf_us_price")
                 row = cursor.fetchone()
                 if row and row[0]:
-                    target_date_str = row[0].split(" ")[0]
+                    raw_target_date_str = row[0]
                 else:
-                    target_date_str = datetime.date.today().strftime("%Y-%m-%d")
+                    raw_target_date_str = datetime.date.today().strftime("%Y-%m-%d")
 
-            target_date_str = target_date_str.split(" ")[0]
+            as_of_datetime_str = format_as_of_datetime(raw_target_date_str, etf_us_price_db)
+            target_date_str = raw_target_date_str.split(" ")[0]
             target_dt = datetime.datetime.strptime(target_date_str, "%Y-%m-%d")
 
             # Period Target Dates
@@ -216,7 +235,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
 
             return {
                 "market": market,
-                "as_of_date": target_date_str,
+                "as_of_date": as_of_datetime_str,
                 "indexes": indexes_data,
                 "groups": groups_data
             }
@@ -230,17 +249,19 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
     conn_macro = sqlite3.connect(str(macro_db))
 
     try:
+        raw_target_date_str = target_date_str
         # Determine target date
-        if not target_date_str:
+        if not raw_target_date_str:
             cursor = conn_etf.cursor()
             cursor.execute("SELECT MAX(날짜) FROM etf_price")
             row = cursor.fetchone()
             if row and row[0]:
-                target_date_str = row[0].split(" ")[0]
+                raw_target_date_str = row[0]
             else:
-                target_date_str = datetime.date.today().strftime("%Y-%m-%d")
+                raw_target_date_str = datetime.date.today().strftime("%Y-%m-%d")
 
-        target_date_str = target_date_str.split(" ")[0]
+        as_of_datetime_str = format_as_of_datetime(raw_target_date_str, etf_price_db)
+        target_date_str = raw_target_date_str.split(" ")[0]
         target_dt = datetime.datetime.strptime(target_date_str, "%Y-%m-%d")
 
         # Period Target Dates
@@ -286,6 +307,15 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                 }
             })
 
+        # Fetch MarCap mapping for KR ETFs
+        marcap_map = {}
+        try:
+            import FinanceDataReader as fdr
+            fdr_df = fdr.StockListing('ETF/KR')
+            marcap_map = dict(zip(fdr_df['Symbol'], fdr_df['MarCap']))
+        except Exception as e:
+            print("Failed to fetch FDR MarCap:", e)
+
         # Construct Groups Structure
         groups_data = []
         for g in ETF_HEATMAP_LAYOUT["KR"]["groups"]:
@@ -304,7 +334,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                 c_3y = get_etf_close_price(conn_etf, code, d_3y)
                 c_5y = get_etf_close_price(conn_etf, code, d_5y)
 
-                group_etfs.append({
+                etf_dict = {
                     "code": code,
                     "name": etf["name"],
                     "returns": {
@@ -318,7 +348,16 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                         "3Y": calculate_return(c_now, c_3y),
                         "5Y": calculate_return(c_now, c_5y),
                     }
-                })
+                }
+                if "sector" in etf:
+                    etf_dict["sector"] = etf["sector"]
+                if code in marcap_map and marcap_map[code] is not None:
+                    try:
+                        etf_dict["marcap"] = int(marcap_map[code])
+                    except (ValueError, TypeError):
+                        pass
+
+                group_etfs.append(etf_dict)
             groups_data.append({
                 "category": g["category"],
                 "etfs": group_etfs
@@ -326,7 +365,7 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
 
         return {
             "market": "KR",
-            "as_of_date": target_date_str,
+            "as_of_date": as_of_datetime_str,
             "indexes": indexes_data,
             "groups": groups_data
         }

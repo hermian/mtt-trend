@@ -8,6 +8,36 @@ ETF_HEATMAP_LAYOUT = {
     ],
     "groups": [
       {
+        "category": "대표 섹터(23종)",
+        "etfs": [
+          {"code": "396500", "name": "TIGER 반도체TOP10", "sector": "반도체"},
+          {"code": "091160", "name": "KODEX 반도체", "sector": "반도체(전통)"},
+          {"code": "305720", "name": "KODEX 2차전지산업", "sector": "2차전지"},
+          {"code": "091180", "name": "KODEX 자동차", "sector": "자동차"},
+          {"code": "466920", "name": "SOL 조선TOP3플러스", "sector": "조선"},
+          {"code": "449450", "name": "PLUS K방산", "sector": "방위산업"},
+          {"code": "487240", "name": "KODEX AI전력핵심설비", "sector": "전력설비"},
+          {"code": "434730", "name": "HANARO 원자력iSelect", "sector": "원자력"},
+          {"code": "445290", "name": "KODEX 로봇액티브", "sector": "로봇"},
+          {"code": "157490", "name": "TIGER 소프트웨어", "sector": "소프트웨어"},
+          {"code": "364970", "name": "TIGER 바이오TOP10", "sector": "바이오"},
+          {"code": "244580", "name": "KODEX 바이오", "sector": "바이오(전통)"},
+          {"code": "091170", "name": "KODEX 은행", "sector": "은행"},
+          {"code": "102970", "name": "KODEX 증권", "sector": "증권"},
+          {"code": "140700", "name": "KODEX 보험", "sector": "보험"},
+          {"code": "117680", "name": "KODEX 철강", "sector": "철강"},
+          {"code": "117460", "name": "KODEX 에너지화학", "sector": "화학/에너지"},
+          {"code": "117700", "name": "KODEX 건설", "sector": "건설"},
+          {"code": "139230", "name": "TIGER 200 중공업", "sector": "중공업"},
+          {"code": "139260", "name": "TIGER 200 IT", "sector": "IT/정보기술"},
+          {"code": "228790", "name": "TIGER 화장품", "sector": "화장품"},
+          {"code": "228810", "name": "TIGER 미디어컨텐츠", "sector": "미디어/엔터"},
+          {"code": "300950", "name": "KODEX 게임산업", "sector": "게임"},
+          {"code": "266410", "name": "KODEX 필수소비재", "sector": "필수소비재"},
+          {"code": "140710", "name": "KODEX 운송", "sector": "운송"}
+        ]
+      },
+      {
         "category": "대표",
         "etfs": [
           {"code": "069500", "name": "KODEX 200"},

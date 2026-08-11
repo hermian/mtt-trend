@@ -73,7 +73,7 @@ def test_etf_heatmap_1w_return(mock_etf_db):
     assert res.status_code == 200
     data = res.json()
     assert data["market"] == "KR"
-    assert data["as_of_date"] == "2026-08-10"
+    assert data["as_of_date"].startswith("2026-08-10")
 
     found_etf = None
     for group in data["groups"]:

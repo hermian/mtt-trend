@@ -165,6 +165,7 @@ async def get_macro_chart_data(
       vkospi     krx_vkospi
       pcr        krx_pcr
       move       index_ohlcv(index_name='move')
+      vxsmh      index_ohlcv(index_name='vxsmh')
       us_2y      us_treasury_yield(y2)
       us_10y     us_treasury_yield(y10)
       us_spread  us_treasury_yield(y2y10_spread)
@@ -206,6 +207,7 @@ async def get_macro_chart_data(
         "vkospi":    ("krx_vkospi",         "close",       None),
         "pcr":       ("krx_pcr",            "pcratio",     None),
         "move":      ("index_ohlcv",        "close",       "index_name = 'move'"),
+        "vxsmh":     ("index_ohlcv",        "close",       "index_name = 'vxsmh'"),
         "us_2y":     ("us_treasury_yield",  "y2",          None),
         "us_10y":    ("us_treasury_yield",  "y10",         None),
         "us_spread": ("us_treasury_yield",  "y2y10_spread", None),
@@ -437,6 +439,7 @@ async def get_macro_chart_data(
             vkospi=p.get("vkospi"),
             pcr=p.get("pcr"),
             move=p.get("move"),
+            vxsmh=p.get("vxsmh"),
             us_2y=p.get("us_2y"),
             us_10y=p.get("us_10y"),
             us_spread=p.get("us_spread"),

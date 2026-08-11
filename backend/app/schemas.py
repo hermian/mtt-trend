@@ -33,6 +33,7 @@ class MacroDataPoint(BaseModel):
     vkospi: Optional[float] = None
     pcr: Optional[float] = None
     move: Optional[float] = None
+    vxsmh: Optional[float] = None        # Cboe SMH Volatility Index → index_ohlcv(index_name='vxsmh')
     us_2y: Optional[float] = None
     us_10y: Optional[float] = None
     us_spread: Optional[float] = None

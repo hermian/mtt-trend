@@ -34,7 +34,11 @@ ETF_HEATMAP_LAYOUT = {
           {"code": "228810", "name": "TIGER 미디어컨텐츠", "sector": "미디어/엔터"},
           {"code": "300950", "name": "KODEX 게임산업", "sector": "게임"},
           {"code": "266410", "name": "KODEX 필수소비재", "sector": "필수소비재"},
-          {"code": "140710", "name": "KODEX 운송", "sector": "운송"}
+          {"code": "140710", "name": "KODEX 운송", "sector": "운송"},
+          {"code": "421320", "name": "PLUS 우주항공", "sector": "우주항공"},
+          {"code": "377990", "name": "TIGER 신재생 에너지", "sector": "신재생"},
+          {"code": "457480", "name": "SOL 반도체소부장Fn", "sector": "소부장"},
+          {"code": "457500", "name": "SOL 2차전지소부장Fn", "sector": "소부장"}
         ]
       },
       {
@@ -303,6 +307,13 @@ ETF_HEATMAP_LAYOUT = {
           {"code": "228810", "name": "TIGER 미디어 컨텐츠"},
           {"code": "400970", "name": "TIGER Fn메타버스"},
           {"code": "300640", "name": "TIGER KRX게임"}
+        ]
+      },
+      {
+        "category": "소부장",
+        "etfs": [
+          {"code": "457480", "name": "SOL 반도체소부장Fn"},
+          {"code": "457500", "name": "SOL 2차전지소부장Fn"}
         ]
       },
       {

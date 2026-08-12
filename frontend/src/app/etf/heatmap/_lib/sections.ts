@@ -88,6 +88,7 @@ export const KR_SECTIONS: HeatmapSection[] = [
       "테마-경기소비재",
       "테마-정보기술",
       "테마-커뮤니케이션",
+      "소부장",
     ],
     categoryLabels: {
       "테마-에너지소재": "에너지소재",
@@ -96,6 +97,7 @@ export const KR_SECTIONS: HeatmapSection[] = [
       "테마-경기소비재": "경기소비재",
       "테마-정보기술": "정보기술",
       "테마-커뮤니케이션": "커뮤니케이션",
+      "소부장": "소부장",
     },
   },
   {

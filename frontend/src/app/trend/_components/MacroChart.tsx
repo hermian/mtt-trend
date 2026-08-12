@@ -896,8 +896,16 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
             const hp = hoveredData.hpDev?.[ind.id];
             const isStale = entry.date !== hoveredData.time;
             return (
-              <span key={ind.id} style={{ color: ind.color }} className="font-bold">
-                {ind.label}: <span className="text-slate-100">{ind.raw(entry.value)}</span>
+              <button
+                key={ind.id}
+                type="button"
+                onClick={() => toggleIndicator(ind.id)}
+                title={`${ind.label} 해제`}
+                style={{ color: ind.color }}
+                className="group inline-flex items-center gap-0.5 font-bold hover:opacity-80 transition-all cursor-pointer rounded px-1.5 py-0.5 -my-0.5 hover:bg-slate-800/80 border border-transparent hover:border-slate-700"
+              >
+                <span>{ind.label}:</span>
+                <span className="text-slate-100">{ind.raw(entry.value)}</span>
                 {isStale && (
                   <span className="text-slate-500 font-normal ml-0.5">({entry.date.slice(5)})</span>
                 )}
@@ -906,7 +914,10 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                     (이탈 {hp.toFixed(1)})
                   </span>
                 )}
-              </span>
+                <span className="text-slate-500 group-hover:text-red-400 font-sans text-[10px] font-normal ml-1 transition-colors">
+                  ✕
+                </span>
+              </button>
             );
           })}
           {normalized && <span className="text-purple-400 italic">(정규화: 기준일=100)</span>}

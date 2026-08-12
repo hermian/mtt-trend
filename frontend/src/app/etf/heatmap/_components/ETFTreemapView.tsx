@@ -213,6 +213,7 @@ interface GroupTreemapProps {
 function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
+  const [hover, setHover] = useState<{ group: TransformedETFGroup; x: number; y: number } | null>(null);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -274,6 +275,16 @@ function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
               key={g.name}
               className="cursor-pointer transition-opacity hover:opacity-90"
               onClick={() => onDrill(g.name)}
+              onMouseMove={(e) => {
+                if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
+                  setHover({
+                    group: g,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }
+              }}
+              onMouseLeave={() => setHover(null)}
             >
               <rect
                 x={rect.x}
@@ -331,6 +342,41 @@ function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
           );
         })}
       </svg>
+
+      {/* 데스크톱 마우스 호버 툴팁 / 팝업 */}
+      {hover && (
+        <div
+          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm"
+          style={{
+            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 240)),
+            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 140)),
+          }}
+        >
+          <div className="font-bold text-gray-100">{hover.group.name}</div>
+          <div className="mt-1 flex gap-3 text-gray-300">
+            <span>
+              평균 수익률{" "}
+              <span
+                className={
+                  hover.group.avg_return === null
+                    ? "text-gray-400"
+                    : hover.group.avg_return > 0
+                      ? "font-semibold text-red-400"
+                      : hover.group.avg_return < 0
+                        ? "font-semibold text-blue-400"
+                        : "font-semibold text-gray-300"
+                }
+              >
+                {formatReturn(hover.group.avg_return)}
+              </span>
+            </span>
+            <span>{hover.group.etf_count}개 ETF</span>
+          </div>
+          <div className="mt-1 text-[10px] text-sky-400">
+            클릭하여 세부 ETF 보기 ↗
+          </div>
+        </div>
+      )}
     </div>
   );
 }

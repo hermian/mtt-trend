@@ -18,9 +18,16 @@ interface GroupTreemapProps {
   onDrill: (groupName: string) => void;
 }
 
+interface GroupHoverState {
+  group: StockHeatmapGroup;
+  x: number;
+  y: number;
+}
+
 export function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
+  const [hover, setHover] = useState<GroupHoverState | null>(null);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -85,6 +92,16 @@ export function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
               key={g.name}
               className="cursor-pointer"
               onClick={() => onDrill(g.name)}
+              onMouseMove={(e) => {
+                if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
+                  setHover({
+                    group: g,
+                    x: e.clientX,
+                    y: e.clientY,
+                  });
+                }
+              }}
+              onMouseLeave={() => setHover(null)}
             >
               <rect
                 x={rect.x}
@@ -155,6 +172,44 @@ export function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
           );
         })}
       </svg>
+
+      {/* 데스크톱 마우스 호버 툴팁 / 팝업 */}
+      {hover && (
+        <div
+          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm"
+          style={{
+            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 240)),
+            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 140)),
+          }}
+        >
+          <div className="font-bold text-gray-100">{hover.group.name}</div>
+          <div className="mt-1 flex gap-3 text-gray-300">
+            <span>
+              평균 수익률{" "}
+              <span
+                className={
+                  hover.group.avg_return === null
+                    ? "text-gray-400"
+                    : hover.group.avg_return > 0
+                      ? "font-semibold text-red-400"
+                      : hover.group.avg_return < 0
+                        ? "font-semibold text-blue-400"
+                        : "font-semibold text-gray-300"
+                }
+              >
+                {formatReturn(hover.group.avg_return)}
+              </span>
+            </span>
+            <span>{hover.group.stock_count}종목</span>
+            {hover.group.rs !== null && (
+              <span className="text-gray-400">RS {hover.group.rs}</span>
+            )}
+          </div>
+          <div className="mt-1 text-[10px] text-sky-400">
+            클릭하여 종목 목록 보기 ↗
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -184,17 +239,6 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<HoverState | null>(null);
   const [selected, setSelected] = useState<SelectedState | null>(null);
-  const [isTouch, setIsTouch] = useState(false);
-
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setIsTouch(
-        "ontouchstart" in window ||
-          navigator.maxTouchPoints > 0 ||
-          window.matchMedia("(pointer: coarse)").matches,
-      );
-    }
-  }, []);
 
   useLayoutEffect(() => {
     const el = containerRef.current;
@@ -219,8 +263,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
     e: React.MouseEvent,
     stock: StockHeatmapItem,
   ) => {
-    const isTouchEvent =
-      isTouch || (e.nativeEvent as PointerEvent).pointerType === "touch";
+    const isTouchEvent = (e.nativeEvent as PointerEvent).pointerType === "touch";
 
     if (isTouchEvent) {
       e.stopPropagation();
@@ -261,7 +304,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
               key={item.s.code}
               className="cursor-pointer"
               onMouseMove={(e) => {
-                if (!isTouch) {
+                if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
                   setHover({
                     stock: item.s,
                     x: e.clientX,
@@ -310,31 +353,31 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
       </svg>
 
       {/* 데스크톱 마우스 호버 툴팁 */}
-      {hover && !selected && !isTouch && (
+      {hover && !selected && (
         <div
-          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl"
+          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm"
           style={{
-            left: Math.min(hover.x + 14, window.innerWidth - 240),
-            top: Math.min(hover.y + 14, window.innerHeight - 140),
+            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 240)),
+            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 150)),
           }}
         >
           <div className="font-bold text-gray-100">
             {hover.stock.name}
-            <span className="ml-2 font-normal text-gray-500">
+            <span className="ml-2 font-normal text-gray-400">
               {hover.stock.code} · {hover.stock.market}
             </span>
           </div>
-          <div className="mt-1 text-gray-500">{group.name}</div>
+          <div className="mt-1 text-gray-400">{group.name}</div>
           <div className="mt-1 flex gap-3">
             <span
               className={
                 hover.stock.ret === null
                   ? "text-gray-400"
                   : hover.stock.ret > 0
-                    ? "text-red-400"
+                    ? "text-red-400 font-semibold"
                     : hover.stock.ret < 0
-                      ? "text-blue-400"
-                      : "text-gray-300"
+                      ? "text-blue-400 font-semibold"
+                      : "text-gray-300 font-semibold"
               }
             >
               {formatReturn(hover.stock.ret)}
@@ -346,8 +389,8 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
               <span className="text-gray-400">RS {hover.stock.rs}</span>
             )}
           </div>
-          <div className="mt-1 text-[10px] text-gray-600">
-            클릭 시 네이버 금융으로 이동
+          <div className="mt-1 text-[10px] text-sky-400">
+            클릭 시 네이버 금융으로 이동 ↗
           </div>
         </div>
       )}

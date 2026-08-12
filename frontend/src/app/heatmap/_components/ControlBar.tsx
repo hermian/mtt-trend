@@ -45,6 +45,7 @@ const MARCAP_PRESETS: Array<{
 }> = [
   { label: "전체", min: null, max: null },
   { label: "1000억+", min: 1000, max: null },
+  { label: "3000억+", min: 3000, max: null },
   { label: "5000억+", min: 5000, max: null },
   { label: "1조+", min: 10000, max: null },
   { label: "5조+", min: 50000, max: null },

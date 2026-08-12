@@ -10,6 +10,7 @@ interface ETFTreemapViewProps {
   data: HeatmapData;
   period: PeriodKey;
   market: "KR" | "US";
+  scale?: ColorScale;
   onHover: (etf: ETFItem | null) => void;
 }
 
@@ -34,6 +35,7 @@ export function ETFTreemapView({
   data,
   period,
   market,
+  scale: propScale,
   onHover,
 }: ETFTreemapViewProps) {
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
@@ -91,12 +93,14 @@ export function ETFTreemapView({
   }, [market, transformedGroups]);
 
   // Color scale
-  const scale = useMemo(() => {
+  const computedScale = useMemo(() => {
     const allReturns = transformedGroups.flatMap((g) =>
       g.etfs.map((e) => e.ret)
     );
     return buildColorScale(allReturns, heatmapPeriod);
   }, [transformedGroups, heatmapPeriod]);
+
+  const scale = propScale ?? computedScale;
 
   const drilledGroupData = useMemo(() => {
     if (!drilledGroup) return null;

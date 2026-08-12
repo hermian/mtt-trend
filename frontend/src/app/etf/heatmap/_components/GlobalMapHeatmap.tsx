@@ -1,6 +1,7 @@
 "use client";
 
-import { formatReturn, getHeatStyle } from "../_lib/colors";
+import { heatColor, type ColorScale } from "@/app/heatmap/_lib/colors";
+import { formatReturn } from "../_lib/colors";
 import { etfLink } from "../_lib/links";
 import type { HeatmapData, ETFItem, PeriodKey } from "../_lib/types";
 
@@ -61,6 +62,7 @@ export const GLOBAL_COORDINATES: Record<string, { top: string; left: string }> =
 interface GlobalMapHeatmapProps {
   data: HeatmapData;
   period: PeriodKey;
+  scale: ColorScale;
   onHover?: (etf: ETFItem | null) => void;
 }
 
@@ -68,14 +70,16 @@ interface GlobalMapHeatmapProps {
 function CompactHeatmapCell({
   etf,
   period,
+  scale,
   onHover,
 }: {
   etf: ETFItem;
   period: PeriodKey;
+  scale: ColorScale;
   onHover?: (etf: ETFItem | null) => void;
 }) {
   const val = etf.returns?.[period] ?? null;
-  const style = getHeatStyle(val, period);
+  const { fill, text } = heatColor(val, scale);
 
   return (
     <a
@@ -95,8 +99,8 @@ function CompactHeatmapCell({
       <span
         className="flex flex-col items-center justify-center px-1 py-0.5 leading-none"
         style={{
-          backgroundColor: style.backgroundColor,
-          color: style.color,
+          backgroundColor: fill,
+          color: text,
         }}
       >
         <span className="font-mono text-[8px] opacity-80">{etf.code}</span>
@@ -108,7 +112,7 @@ function CompactHeatmapCell({
   );
 }
 
-export function GlobalMapHeatmap({ data, period, onHover }: GlobalMapHeatmapProps) {
+export function GlobalMapHeatmap({ data, period, scale, onHover }: GlobalMapHeatmapProps) {
   // Collect all ETFs from the groups
   const allEtfs = data.groups.flatMap((g) => g.etfs);
 
@@ -139,6 +143,7 @@ export function GlobalMapHeatmap({ data, period, onHover }: GlobalMapHeatmapProp
               <CompactHeatmapCell
                 etf={etf}
                 period={period}
+                scale={scale}
                 onHover={onHover}
               />
             </div>

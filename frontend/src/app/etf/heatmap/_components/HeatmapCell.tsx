@@ -1,21 +1,30 @@
 "use client";
 
-import { formatReturn, getHeatStyle } from "../_lib/colors";
+import { heatColor, type ColorScale } from "@/app/heatmap/_lib/colors";
+import { formatReturn } from "../_lib/colors";
 import { etfLink, type MarketKey } from "../_lib/links";
 import type { ETFItem, PeriodKey } from "../_lib/types";
 
 interface HeatmapCellProps {
   etf: ETFItem;
   period: PeriodKey;
+  scale: ColorScale;
   /** 타일 상단 라벨 (없으면 etf.name) */
   label?: string;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
 }
 
-export function HeatmapCell({ etf, period, label, market, onHover }: HeatmapCellProps) {
+export function HeatmapCell({
+  etf,
+  period,
+  scale,
+  label,
+  market,
+  onHover,
+}: HeatmapCellProps) {
   const val = etf.returns?.[period] ?? null;
-  const style = getHeatStyle(val, period);
+  const { fill, text } = heatColor(val, scale);
   const header = label ?? etf.name;
 
   return (
@@ -36,8 +45,8 @@ export function HeatmapCell({ etf, period, label, market, onHover }: HeatmapCell
       <span
         className="flex flex-1 flex-col justify-between gap-0.5 px-1.5 py-1"
         style={{
-          backgroundColor: style.backgroundColor,
-          color: style.color,
+          backgroundColor: fill,
+          color: text,
         }}
       >
         <span className="font-mono text-[10px] opacity-80">{etf.code}</span>

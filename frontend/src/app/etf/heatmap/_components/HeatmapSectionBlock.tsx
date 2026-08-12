@@ -1,5 +1,6 @@
 "use client";
 
+import { type ColorScale } from "@/app/heatmap/_lib/colors";
 import { buildSectionGroups } from "../_lib/sections";
 import { type MarketKey } from "../_lib/links";
 import type { ETFItem, GroupItem, HeatmapSection, PeriodKey } from "../_lib/types";
@@ -9,6 +10,7 @@ interface HeatmapSectionBlockProps {
   section: HeatmapSection;
   groups: GroupItem[];
   period: PeriodKey;
+  scale: ColorScale;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
 }
@@ -17,6 +19,7 @@ export function HeatmapSectionBlock({
   section,
   groups,
   period,
+  scale,
   market,
   onHover,
 }: HeatmapSectionBlockProps) {
@@ -35,6 +38,7 @@ export function HeatmapSectionBlock({
             label={item.label}
             etfs={item.etfs}
             period={period}
+            scale={scale}
             market={market}
             onHover={onHover}
             gridCols={section.gridCols}

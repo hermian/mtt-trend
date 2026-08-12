@@ -1,5 +1,6 @@
 "use client";
 
+import { type ColorScale } from "@/app/heatmap/_lib/colors";
 import { HeatmapCell } from "./HeatmapCell";
 import { type MarketKey } from "../_lib/links";
 import type { ETFItem, PeriodKey } from "../_lib/types";
@@ -8,6 +9,7 @@ interface HeatmapGroupProps {
   label: string;
   etfs: ETFItem[];
   period: PeriodKey;
+  scale: ColorScale;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
   gridCols?: number;
@@ -18,6 +20,7 @@ export function HeatmapGroup({
   label,
   etfs,
   period,
+  scale,
   market,
   onHover,
   gridCols,
@@ -45,6 +48,7 @@ export function HeatmapGroup({
             key={`${label}-${etf.code}-${etf.name}`}
             etf={etf}
             period={period}
+            scale={scale}
             market={market}
             onHover={onHover}
           />

@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { apiClient } from "@/lib/apiClient";
+import { buildETFColorScale } from "./_lib/colors";
 import { HeatmapCell } from "./_components/HeatmapCell";
 import { HeatmapSectionBlock } from "./_components/HeatmapSectionBlock";
 import { HeatmapTooltip } from "./_components/HeatmapTooltip";
@@ -53,6 +54,24 @@ export default function ETFHeatmapPage() {
         setLoading(false);
       });
   }, [activeTab]);
+
+  const scale = useMemo(() => {
+    if (!data || !data.groups) {
+      return buildETFColorScale([], selectedPeriod);
+    }
+    const allRets: Array<number | null> = [];
+    if (data.indexes) {
+      for (const idx of data.indexes) {
+        allRets.push(idx.returns?.[selectedPeriod] ?? null);
+      }
+    }
+    for (const group of data.groups) {
+      for (const etf of group.etfs) {
+        allRets.push(etf.returns?.[selectedPeriod] ?? null);
+      }
+    }
+    return buildETFColorScale(allRets, selectedPeriod);
+  }, [data, selectedPeriod]);
 
   const sections = activeTab === "US" ? US_SECTIONS : KR_SECTIONS;
 
@@ -154,6 +173,7 @@ export default function ETFHeatmapPage() {
             <GlobalMapHeatmap
               data={data}
               period={selectedPeriod}
+              scale={scale}
               onHover={setHoveredEtf}
             />
           ) : viewMode === "treemap" ? (
@@ -161,6 +181,7 @@ export default function ETFHeatmapPage() {
               data={data}
               period={selectedPeriod}
               market={activeTab}
+              scale={scale}
               onHover={setHoveredEtf}
             />
           ) : (
@@ -175,6 +196,7 @@ export default function ETFHeatmapPage() {
                         key={idx.code}
                         etf={idx}
                         period={selectedPeriod}
+                        scale={scale}
                         label={idx.name}
                         market={activeTab}
                         onHover={setHoveredEtf}
@@ -193,6 +215,7 @@ export default function ETFHeatmapPage() {
                       section={section}
                       groups={data.groups}
                       period={selectedPeriod}
+                      scale={scale}
                       market={activeTab}
                       onHover={setHoveredEtf}
                     />
@@ -205,6 +228,7 @@ export default function ETFHeatmapPage() {
                       section={section}
                       groups={data.groups}
                       period={selectedPeriod}
+                      scale={scale}
                       market={activeTab}
                       onHover={setHoveredEtf}
                     />
@@ -223,6 +247,7 @@ export default function ETFHeatmapPage() {
                         section={section}
                         groups={data.groups}
                         period={selectedPeriod}
+                        scale={scale}
                         market={activeTab}
                         onHover={setHoveredEtf}
                       />
@@ -232,7 +257,7 @@ export default function ETFHeatmapPage() {
             </>
           )}
 
-          <ColorLegend period={selectedPeriod} />
+          <ColorLegend scale={scale} />
         </div>
       )}
 
@@ -240,3 +265,4 @@ export default function ETFHeatmapPage() {
     </div>
   );
 }
+

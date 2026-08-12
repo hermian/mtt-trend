@@ -65,9 +65,9 @@ describe("TreemapChart Hover Popups", () => {
     fireEvent.mouseMove(firstTile, { clientX: 150, clientY: 150 });
 
     expect(screen.getAllByText("삼성전자").length).toBeGreaterThan(1);
-    expect(screen.getByText("클릭 시 네이버 금융으로 이동 ↗")).toBeDefined();
+    expect(screen.getByText("클릭 시 상세 정보 이동 ↗")).toBeDefined();
 
     fireEvent.mouseLeave(firstTile);
-    expect(screen.queryByText("클릭 시 네이버 금융으로 이동 ↗")).toBeNull();
+    expect(screen.queryByText("클릭 시 상세 정보 이동 ↗")).toBeNull();
   });
 });

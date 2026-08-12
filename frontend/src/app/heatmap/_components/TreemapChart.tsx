@@ -272,7 +272,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
       );
     } else {
       window.open(
-        `https://stock.naver.com/domestic/stock/${stock.code}/price`,
+        `http://hermian.duckdns.org:15888/?search=${encodeURIComponent(stock.name)}`,
         "_blank",
         "noopener",
       );
@@ -390,7 +390,7 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
             )}
           </div>
           <div className="mt-1 text-[10px] text-sky-400">
-            클릭 시 네이버 금융으로 이동 ↗
+            클릭 시 상세 정보 이동 ↗
           </div>
         </div>
       )}
@@ -446,12 +446,12 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
 
           <div className="mt-3">
             <a
-              href={`https://stock.naver.com/domestic/stock/${selected.stock.code}/price`}
+              href={`http://hermian.duckdns.org:15888/?search=${encodeURIComponent(selected.stock.name)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 active:bg-emerald-700"
             >
-              네이버 증권에서 보기 ↗
+              상세 정보 보기 ↗
             </a>
           </div>
         </div>

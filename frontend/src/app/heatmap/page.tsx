@@ -111,7 +111,7 @@ export default function StockHeatmapPage() {
           >
             easyinvesting.app/#/heatmap
           </a>{" "}
-          · 박스 클릭 시 네이버 금융으로 이동
+          · 박스 클릭 시 종목 상세 페이지로 이동
         </p>
       </div>
 

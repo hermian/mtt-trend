@@ -16,6 +16,7 @@ interface GroupTreemapProps {
   groups: StockHeatmapGroup[];
   scale: ColorScale;
   onDrill: (groupName: string) => void;
+  onShowStockList?: (groupName: string) => void;
 }
 
 interface GroupHoverState {
@@ -24,7 +25,7 @@ interface GroupHoverState {
   y: number;
 }
 
-export function GroupTreemap({ groups, scale, onDrill }: GroupTreemapProps) {
+export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<GroupHoverState | null>(null);

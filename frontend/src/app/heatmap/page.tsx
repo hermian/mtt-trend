@@ -6,6 +6,7 @@ import { ControlBar, type HeatmapControls } from "./_components/ControlBar";
 import { Legend } from "./_components/Legend";
 import { GroupTreemap, StockTreemap } from "./_components/TreemapChart";
 import { buildColorScale } from "./_lib/colors";
+import { StockListModal } from "./_components/StockListModal";
 
 const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
   sector: "섹터",
@@ -32,6 +33,8 @@ export default function StockHeatmapPage() {
   });
 
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalInitialGroup, setModalInitialGroup] = useState<string | null>(null);
   const isMarketGrouping = MARKET_GROUPINGS.has(controls.grouping);
 
   const { data, isFetching, isError, error } = useStockHeatmap({
@@ -56,6 +59,11 @@ export default function StockHeatmapPage() {
   const handleControlChange = (patch: Partial<HeatmapControls>) => {
     setDrilledGroup(null);
     setControls((prev) => ({ ...prev, ...patch }));
+  };
+
+  const handleOpenModal = (groupName?: string | null) => {
+    setModalInitialGroup(groupName ?? null);
+    setIsModalOpen(true);
   };
 
   const scale = useMemo(() => {
@@ -84,37 +92,56 @@ export default function StockHeatmapPage() {
 
   return (
     <div className="flex-1 overflow-y-auto bg-gray-950 p-4 text-gray-100 md:p-6">
-      <div className="mb-4 flex flex-col gap-1">
-        <h1 className="text-xl font-bold tracking-tight md:text-2xl">
-          주식 히트맵
-        </h1>
-        <p className="text-xs text-gray-400 md:text-sm">
-          {GROUPING_TITLES[controls.grouping]}별 한국 주식 수익률 ·{" "}
-          {data?.period === "CUSTOM" && data?.effective_start_date && data?.effective_end_date ? (
-            <span className="font-medium text-sky-400">
-              지정 기간 ({data.effective_start_date} ~ {data.effective_end_date})
-            </span>
-          ) : (
-            <>
-              {data?.as_of_date ?? "-"}
-              {data?.as_of_time ? ` ${data.as_of_time}` : ""} 기준
-            </>
-          )}{" "}
-          · {data?.stock_count ?? 0}종목
-          {isFetching && <span className="ml-2 text-gray-500">갱신 중…</span>}
-        </p>
-        <p className="text-[11px] text-gray-500">
-          참고:{" "}
-          <a
-            href="https://easyinvesting.app/#/heatmap"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline transition-colors hover:text-sky-400"
+      <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-xl font-bold tracking-tight md:text-2xl">
+            주식 히트맵
+          </h1>
+          <p className="text-xs text-gray-400 md:text-sm">
+            {GROUPING_TITLES[controls.grouping]}별 한국 주식 수익률 ·{" "}
+            {data?.period === "CUSTOM" && data?.effective_start_date && data?.effective_end_date ? (
+              <span className="font-medium text-sky-400">
+                지정 기간 ({data.effective_start_date} ~ {data.effective_end_date})
+              </span>
+            ) : (
+              <>
+                {data?.as_of_date ?? "-"}
+                {data?.as_of_time ? ` ${data.as_of_time}` : ""} 기준
+              </>
+            )}{" "}
+            · {data?.stock_count ?? 0}종목
+            {isFetching && <span className="ml-2 text-gray-500">갱신 중…</span>}
+          </p>
+          <p className="text-[11px] text-gray-500">
+            참고:{" "}
+            <a
+              href="https://easyinvesting.app/#/heatmap"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline transition-colors hover:text-sky-400"
+            >
+              easyinvesting.app/#/heatmap
+            </a>{" "}
+            · 박스 클릭 시 종목 상세 페이지로 이동
+          </p>
+        </div>
+
+        {/* 종목 콤마 목록 버튼 */}
+        <div className="mt-2 md:mt-0">
+          <button
+            type="button"
+            onClick={() => handleOpenModal(drilledGroup)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-sky-600/60 bg-sky-950/80 px-3.5 py-2 text-xs font-semibold text-sky-300 shadow-sm transition-colors hover:bg-sky-900 hover:text-white active:bg-sky-800"
+            title="필터링된 종목 이름을 콤마(,)로 연결하여 보기 / 복사"
           >
-            easyinvesting.app/#/heatmap
-          </a>{" "}
-          · 박스 클릭 시 종목 상세 페이지로 이동
-        </p>
+            <span>📋</span> 종목 콤마 목록 보기
+            {data?.stock_count ? (
+              <span className="rounded bg-sky-800/80 px-1.5 py-0.5 text-[10px] text-sky-200">
+                {data.stock_count}
+              </span>
+            ) : null}
+          </button>
+        </div>
       </div>
 
       <div className="space-y-3">
@@ -123,7 +150,7 @@ export default function StockHeatmapPage() {
 
         {/* Breadcrumb for drill-down (섹터/업종/테마만) */}
         {drilledGroup && !isMarketGrouping && (
-          <div className="flex items-center gap-2 text-sm">
+          <div className="flex flex-wrap items-center gap-2 text-sm">
             <button
               onClick={() => setDrilledGroup(null)}
               className="rounded-md bg-gray-800 px-3 py-1.5 text-xs font-semibold text-gray-300 transition-colors hover:bg-gray-700 hover:text-white"
@@ -139,6 +166,14 @@ export default function StockHeatmapPage() {
                 ({drilledGroupData.stock_count}종목)
               </span>
             )}
+
+            <button
+              type="button"
+              onClick={() => handleOpenModal(drilledGroup)}
+              className="ml-auto inline-flex items-center gap-1 rounded-md border border-sky-800 bg-sky-950/60 px-2.5 py-1 text-xs font-semibold text-sky-300 transition-colors hover:bg-sky-900 hover:text-white"
+            >
+              📋 {drilledGroup} 콤마 목록 보기
+            </button>
           </div>
         )}
 
@@ -154,6 +189,7 @@ export default function StockHeatmapPage() {
               groups={data.groups}
               scale={scale}
               onDrill={(name) => setDrilledGroup(name)}
+              onShowStockList={(name) => handleOpenModal(name)}
             />
           </div>
         )}
@@ -176,6 +212,15 @@ export default function StockHeatmapPage() {
           </div>
         )}
       </div>
+
+      <StockListModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        groups={data?.groups ?? []}
+        initialGroup={modalInitialGroup}
+        groupingTitle={GROUPING_TITLES[controls.grouping]}
+      />
     </div>
   );
 }
+

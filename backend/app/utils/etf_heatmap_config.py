@@ -37,8 +37,8 @@ ETF_HEATMAP_LAYOUT = {
           {"code": "140710", "name": "KODEX 운송", "sector": "운송"},
           {"code": "421320", "name": "PLUS 우주항공", "sector": "우주항공"},
           {"code": "377990", "name": "TIGER 신재생 에너지", "sector": "신재생"},
-          {"code": "457480", "name": "SOL 반도체소부장Fn", "sector": "소부장"},
-          {"code": "457500", "name": "SOL 2차전지소부장Fn", "sector": "소부장"}
+          {"code": "455850", "name": "SOL 반도체소부장Fn", "sector": "소부장"},
+          {"code": "455860", "name": "SOL 2차전지소부장Fn", "sector": "소부장"}
         ]
       },
       {
@@ -312,8 +312,8 @@ ETF_HEATMAP_LAYOUT = {
       {
         "category": "소부장",
         "etfs": [
-          {"code": "457480", "name": "SOL 반도체소부장Fn"},
-          {"code": "457500", "name": "SOL 2차전지소부장Fn"}
+          {"code": "455850", "name": "SOL 반도체소부장Fn"},
+          {"code": "455860", "name": "SOL 2차전지소부장Fn"}
         ]
       },
       {

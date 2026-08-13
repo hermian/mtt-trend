@@ -287,3 +287,13 @@ def test_custom_date_range(client, heatmap_env):
     assert stocks["000020"]["ret"] is not None
 
 
+def test_min_rs_filter(client, heatmap_env):
+    # RS rating 필터링 테스트 (예: min_rs=80)
+    body = client.get("/api/heatmap/stocks?grouping=sector&period=1D&min_rs=80").json()
+    assert body["min_rs"] == 80
+    for group in body["groups"]:
+        for stock in group["stocks"]:
+            assert stock["rs"] is not None and stock["rs"] >= 80
+
+
+

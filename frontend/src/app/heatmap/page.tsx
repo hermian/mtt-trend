@@ -27,6 +27,7 @@ export default function StockHeatmapPage() {
     marcapMin: null,
     marcapMax: null,
     minRet: null,
+    minRs: null,
     limit: 0,
   });
 
@@ -41,6 +42,7 @@ export default function StockHeatmapPage() {
     marcapMin: controls.marcapMin,
     marcapMax: controls.marcapMax,
     minRet: controls.minRet,
+    minRs: controls.minRs,
     limit: controls.limit,
   });
 

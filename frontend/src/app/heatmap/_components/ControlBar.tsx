@@ -12,6 +12,7 @@ export interface HeatmapControls {
   marcapMin: number | null;
   marcapMax: number | null;
   minRet: number | null;
+  minRs: number | null;
   limit: number;
 }
 
@@ -58,6 +59,15 @@ const MIN_RET_PRESETS: Array<{ label: string; value: number | null }> = [
   { label: "4%+", value: 4 },
   { label: "5%+", value: 5 },
   { label: "10%+", value: 10 },
+];
+
+const RS_PRESETS: Array<{ label: string; value: number | null }> = [
+  { label: "전체", value: null },
+  { label: "70+", value: 70 },
+  { label: "80+", value: 80 },
+  { label: "85+", value: 85 },
+  { label: "90+", value: 90 },
+  { label: "95+", value: 95 },
 ];
 
 const LIMITS: Array<{ id: number; label: string }> = [
@@ -112,6 +122,7 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
   const [minInput, setMinInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
   const [retInput, setRetInput] = useState("");
+  const [rsInput, setRsInput] = useState("");
 
   const [customStart, setCustomStart] = useState(value.startDate ?? "");
   const [customEnd, setCustomEnd] = useState(value.endDate ?? "");
@@ -129,6 +140,13 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
     const ret = retInput.trim() === "" ? null : Number(retInput);
     onChange({
       minRet: ret !== null && Number.isFinite(ret) ? ret : null,
+    });
+  };
+
+  const applyCustomRs = () => {
+    const rs = rsInput.trim() === "" ? null : Number(rsInput);
+    onChange({
+      minRs: rs !== null && Number.isFinite(rs) && rs >= 0 && rs <= 99 ? rs : null,
     });
   };
 
@@ -337,6 +355,45 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
         <button
           type="button"
           onClick={applyCustomRet}
+          className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
+        >
+          적용
+        </button>
+      </div>
+
+      {/* RS Rating */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">RS 필터</span>
+        {RS_PRESETS.map((r) => (
+          <button
+            key={r.label}
+            type="button"
+            className={btnClass(value.minRs === r.value)}
+            onClick={() => {
+              setRsInput("");
+              onChange({ minRs: r.value });
+            }}
+          >
+            {r.label}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-gray-500">직접입력</span>
+        <input
+          type="number"
+          min={0}
+          max={99}
+          placeholder="최저"
+          value={rsInput}
+          onChange={(e) => setRsInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyCustomRs();
+          }}
+          className="w-16 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+        />
+        <span className="text-xs text-gray-500">이상</span>
+        <button
+          type="button"
+          onClick={applyCustomRs}
           className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
         >
           적용

@@ -334,6 +334,7 @@ export interface StockHeatmapResponse {
   marcap_min: number | null;
   marcap_max: number | null;
   min_ret?: number | null;
+  min_rs?: number | null;
   limit: number;
   stock_count: number;
   groups: StockHeatmapGroup[];
@@ -347,6 +348,7 @@ export interface StockHeatmapParams {
   marcapMin?: number | null;
   marcapMax?: number | null;
   minRet?: number | null;
+  minRs?: number | null;
   limit: number;
 }
 
@@ -677,6 +679,7 @@ export const api = {
           marcap_min: params.marcapMin ?? undefined,
           marcap_max: params.marcapMax ?? undefined,
           min_ret: params.minRet ?? undefined,
+          min_rs: params.minRs ?? undefined,
           limit: params.limit,
         },
       }

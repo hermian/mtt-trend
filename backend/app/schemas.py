@@ -356,6 +356,7 @@ class StockHeatmapResponse(BaseModel):
     marcap_min: Optional[float] = None
     marcap_max: Optional[float] = None
     min_ret: Optional[float] = None
+    min_rs: Optional[int] = None
     limit: int = 0
     stock_count: int
     groups: List[HeatmapGroupItem]

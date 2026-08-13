@@ -527,3 +527,41 @@ Language: English
 Core Rule: MoAI is an orchestrator; direct implementation is prohibited
 
 For detailed patterns on plugins, sandboxing, headless mode, and version management, see Skill("moai-foundation-claude").
+
+---
+
+## Commit Messages: Lore Format & Issue Citation
+
+When writing git commit messages for non-trivial changes, ALWAYS use the Lore format with git trailers and ALWAYS cite the relevant GitHub issue number.
+
+Format:
+- Imperative summary line (focused on *why*, not *what*), including issue number if applicable: `Summary (#30)`
+- Optional body explaining the change
+- Git trailers (all optional — include only those that carry signal):
+  - `Constraint:` External limit that shaped the decision
+  - `Rejected:` Alternative considered and why (`alt | reason`)
+  - `Confidence:` `high` / `medium` / `low`
+  - `Scope-risk:` `narrow` / `moderate` / `broad`
+  - `Reversibility:` `clean` / `moderate` / `difficult`
+  - `Directive:` Warning or instruction for future modifiers
+  - `Tested:` What was verified
+  - `Not-tested:` Known coverage gaps
+  - `Related:` Linked commits or GitHub issue reference (e.g. `Related: #30`)
+
+Example:
+```
+Add RS Rating filter presets and custom min input to stock heatmap (#30)
+
+Add RS (Relative Strength Rating) filter presets (70+, 80+, 85+, 90+, 95+) and a direct numerical minimum input field to the stock heatmap controls and backend API.
+
+Constraint: RS Rating scale is 0~99 stored as integer in base frame
+Rejected: Hardcoding presets only | users need custom RS thresholds like 75 or 92
+Rejected: Client-only filtering | backend must handle filtering to keep payload size small and stock count accurate
+Confidence: high
+Scope-risk: narrow
+Reversibility: clean
+Directive: Ensure min_rs parameter is included in React Query queryKey for auto-refetching
+Tested: Backend API pytest test_min_rs_filter (14 tests) and Frontend Vitest ControlBar component tests (23 tests)
+Related: #30
+```
+

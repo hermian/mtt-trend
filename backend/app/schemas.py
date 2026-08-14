@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 # --- Common/General Schemas ---
 class DatesResponse(BaseModel):
@@ -13,7 +13,7 @@ class ChartDataPoint(BaseModel):
     low: Optional[float] = None
     close: Optional[float] = None
     volume: Optional[float] = 0
-    indicators: Optional[Dict[str, float]] = None
+    indicators: Optional[Dict[str, Any]] = None
 
 class ChartDataResponse(BaseModel):
     symbol: str

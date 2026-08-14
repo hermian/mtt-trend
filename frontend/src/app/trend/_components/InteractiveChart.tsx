@@ -15,6 +15,7 @@ import {
   SeriesType,
 } from "lightweight-charts";
 import { useChartData } from "@/hooks/useChartData";
+import { toChartTime } from "./_lib/chartTime";
 
 export interface IndicatorConfig {
   id: string;
@@ -70,9 +71,16 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
       const lastIndex = data.length - 1;
       if (lastIndex >= 0) {
         const startIndex = Math.max(0, lastIndex - 150);
-        const range = { from: data[startIndex].time as any, to: data[lastIndex].time as any };
+        const from = toChartTime(data[startIndex].time) ?? data[startIndex].time;
+        const to = toChartTime(data[lastIndex].time) ?? data[lastIndex].time;
+        const range = { from: from as any, to: to as any };
         isSyncingRef.current = true;
-        chartsRef.current.forEach(c => { c.timeScale().setVisibleRange(range); c.timeScale().scrollToPosition(8, false); });
+        chartsRef.current.forEach(c => {
+          try {
+            c.timeScale().setVisibleRange(range);
+            c.timeScale().scrollToPosition(8, false);
+          } catch { /* invalid range */ }
+        });
         setTimeout(() => { isSyncingRef.current = false; }, 200);
       }
     }
@@ -205,7 +213,10 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   useEffect(() => {
     if (!chartData || !chartData.data || chartData.data.length === 0) return;
     if (seriesRef.current.size === 0) return;
-    const sortedData = [...chartData.data].sort((a, b) => (a.time > b.time ? 1 : -1));
+    const sortedData = [...chartData.data]
+      .map((p) => ({ ...p, time: toChartTime(p.time) ?? String(p.time).slice(0, 10) }))
+      .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.time))
+      .sort((a, b) => (a.time > b.time ? 1 : -1));
 
     configs.forEach((config) => {
       const activeSeries = seriesRef.current.get(config.id);

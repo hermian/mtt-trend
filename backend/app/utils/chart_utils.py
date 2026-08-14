@@ -37,6 +37,83 @@ SYMBOL_MAP = {
 
 _CHART_CACHE: Dict[str, dict] = {}
 
+
+def normalize_chart_time(value) -> str:
+    """lightweight-charts business day: YYYY-MM-DD.
+
+    kospi_mtt.csv Date is often pandas datetime
+    ``1995-05-02T00:00:00.000000000`` which crashes setVisibleRange/setData.
+    """
+    if value is None:
+        return ""
+    s = str(value).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    return s
+
+
+_MMT_CACHE = None
+
+def _get_mmt_dict():
+    global _MMT_CACHE
+    if _MMT_CACHE is not None:
+        return _MMT_CACHE
+    mmt_path = Path("/Users/hosung/workspace/git/marcap/imarcap/mmt_all_count.log")
+    res = {}
+    if mmt_path.exists():
+        try:
+            mdf = pl.read_csv(mmt_path)
+            for row in mdf.to_dicts():
+                d = str(row.get("Date"))[:10]
+                mmt_val = row.get("MMT")
+                stocks_val = row.get("Stocks")
+                if mmt_val is not None and stocks_val and float(stocks_val) > 0:
+                    raw_mmt = float(mmt_val)
+                    mmt_r_val = raw_mmt / float(stocks_val) * 100.0
+                    res[d] = {
+                        "mmt": min(raw_mmt, 200.0),
+                        "mmt_r": round(mmt_r_val, 2)
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to load MMT log: {e}")
+    _MMT_CACHE = res
+    return res
+
+
+_KOSDAQ_CACHE = None
+
+def _get_kosdaq_dict():
+    global _KOSDAQ_CACHE
+    if _KOSDAQ_CACHE is not None:
+        return _KOSDAQ_CACHE
+    kq_path = _leverage_csv_dir() / "kosdaq_mtt.csv"
+    res = {}
+    if kq_path.exists():
+        try:
+            kdf = pl.read_csv(kq_path)
+            for row in kdf.to_dicts():
+                d = str(row.get("Date"))[:10]
+                v = row.get("Volume")
+                c = row.get("Close")
+                amt = row.get("Amount")
+                if v is not None:
+                    v_val = float(v) / 1e7
+                    if amt is not None:
+                        a_val = float(amt) / 1e11
+                    elif c is not None:
+                        a_val = (float(c) * float(v)) / 1e11
+                    else:
+                        a_val = None
+                    res[d] = {
+                        "kosdaq_volume": round(v_val, 2),
+                        "kosdaq_amount": round(a_val, 2) if a_val is not None else None
+                    }
+        except Exception as e:
+            logger.warning(f"Failed to load KOSDAQ csv: {e}")
+    _KOSDAQ_CACHE = res
+    return res
+
+
 def load_chart_data(
     symbol: str,
     start_date: Optional[str] = None, 
@@ -81,6 +158,8 @@ def load_chart_data(
             
             price_sma50_raw = close.rolling_mean(window_size=50)
             price_sma50 = price_sma50_raw.fill_null(close)
+            price_sma100 = close.rolling_mean(window_size=100).fill_null(close)
+            price_sma150 = close.rolling_mean(window_size=150).fill_null(close)
             price_sma200 = close.rolling_mean(window_size=200).fill_null(close)
 
             # disparity_sma50: 종가 대비 50일선 이격도 (100 = 50일 이동평균과 동일)
@@ -101,6 +180,8 @@ def load_chart_data(
             calculated_sk = slow_k.to_list()
             calculated_sd = slow_d.to_list()
             calculated_ma50 = price_sma50.to_list()
+            calculated_ma100 = price_sma100.to_list()
+            calculated_ma150 = price_sma150.to_list()
             calculated_ma200 = price_sma200.to_list()
             calculated_disparity_sma50 = disparity_sma50.to_list()
             calculated_vix_fix = vix_fix.to_list()
@@ -108,6 +189,13 @@ def load_chart_data(
             
             new_data_points = []
             for i, row in enumerate(raw_data):
+                h52 = row.get("high52sum")
+                l52 = row.get("low52sum")
+                try:
+                    h52_l52 = float(h52) - float(l52) if h52 is not None and l52 is not None else None
+                except (TypeError, ValueError):
+                    h52_l52 = None
+
                 indicators = {
                     "rsi": calculated_rsi[i],
                     "macd": calculated_macd[i],
@@ -115,24 +203,55 @@ def load_chart_data(
                     "stoch_k": calculated_sk[i],
                     "stoch_d": calculated_sd[i],
                     "price_sma50": calculated_ma50[i],
+                    "price_sma100": calculated_ma100[i],
+                    "price_sma150": calculated_ma150[i],
                     "price_sma200": calculated_ma200[i],
                     # CSV SMA*_pct: 시장 breadth (해당 이평 위 종목 비율)
-                    "above_sma10": row.get("SMA10_pct"),
-                    "above_sma20": row.get("SMA20_pct"),
-                    "above_sma50": row.get("SMA50_pct"),
-                    "above_sma200": row.get("SMA200_pct"),
+                    "above_sma10": row.get("SMA10_pct") if row.get("SMA10_pct") is not None else row.get("above10ma_pct"),
+                    "above_sma20": row.get("SMA20_pct") if row.get("SMA20_pct") is not None else row.get("above20ma_pct"),
+                    "above_sma50": row.get("SMA50_pct") if row.get("SMA50_pct") is not None else row.get("above50ma_pct"),
+                    "above_sma200": row.get("SMA200_pct") if row.get("SMA200_pct") is not None else row.get("above200ma_pct"),
                     "disparity_sma50": calculated_disparity_sma50[i],
-                    "adr14": row.get("ADR14"),
-                    "adr20": row.get("ADR20"),
+                    "adr14": row.get("ADR14") if row.get("ADR14") is not None else row.get("adr14"),
+                    "adr20": row.get("ADR20") if row.get("ADR20") is not None else (row.get("adr20") if row.get("adr20") is not None else row.get("ADR14")),
                     "vix_fix": calculated_vix_fix[i],
                     "vix_fix_fear": calculated_vix_fix_fear[i],
+                    "price_sma150": row.get("SMA150"),
+                    "stockbee_mm": row.get("stockbee_mm"),
+                    "above_sma40": row.get("above40ma_pct") if row.get("above40ma_pct") is not None else row.get("SMA40_pct"),
+                    "high52sum": h52,
+                    "low52sum": l52,
+                    "high52_low52": h52_l52,
+                    "bam": row.get("bam"),
+                    "adl": row.get("adl"),
+                    "mcclellan_oscilator": row.get("mcclellan_oscilator"),
+                    "mcclellan_summation_indicator": row.get("mcclellan_summation_indicator"),
+                    "mcclellan_summation": row.get("mcclellan_summation_indicator"),
+                    "saito_ratio": row.get("saito_ratio"),
+                    "zbt": row.get("ZBT") if row.get("ZBT") is not None else row.get("zbt"),
+                    "mmt": _get_mmt_dict().get(str(row.get("Date"))[:10], {}).get("mmt", row.get("MMT") if row.get("MMT") is not None else row.get("mmt")),
+                    "mmt_r": _get_mmt_dict().get(str(row.get("Date"))[:10], {}).get("mmt_r", row.get("MMT_R") if row.get("MMT_R") is not None else row.get("mmt_r")),
+                    "usdkrw": row.get("USD/KRW") if row.get("USD/KRW") is not None else row.get("usdkrw"),
+                    "kospi_amount": round(float(row.get("Amount")) / 1e11, 2) if row.get("Amount") is not None else None,
+                    "kosdaq_amount": _get_kosdaq_dict().get(str(row.get("Date"))[:10], {}).get("kosdaq_amount"),
+                    "kospi_volume": round(float(row.get("Volume")) / 1e7, 2) if row.get("Volume") is not None else None,
+                    "kosdaq_volume": _get_kosdaq_dict().get(str(row.get("Date"))[:10], {}).get("kosdaq_volume"),
+                    "macd_hist": row.get("MACDh_12_26_9"),
                 }
                 
+                def _to_float(val):
+                    if val is None or val == "" or str(val).lower() == "none":
+                        return 0.0
+                    try:
+                        return round(float(val), 2)
+                    except Exception:
+                        return 0.0
+
                 new_data_points.append(ChartDataPoint(
-                    time=row["Date"],
+                    time=normalize_chart_time(row["Date"]),
                     open=row["Open"], high=row["High"], low=row["Low"], close=row["Close"],
-                    volume=row.get("Volume", 0),  # 거래량 데이터 추가!
-                    indicators={k: round(float(v), 2) if v is not None else 0.0 for k, v in indicators.items()}
+                    volume=row.get("Volume", 0),
+                    indicators={k: _to_float(v) for k, v in indicators.items()}
                 ))
             
             cache["data"] = new_data_points

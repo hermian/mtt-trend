@@ -5,6 +5,11 @@ import { describe, it, expect, vi } from "vitest";
 import { render } from "@testing-library/react";
 import TrendPage from "../page";
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+}));
+
 // Mock child components
 vi.mock("../_components/TopThemesBar", () => ({
   TopThemesBar: () => <div data-testid="top-themes-bar">TopThemesBar</div>,

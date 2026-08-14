@@ -8,7 +8,20 @@ import { SurgingThemesCard } from "./_components/SurgingThemesCard";
 import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
+import dynamic from "next/dynamic";
 import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
+
+const KospiWeatherChart = dynamic(
+  () => import("./_components/KospiWeatherChart"),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col items-center justify-center h-full text-emerald-400 font-mono text-xs animate-pulse">
+        Loading KOSPI Weather Engine...
+      </div>
+    ),
+  }
+);
 import { AboveMaChart } from "./_components/AboveMaChart";
 import { MacroChart } from "./_components/MacroChart";
 import { ValuationBandChart } from "./_components/ValuationBandChart";
@@ -59,6 +72,8 @@ function TrendPageContent() {
   const activeTab =
     rawTab === "chart"
       ? "chart"
+      : (rawTab === "kospi_weather" || rawTab === "weather_20panel")
+      ? "kospi_weather"
       : rawTab === "above_ma"
       ? "above_ma"
       : rawTab === "macro"
@@ -178,8 +193,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "stockbee_mm" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" && activeTab !== "stockbee_mm" ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "kospi_weather" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "stockbee_mm" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" && activeTab !== "stockbee_mm" && activeTab !== "kospi_weather" ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2 font-medium">
               {datesLoading ? (
                 <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
@@ -344,6 +359,12 @@ function TrendPageContent() {
                        <p>Engine: <span className="text-gray-300 font-bold">Lightweight Charts 60fps Canvas</span></p>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeTab === "kospi_weather" && (
+                <div className="w-full h-full flex flex-col">
+                  <KospiWeatherChart />
                 </div>
               )}
 

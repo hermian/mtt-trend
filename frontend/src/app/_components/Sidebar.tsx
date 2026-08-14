@@ -117,6 +117,8 @@ export function Sidebar() {
     pathname.startsWith("/trend") && searchParams.get("tab") === "wics_index";
   const isStockbeeMmActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "stockbee_mm";
+  const isWeatherActive =
+    pathname.startsWith("/trend") && (searchParams.get("tab") === "kospi_weather" || searchParams.get("tab") === "weather_20panel");
   return (
     <aside
       className={clsx(
@@ -205,6 +207,32 @@ export function Sidebar() {
             <path d="m19 9-5 5-4-4-3 3" />
           </svg>
           {!collapsed && <span className="truncate">심층지표 분석</span>}
+        </Link>
+
+        {/* KOSPI Weather 전기간 분석 단독 전용 탭 Button-styled Link */}
+        <Link
+          href="/trend?tab=kospi_weather"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isWeatherActive
+              ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-bold"
+              : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-600/30"
+          )}
+          title={collapsed ? "KOSPI Weather" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+          </svg>
+          {!collapsed && <span className="truncate">KOSPI Weather</span>}
         </Link>
 
         {/* Above MA & 수급 Button-styled Link */}

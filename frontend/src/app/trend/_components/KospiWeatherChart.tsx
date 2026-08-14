@@ -652,7 +652,7 @@ export function KospiWeatherChart() {
   };
 
   return (
-    <div ref={containerRef} className="relative flex flex-col w-full h-screen bg-slate-950 overflow-hidden border-t border-slate-800">
+    <div ref={containerRef} className="relative flex flex-col w-full h-[calc(100vh-3.5rem)] md:h-full min-h-0 bg-slate-950 overflow-hidden border-t border-slate-800">
       <div className="px-3 py-1 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between gap-4 shrink-0 h-9">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${status === "Ready" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" : "bg-blue-500 animate-pulse"}`} />
@@ -663,7 +663,7 @@ export function KospiWeatherChart() {
         </div>
       </div>
 
-      <div data-scroll-area className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 relative">
+      <div data-scroll-area className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 relative pb-16">
         {isLoading && (
           <div className="absolute inset-0 z-40 bg-slate-950/80 flex items-center justify-center text-emerald-400 text-xs font-mono animate-pulse">
             Loading KOSPI Weather 20-Panel History...
@@ -681,6 +681,8 @@ export function KospiWeatherChart() {
             <div data-chart-id={config.id} className="w-full" />
           </div>
         ))}
+        {/* P20 Saito 최하단 잘림 방지 넉넉한 여백 스페이스 */}
+        <div className="h-24 w-full bg-slate-950 shrink-0" />
       </div>
     </div>
   );

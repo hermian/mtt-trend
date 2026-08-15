@@ -10,6 +10,7 @@ import {
   LineSeries,
   HistogramSeries,
   LineStyle,
+  PriceScaleMode,
 } from "lightweight-charts";
 import { useAvwapChart, useStockSearch } from "@/hooks/useAvwapChart";
 import type { AvwapPoint, StockSearchResult } from "@/lib/api";
@@ -35,6 +36,7 @@ export function AvwapChart() {
   const [market, setMarket] = useState<"kospi" | "kosdaq">("kospi");
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
   const [symbol, setSymbol] = useState<string | null>(null);
+  const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
 
   // Stock Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -247,6 +249,9 @@ export function AvwapChart() {
                 : { top: 0.1, bottom: 0.1 },
             autoScale: true,
             minimumWidth: 85,
+            mode: panel.id === "main"
+              ? (priceScaleMode === "log" ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal)
+              : PriceScaleMode.Normal,
           },
           leftPriceScale: {
             visible: panel.id === "volume",
@@ -739,6 +744,19 @@ export function AvwapChart() {
     }
   }, [showVwap, showHvwap, showLvwap, showBbUpper, enabledAnchors, chartData]);
 
+  // Update Y-axis price scale mode (log vs linear) dynamically
+  useEffect(() => {
+    const mainChart = chartsRef.current.get("main");
+    if (!mainChart) return;
+    try {
+      mainChart.priceScale("right").applyOptions({
+        mode: priceScaleMode === "log" ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+      });
+    } catch (e) {
+      console.error("Error applying priceScale mode:", e);
+    }
+  }, [priceScaleMode]);
+
   // Last available point for summary header when not hovering
   const latestPoint = useMemo(() => {
     if (!chartData?.points || chartData.points.length === 0) return null;
@@ -893,6 +911,24 @@ export function AvwapChart() {
                 }`}
               >
                 {it.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Price Scale Mode Toggle (Log / Linear) */}
+          <div className="inline-flex rounded-lg bg-gray-800/80 p-1 border border-gray-700">
+            {(["log", "linear"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setPriceScaleMode(mode)}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  priceScaleMode === mode
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-gray-400 hover:text-white"
+                }`}
+                title={mode === "log" ? "로그 스케일 (기본)" : "선형 스케일"}
+              >
+                {mode === "log" ? "로그(Log)" : "선형(Linear)"}
               </button>
             ))}
           </div>
@@ -1080,6 +1116,7 @@ export function AvwapChart() {
                 {chartData?.name || (symbol ? symbol : market)}
               </span>
               <span className="text-blue-400">{interval}</span>
+              <span className="text-purple-400 font-mono text-[11px]">[{priceScaleMode.toUpperCase()}]</span>
               <span className="text-gray-500">|</span>
               <span className="text-gray-400">AVWAP & MAs</span>
             </div>

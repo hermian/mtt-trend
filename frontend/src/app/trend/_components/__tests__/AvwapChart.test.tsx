@@ -17,6 +17,9 @@ vi.mock("lightweight-charts", () => ({
       getVisibleLogicalRange: vi.fn(() => ({ from: 0, to: 100 })),
       setVisibleLogicalRange: vi.fn(),
     })),
+    priceScale: vi.fn(() => ({
+      applyOptions: vi.fn(),
+    })),
     subscribeCrosshairMove: vi.fn(),
   })),
   ColorType: { Solid: "solid" },
@@ -24,6 +27,7 @@ vi.mock("lightweight-charts", () => ({
   LineSeries: "LineSeries",
   HistogramSeries: "HistogramSeries",
   LineStyle: { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 },
+  PriceScaleMode: { Normal: 0, Logarithmic: 1, Percentage: 2, IndexedTo100: 3 },
 }));
 
 describe("AvwapChart Component", () => {
@@ -161,5 +165,34 @@ describe("AvwapChart Component", () => {
 
     const onAllBtn = screen.getByText("앵커 전체ON");
     fireEvent.click(onAllBtn);
+  });
+
+  it("renders log scale by default and allows toggling to linear scale", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    render(<AvwapChart />);
+
+    const logBtn = screen.getByText("로그(Log)");
+    const linearBtn = screen.getByText("선형(Linear)");
+
+    expect(logBtn).toBeInTheDocument();
+    expect(linearBtn).toBeInTheDocument();
+    expect(screen.getByText("[LOG]")).toBeInTheDocument();
+
+    // Click Linear
+    fireEvent.click(linearBtn);
+    expect(screen.getByText("[LINEAR]")).toBeInTheDocument();
+
+    // Click Log again
+    fireEvent.click(logBtn);
+    expect(screen.getByText("[LOG]")).toBeInTheDocument();
   });
 });

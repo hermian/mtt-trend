@@ -36,16 +36,16 @@ const WEATHER_20PANEL_CONFIGS: IndicatorConfig[] = [
   { id: "mmt_r", name: "MMT Ratio (%)", type: "line", heightRatio: 1.2, color: "#ef4444" },
   { id: "main", name: "KOSPI 주가 (OHLC) & SMA 50/100/200", type: "candlestick", heightRatio: 5 },
   { id: "mmt", name: "MMT (Market Momentum 종목 수)", type: "line", heightRatio: 1.2, color: "#f59e0b" },
-  { id: "adl", name: "ADL (Advance-Decline Line)", type: "line", heightRatio: 1.5, color: "#ef4444" },
+  { id: "saito_ratio", name: "Saito Ratio (종목 수)", type: "line", heightRatio: 1.2, color: "#a855f7" },
+  { id: "high52_low52_net", name: "52주 High-Low Net", type: "line", heightRatio: 1.5, color: "#10b981" },
   { id: "market_amount", name: "KOSPI / KOSDAQ 거래대금 (천억원)", type: "line", heightRatio: 1.5 },
   { id: "market_volume", name: "KOSPI / KOSDAQ 거래량 (천만주)", type: "line", heightRatio: 1.5 },
-  { id: "high52_low52_net", name: "52주 High-Low Net", type: "line", heightRatio: 1.5, color: "#10b981" },
   { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 1.5, color: "#fbbf24" },
   { id: "macd", name: "MACD (12, 26, 9)", type: "line", heightRatio: 1.5, color: "#3b82f6" },
   { id: "zbt", name: "ZBT (Zweig Breadth Thrust)", type: "line", heightRatio: 1.2, color: "#3b82f6" },
   { id: "mcclellan_oscilator", name: "McClellan Oscillator", type: "line", heightRatio: 1.5 },
   { id: "mcclellan_summation", name: "McClellan Summation Index", type: "line", heightRatio: 1.5, color: "#60a5fa" },
-  { id: "saito_ratio", name: "Saito Ratio (종목 수)", type: "line", heightRatio: 1.2, color: "#a855f7" },
+  { id: "adl", name: "ADL (Advance-Decline Line)", type: "line", heightRatio: 1.5, color: "#ef4444" },
 ];
 
 export function KospiWeatherChart() {
@@ -717,7 +717,7 @@ export function KospiWeatherChart() {
             <div data-chart-id={config.id} className="w-full" />
           </div>
         ))}
-        {/* P20 Saito 최하단 잘림 방지 넉넉한 여백 스페이스 */}
+        {/* P10 ADL 최하단 잘림 방지 넉넉한 여백 스페이스 */}
         <div className="h-24 w-full bg-slate-950 shrink-0" />
       </div>
     </div>

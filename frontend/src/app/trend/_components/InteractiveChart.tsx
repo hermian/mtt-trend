@@ -5,6 +5,7 @@ import {
   createChart,
   ColorType,
   CrosshairMode,
+  LineStyle,
   CandlestickSeries,
   LineSeries,
   HistogramSeries,
@@ -235,6 +236,13 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           activeSeries.push(chart.addSeries(AreaSeries, { topColor: "rgba(59, 130, 246, 0.0)", bottomColor: "rgba(59, 130, 246, 0.4)", lineVisible: false, crosshairMarkerVisible: false }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#fbbf24", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f8fafc", lineWidth: 2, lineStyle: 2 }));
+        } else if (config.id === "rsi" || config.id === "rsi_14") {
+          const s = chart.addSeries(LineSeries, { color: config.color || "#fbbf24", lineWidth: 2 });
+          try {
+            s.createPriceLine({ price: 70, color: "#ffffff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true });
+            s.createPriceLine({ price: 30, color: "#ffffff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true });
+          } catch {}
+          activeSeries.push(s);
         } else {
           const seriesType = config.type === "histogram" ? HistogramSeries : LineSeries;
           activeSeries.push(chart.addSeries(seriesType, { color: config.color || "#60a5fa", lineWidth: 2 }));

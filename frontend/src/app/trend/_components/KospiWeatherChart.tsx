@@ -50,6 +50,7 @@ const WEATHER_20PANEL_CONFIGS: IndicatorConfig[] = [
 
 export function KospiWeatherChart() {
   const containerRef = useRef<HTMLDivElement>(null);
+  const verticalGuideRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
   const isSyncingRef = useRef(false);
@@ -115,6 +116,18 @@ export function KospiWeatherChart() {
           rightPriceScale: { borderColor: "#334155", scaleMargins: { top: 0.1, bottom: 0.1 }, autoScale: true, minimumWidth: 105 },
           handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
           handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+          crosshair: {
+            vertLine: {
+              visible: false,
+            },
+            horzLine: {
+              visible: true,
+              style: LineStyle.Dashed,
+              width: 1,
+              color: "#94a3b8",
+              labelVisible: true,
+            },
+          },
         });
 
         chartsRef.current.set(config.id, chart);
@@ -438,6 +451,15 @@ export function KospiWeatherChart() {
         seriesRef.current.set(config.id, activeSeries);
 
         chart.subscribeCrosshairMove((param) => {
+          if (verticalGuideRef.current) {
+            if (!param.time || !param.point || param.point.x < 0) {
+              verticalGuideRef.current.style.display = "none";
+            } else {
+              verticalGuideRef.current.style.display = "block";
+              verticalGuideRef.current.style.transform = `translateX(${param.point.x}px)`;
+            }
+          }
+
           if (!param.time || !param.point || param.point.x < 0) {
             setHoveredData(null);
           } else {
@@ -663,7 +685,21 @@ export function KospiWeatherChart() {
         </div>
       </div>
 
-      <div data-scroll-area className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 relative pb-16">
+      <div
+        data-scroll-area
+        onMouseLeave={() => {
+          if (verticalGuideRef.current) verticalGuideRef.current.style.display = "none";
+          setHoveredData(null);
+        }}
+        className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 relative pb-16"
+      >
+        {/* 20개 전 패널을 관통하는 실시간 수직선(Crosshair 세로선) 가이드 */}
+        <div
+          ref={verticalGuideRef}
+          className="pointer-events-none absolute top-0 bottom-0 z-30 border-l border-dashed border-slate-400/80 hidden transition-none"
+          style={{ width: "1px", left: 0 }}
+        />
+
         {isLoading && (
           <div className="absolute inset-0 z-40 bg-slate-950/80 flex items-center justify-center text-emerald-400 text-xs font-mono animate-pulse">
             Loading KOSPI Weather 20-Panel History...

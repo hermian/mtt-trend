@@ -11,6 +11,7 @@ const defaultControls: HeatmapControls = {
   marcapMax: null,
   minRet: null,
   minRs: null,
+  mmt: null,
   limit: 0,
 };
 
@@ -46,5 +47,52 @@ describe("ControlBar RS Filter", () => {
 
     fireEvent.click(rsApplyBtn);
     expect(handleChange).toHaveBeenCalledWith({ minRs: 75 });
+  });
+});
+
+describe("ControlBar MMT Filter", () => {
+  it("renders MMT filter preset buttons -2, -1, 0, 1, 2, 3 and handles toggle behavior", () => {
+    const handleChange = vi.fn();
+    const { rerender } = render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    expect(screen.getByText("MMT 필터")).toBeDefined();
+    expect(screen.getByText("-2")).toBeDefined();
+    expect(screen.getByText("-1")).toBeDefined();
+    expect(screen.getByText("0")).toBeDefined();
+    expect(screen.getByText("1")).toBeDefined();
+    expect(screen.getByText("2")).toBeDefined();
+    expect(screen.getByText("3")).toBeDefined();
+
+    // 1. Initial click on "1" from all (null) -> sets [1]
+    fireEvent.click(screen.getByText("1"));
+    expect(handleChange).toHaveBeenCalledWith({ mmt: [1] });
+
+    // 2. Click "2" when [1] is already selected -> adds 2 -> [1, 2]
+    rerender(<ControlBar value={{ ...defaultControls, mmt: [1] }} onChange={handleChange} />);
+    fireEvent.click(screen.getByText("2"));
+    expect(handleChange).toHaveBeenCalledWith({ mmt: [1, 2] });
+
+    // 3. Click "3" when [1, 2] are selected -> adds 3 -> [1, 2, 3]
+    rerender(<ControlBar value={{ ...defaultControls, mmt: [1, 2] }} onChange={handleChange} />);
+    fireEvent.click(screen.getByText("3"));
+    expect(handleChange).toHaveBeenCalledWith({ mmt: [1, 2, 3] });
+
+    // 4. Click "1" when [1, 2, 3] are selected -> toggles off 1 -> [2, 3]
+    rerender(<ControlBar value={{ ...defaultControls, mmt: [1, 2, 3] }} onChange={handleChange} />);
+    fireEvent.click(screen.getByText("1"));
+    expect(handleChange).toHaveBeenCalledWith({ mmt: [2, 3] });
+
+    // 5. Click "2" when only [2] is selected -> deselects all -> null
+    rerender(<ControlBar value={{ ...defaultControls, mmt: [2] }} onChange={handleChange} />);
+    fireEvent.click(screen.getByText("2"));
+    expect(handleChange).toHaveBeenCalledWith({ mmt: null });
+
+    // 6. Click "전체" when [1, 2] are selected -> resets to null
+    rerender(<ControlBar value={{ ...defaultControls, mmt: [1, 2] }} onChange={handleChange} />);
+    const mmtContainer = screen.getByText("MMT 필터").closest("div");
+    const allBtn = mmtContainer?.querySelectorAll("button")[0];
+    expect(allBtn).toBeDefined();
+    fireEvent.click(allBtn!);
+    expect(handleChange).toHaveBeenCalledWith({ mmt: null });
   });
 });

@@ -34,10 +34,10 @@ def heatmap_env(tmp_path, monkeypatch):
     con = duckdb.connect()
     attrs_sql = """
         SELECT * FROM (VALUES
-            ('000010', '에이', 'KOSPI', 'IT', '소프트웨어', 'AI,반도체', 2.0, 80),
-            ('000020', '비',   'KOSPI', 'IT', '소프트웨어', 'AI',       10.0, 60),
-            ('000030', '씨',   'KOSDAQ', '금융', '은행',     '',          0.5, 40)
-        ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating)
+            ('000010', '에이', 'KOSPI', 'IT', '소프트웨어', 'AI,반도체', 2.0, 80, 0),
+            ('000020', '비',   'KOSPI', 'IT', '소프트웨어', 'AI',       10.0, 60, 1),
+            ('000030', '씨',   'KOSDAQ', '금융', '은행',     '',          0.5, 40, -2)
+        ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating, MMT)
     """
     con.execute(
         f"COPY ({attrs_sql}) TO '{part_latest / 'part-0.parquet'}' (FORMAT PARQUET)"
@@ -45,8 +45,8 @@ def heatmap_env(tmp_path, monkeypatch):
     con.execute(
         f"""COPY (
             SELECT * FROM (VALUES
-                ('999999', '옛날', 'KOSPI', 'IT', '소프트웨어', '', 1.0, 50)
-            ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating)
+                ('999999', '옛날', 'KOSPI', 'IT', '소프트웨어', '', 1.0, 50, 0)
+            ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating, MMT)
         ) TO '{part_old / "part-0.parquet"}' (FORMAT PARQUET)"""
     )
 
@@ -181,9 +181,9 @@ def test_kosdaq_grouping_normalizes_kq(client, heatmap_env, monkeypatch, tmp_pat
     con.execute(
         f"""COPY (
             SELECT * FROM (VALUES
-                ('000010', '에이', 'KOSPI', 'IT', '소프트웨어', '', 2.0, 80),
-                ('000030', '씨',   'KQ',    '금융', '은행',     '', 0.5, 40)
-            ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating)
+                ('000010', '에이', 'KOSPI', 'IT', '소프트웨어', '', 2.0, 80, 0),
+                ('000030', '씨',   'KQ',    '금융', '은행',     '', 0.5, 40, -2)
+            ) AS t(Code, Name, Market, Sector, WICS, "테마", Marcap, RS_Rating, MMT)
         ) TO '{part / "part-0.parquet"}' (FORMAT PARQUET)"""
     )
     con.close()
@@ -294,6 +294,33 @@ def test_min_rs_filter(client, heatmap_env):
     for group in body["groups"]:
         for stock in group["stocks"]:
             assert stock["rs"] is not None and stock["rs"] >= 80
+
+
+def test_mmt_filter(client, heatmap_env):
+    # MMT 단일 필터링 테스트 (예: mmt=1)
+    body = client.get("/api/heatmap/stocks?grouping=sector&period=1D&mmt=1").json()
+    assert body["mmt"] == "1"
+    assert body["stock_count"] == 1
+    stocks = _stocks_by_code(body)
+    assert set(stocks.keys()) == {"000020"}
+    assert stocks["000020"]["mmt"] == 1
+
+    # MMT=-2 필터링 테스트
+    body_neg = client.get("/api/heatmap/stocks?grouping=sector&period=1D&mmt=-2").json()
+    assert body_neg["mmt"] == "-2"
+    assert body_neg["stock_count"] == 1
+    stocks_neg = _stocks_by_code(body_neg)
+    assert set(stocks_neg.keys()) == {"000030"}
+    assert stocks_neg["000030"]["mmt"] == -2
+
+    # MMT 복수 선택 필터링 테스트 (예: mmt=1,-2)
+    body_multi = client.get("/api/heatmap/stocks?grouping=sector&period=1D&mmt=1,-2").json()
+    assert body_multi["mmt"] == "1,-2"
+    assert body_multi["stock_count"] == 2
+    stocks_multi = _stocks_by_code(body_multi)
+    assert set(stocks_multi.keys()) == {"000020", "000030"}
+
+
 
 
 

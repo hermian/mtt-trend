@@ -26,6 +26,7 @@ async def get_stock_heatmap(
     marcap_max: Optional[float] = Query(None, description="시가총액 상한 (억원)"),
     min_ret: Optional[float] = Query(None, description="최소 수익률 (%)"),
     min_rs: Optional[int] = Query(None, description="최소 RS Rating (0~99)"),
+    mmt: Optional[str] = Query(None, description="MMT 필터 (복수 선택 시 콤마 구분: 예: '1,2,3' 또는 '-2,1')"),
     limit: int = Query(0, ge=0, description="표시 개수: 0=전체, 그 외=시가총액 상위 N"),
 ):
     """
@@ -56,6 +57,7 @@ async def get_stock_heatmap(
             marcap_max=marcap_max,
             min_ret=min_ret,
             min_rs=min_rs,
+            mmt=mmt,
             limit=limit,
         )
     except FileNotFoundError as e:

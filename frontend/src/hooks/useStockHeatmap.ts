@@ -13,6 +13,11 @@ export const useStockHeatmap = (params: StockHeatmapParams) => {
       params.marcapMax ?? null,
       params.minRet ?? null,
       params.minRs ?? null,
+      Array.isArray(params.mmt)
+        ? params.mmt.length > 0
+          ? [...params.mmt].sort((a, b) => a - b).join(",")
+          : null
+        : params.mmt ?? null,
       params.limit,
     ],
     queryFn: () => api.getStockHeatmap(params),

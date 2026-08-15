@@ -389,6 +389,9 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
             {hover.stock.rs !== null && (
               <span className="text-gray-400">RS {hover.stock.rs}</span>
             )}
+            {hover.stock.mmt !== undefined && hover.stock.mmt !== null && (
+              <span className="text-gray-400">MMT {hover.stock.mmt}</span>
+            )}
           </div>
           <div className="mt-1 text-[10px] text-sky-400">
             클릭 시 상세 정보 이동 ↗
@@ -441,6 +444,9 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
               </span>
               {selected.stock.rs !== null && (
                 <span className="text-gray-400">RS {selected.stock.rs}</span>
+              )}
+              {selected.stock.mmt !== undefined && selected.stock.mmt !== null && (
+                <span className="text-gray-400">MMT {selected.stock.mmt}</span>
               )}
             </div>
           </div>

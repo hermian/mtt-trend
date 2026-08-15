@@ -22,7 +22,7 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 from zoneinfo import ZoneInfo
 
 import duckdb
@@ -196,10 +196,13 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
 
     con = duckdb.connect(":memory:")
     try:
+        parquet_cols = [col[0] for col in con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(part_path)]).fetchall()]
+        mmt_col_sql = "MMT" if "MMT" in parquet_cols else "NULL AS MMT"
+
         attrs = con.execute(
-            """
+            f"""
             SELECT Code, Name, Market, Sector, WICS,
-                   "테마" AS Themes, Marcap, RS_Rating
+                   "테마" AS Themes, Marcap, RS_Rating, {mmt_col_sql}
             FROM read_parquet(?)
             """,
             [str(part_path)],
@@ -224,7 +227,7 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
                 WITH ranked AS (
                     SELECT 종목코드 AS code, 종가 AS close,
                            ROW_NUMBER() OVER (
-                               PARTITION BY 종목코드 ORDER BY 날짜 DESC
+                                PARTITION BY 종목코드 ORDER BY 날짜 DESC
                            ) AS rn
                     FROM sp.stock_price
                     WHERE 날짜 <= ?
@@ -251,11 +254,12 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
         con.close()
 
     frame_rows: List[Dict[str, Any]] = []
-    for code, name, market, sector, wics, themes, marcap, rs_rating in attrs:
+    for code, name, market, sector, wics, themes, marcap, rs_rating, mmt_val in attrs:
         themes_list = (
             [t.strip() for t in str(themes).split(",") if t.strip()] if themes else []
         )
         market_raw = (str(market).strip().upper() if market else "") or None
+        mmt_int = int(round(mmt_val)) if mmt_val is not None and not (isinstance(mmt_val, float) and math.isnan(mmt_val)) else None
         frame_rows.append(
             {
                 "code": code,
@@ -267,6 +271,7 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
                 "themes": themes_list,
                 "marcap": round(float(marcap) * 1000, 1) if marcap is not None else 0.0,  # 천억원→억원
                 "rs": int(round(rs_rating)) if rs_rating is not None else None,
+                "mmt": mmt_int,
                 "rets": rets_by_code.get(code, {}),
             }
         )
@@ -321,6 +326,7 @@ def shape_heatmap(
     marcap_max: Optional[float] = None,
     min_ret: Optional[float] = None,
     min_rs: Optional[int] = None,
+    mmt: Optional[Union[str, List[int], int]] = None,
     limit: int = 0,
 ) -> Dict[str, Any]:
     """
@@ -386,6 +392,31 @@ def shape_heatmap(
             for r in rows
             if r.get("rs") is not None and r["rs"] >= min_rs
         ]
+
+    mmt_set: Optional[set[int]] = None
+    if mmt is not None:
+        if isinstance(mmt, (list, tuple, set)):
+            mmt_set = {int(x) for x in mmt}
+        elif isinstance(mmt, int):
+            mmt_set = {mmt}
+        elif isinstance(mmt, str) and mmt.strip():
+            parsed_set = set()
+            for part in mmt.split(","):
+                part = part.strip()
+                if part:
+                    try:
+                        parsed_set.add(int(part))
+                    except ValueError:
+                        pass
+            if parsed_set:
+                mmt_set = parsed_set
+
+    if mmt_set is not None:
+        rows = [
+            r
+            for r in rows
+            if r.get("mmt") is not None and r["mmt"] in mmt_set
+        ]
     if limit and limit > 0:
         rows = sorted(rows, key=lambda r: r["marcap"], reverse=True)[:limit]
 
@@ -412,6 +443,7 @@ def shape_heatmap(
                     "marcap": round(m["marcap"], 1),
                     "ret": m["rets"].get(period),
                     "rs": m["rs"],
+                    "mmt": m.get("mmt"),
                     "weight": round(weight, 3),
                 }
             )
@@ -444,7 +476,9 @@ def shape_heatmap(
         "marcap_max": marcap_max,
         "min_ret": min_ret,
         "min_rs": min_rs,
+        "mmt": mmt,
         "limit": limit,
         "stock_count": len(rows),
         "groups": group_payloads,
     }
+

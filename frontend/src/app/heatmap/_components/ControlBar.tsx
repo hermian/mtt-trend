@@ -13,6 +13,7 @@ export interface HeatmapControls {
   marcapMax: number | null;
   minRet: number | null;
   minRs: number | null;
+  mmt: number[] | null;
   limit: number;
 }
 
@@ -68,6 +69,16 @@ const RS_PRESETS: Array<{ label: string; value: number | null }> = [
   { label: "85+", value: 85 },
   { label: "90+", value: 90 },
   { label: "95+", value: 95 },
+];
+
+const MMT_PRESETS: Array<{ label: string; value: number | null }> = [
+  { label: "전체", value: null },
+  { label: "-2", value: -2 },
+  { label: "-1", value: -1 },
+  { label: "0", value: 0 },
+  { label: "1", value: 1 },
+  { label: "2", value: 2 },
+  { label: "3", value: 3 },
 ];
 
 const LIMITS: Array<{ id: number; label: string }> = [
@@ -398,6 +409,48 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
         >
           적용
         </button>
+      </div>
+
+      {/* MMT 필터 */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">MMT 필터</span>
+        {MMT_PRESETS.map((m) => {
+          const active =
+            m.value === null
+              ? !value.mmt || value.mmt.length === 0
+              : Boolean(value.mmt?.includes(m.value));
+
+          const handleClick = () => {
+            if (m.value === null) {
+              onChange({ mmt: null });
+              return;
+            }
+            const current = value.mmt ?? [];
+            const exists = current.includes(m.value);
+            let next: number[];
+            if (exists) {
+              next = current.filter((v) => v !== m.value);
+            } else {
+              next = [...current, m.value].sort((a, b) => a - b);
+            }
+            if (next.length === 0 || next.length === 6) {
+              onChange({ mmt: null });
+            } else {
+              onChange({ mmt: next });
+            }
+          };
+
+          return (
+            <button
+              key={m.label}
+              type="button"
+              className={btnClass(active)}
+              onClick={handleClick}
+            >
+              {m.label}
+            </button>
+          );
+        })}
       </div>
 
       {/* 표시 개수 */}

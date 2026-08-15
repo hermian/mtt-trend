@@ -310,6 +310,7 @@ export interface StockHeatmapItem {
   marcap: number; // 억원
   ret: number | null; // 선택 기간 수익률 (%)
   rs: number | null;
+  mmt?: number | null;
   weight: number; // ∛(시가총액)
 }
 
@@ -335,6 +336,7 @@ export interface StockHeatmapResponse {
   marcap_max: number | null;
   min_ret?: number | null;
   min_rs?: number | null;
+  mmt?: string | number[] | number | null;
   limit: number;
   stock_count: number;
   groups: StockHeatmapGroup[];
@@ -349,6 +351,7 @@ export interface StockHeatmapParams {
   marcapMax?: number | null;
   minRet?: number | null;
   minRs?: number | null;
+  mmt?: number[] | number | string | null;
   limit: number;
 }
 
@@ -668,6 +671,12 @@ export const api = {
   getStockHeatmap: async (
     params: StockHeatmapParams
   ): Promise<StockHeatmapResponse> => {
+    const mmtParam = Array.isArray(params.mmt)
+      ? params.mmt.length > 0
+        ? params.mmt.join(",")
+        : undefined
+      : params.mmt ?? undefined;
+
     const { data } = await apiClient.get<StockHeatmapResponse>(
       "/api/heatmap/stocks",
       {
@@ -680,6 +689,7 @@ export const api = {
           marcap_max: params.marcapMax ?? undefined,
           min_ret: params.minRet ?? undefined,
           min_rs: params.minRs ?? undefined,
+          mmt: mmtParam,
           limit: params.limit,
         },
       }

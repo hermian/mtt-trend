@@ -1,5 +1,5 @@
 from pydantic import BaseModel, ConfigDict
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, Union
 
 # --- Common/General Schemas ---
 class DatesResponse(BaseModel):
@@ -332,6 +332,7 @@ class HeatmapStockItem(BaseModel):
     marcap: float  # 억원
     ret: Optional[float] = None  # 선택 기간 수익률 (%)
     rs: Optional[int] = None
+    mmt: Optional[int] = None
     weight: float  # ∛(시가총액), 트리맵 면적 가중치
 
 
@@ -357,7 +358,9 @@ class StockHeatmapResponse(BaseModel):
     marcap_max: Optional[float] = None
     min_ret: Optional[float] = None
     min_rs: Optional[int] = None
+    mmt: Optional[Union[str, List[int], int]] = None
     limit: int = 0
     stock_count: int
     groups: List[HeatmapGroupItem]
+
 

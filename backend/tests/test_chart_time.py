@@ -49,3 +49,21 @@ def test_kosdaq_amount_volume_2013_real_cache(monkeypatch):
         assert p.indicators.get("kosdaq_volume") > 0
 
 
+def test_kospi_adr14_and_adr20_distinct():
+    response = load_chart_data("kospi")
+    if response is None or not response.data:
+        pytest.skip("kospi_mtt.csv not available")
+    sample_points = response.data[50:]
+    assert len(sample_points) > 100
+    distinct_count = 0
+    for p in sample_points:
+        adr14 = p.indicators.get("adr14")
+        adr20 = p.indicators.get("adr20")
+        assert adr14 is not None
+        assert adr20 is not None
+        if abs(adr14 - adr20) > 0.01:
+            distinct_count += 1
+    assert distinct_count > len(sample_points) * 0.8
+
+
+

@@ -178,6 +178,18 @@ def load_chart_data(
             vix_fix_upper = vix_fix.rolling_mean(window_size=22) + vix_fix.rolling_std(window_size=22) * 2
             vix_fix_fear = vix_fix * (vix_fix > vix_fix_upper).cast(pl.Float64)
             
+            # ADR20 계산 (CSV에 ADR20 컬럼이 없는 KOSPI 등의 경우 adv/dec 기반 20일 롤링 계산)
+            if "ADR20" in df.columns:
+                adr20 = df["ADR20"].cast(pl.Float64, strict=False).fill_null(100.0)
+            elif "adv" in df.columns and "dec" in df.columns:
+                adv_sum20 = df["adv"].cast(pl.Float64, strict=False).rolling_sum(window_size=20)
+                dec_sum20 = df["dec"].cast(pl.Float64, strict=False).rolling_sum(window_size=20)
+                adr20 = (adv_sum20 / dec_sum20.clip(1e-10, None) * 100).fill_null(100.0)
+            elif "ADR14" in df.columns:
+                adr20 = df["ADR14"].cast(pl.Float64, strict=False).fill_null(100.0)
+            else:
+                adr20 = pl.Series([100.0] * len(df))
+
             # 2. 데이터 통합 및 행 단위 추출
             raw_data = df.to_dicts()
             calculated_rsi = rsi.to_list()
@@ -192,6 +204,7 @@ def load_chart_data(
             calculated_disparity_sma50 = disparity_sma50.to_list()
             calculated_vix_fix = vix_fix.to_list()
             calculated_vix_fix_fear = vix_fix_fear.to_list()
+            calculated_adr20 = adr20.to_list()
             
             new_data_points = []
             for i, row in enumerate(raw_data):
@@ -219,7 +232,7 @@ def load_chart_data(
                     "above_sma200": row.get("SMA200_pct") if row.get("SMA200_pct") is not None else row.get("above200ma_pct"),
                     "disparity_sma50": calculated_disparity_sma50[i],
                     "adr14": row.get("ADR14") if row.get("ADR14") is not None else row.get("adr14"),
-                    "adr20": row.get("ADR20") if row.get("ADR20") is not None else (row.get("adr20") if row.get("adr20") is not None else row.get("ADR14")),
+                    "adr20": round(float(row.get("ADR20")), 2) if row.get("ADR20") is not None else round(float(calculated_adr20[i]), 2),
                     "vix_fix": calculated_vix_fix[i],
                     "vix_fix_fear": calculated_vix_fix_fear[i],
                     "price_sma150": row.get("SMA150"),

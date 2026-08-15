@@ -39,6 +39,7 @@ interface HoveredData {
 
 const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, height = 800 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const verticalGuideRef = useRef<HTMLDivElement>(null);
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
   const chartDataRef = useRef<any>(null);
@@ -131,7 +132,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             horzTouchDrag: config.id === "main", // 좌우 이동만 허용
             vertTouchDrag: false,               // @MX:NOTE: Y축 방향 드래그 차단 (오토 스케일 유지 핵심)
           } : true, // @MX:NOTE: PC는 기본값(true)을 사용하여 모든 스크롤 기능 활성화 (마우스 드래그 포함)
-          crosshair: { mode: CrosshairMode.Normal, vertLine: { labelVisible: index === configs.length - 1, color: "#64748b", width: 1, style: 1 }, horzLine: { color: "#64748b", width: 1, style: 1 } },
+          crosshair: { mode: CrosshairMode.Normal, vertLine: { visible: false }, horzLine: { color: "#64748b", width: 1, style: 1 } },
         });
 
         const activeSeries: ISeriesApi<SeriesType>[] = [];
@@ -182,17 +183,27 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         }
 
         chart.subscribeCrosshairMove((param) => {
-           chartsRef.current.forEach((c) => { if (c !== chart) { if (!param.time || (param.point && param.point.x < 0)) { c.setCrosshairPosition(null as any, null as any, null as any); } else { c.setCrosshairPosition(null as any, param.time as any, null as any); } } });
-           if (!param.time || !param.point || param.point.x < 0) { setHoveredData(null); } else {
-              const currentPoint = chartDataRef.current?.data?.find((p: any) => p.time === param.time);
-              if (currentPoint) { 
-                setHoveredData({ 
-                  time: currentPoint.time, 
-                  ohlc: { open: currentPoint.open, high: currentPoint.high, low: currentPoint.low, close: currentPoint.close, volume: currentPoint.volume || 0 }, 
-                  indicators: currentPoint.indicators || {} 
-                }); 
-              }
-           }
+          if (verticalGuideRef.current) {
+            if (!param.time || !param.point || param.point.x < 0) {
+              verticalGuideRef.current.style.display = "none";
+            } else {
+              verticalGuideRef.current.style.display = "block";
+              verticalGuideRef.current.style.transform = `translateX(${param.point.x}px)`;
+            }
+          }
+
+          if (!param.time || !param.point || param.point.x < 0) {
+            setHoveredData(null);
+          } else {
+            const currentPoint = chartDataRef.current?.data?.find((p: any) => p.time === param.time);
+            if (currentPoint) { 
+              setHoveredData({ 
+                time: currentPoint.time, 
+                ohlc: { open: currentPoint.open, high: currentPoint.high, low: currentPoint.low, close: currentPoint.close, volume: currentPoint.volume || 0 }, 
+                indicators: currentPoint.indicators || {} 
+              }); 
+            }
+          }
         });
 
         chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
@@ -332,7 +343,21 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         )}
       </div>
 
-      <div data-scroll-area className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 relative">
+      <div
+        data-scroll-area
+        onMouseLeave={() => {
+          if (verticalGuideRef.current) verticalGuideRef.current.style.display = "none";
+          setHoveredData(null);
+        }}
+        className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 relative"
+      >
+        {/* 심층지표 모든 패널을 관통하는 실시간 수직선(Crosshair 세로선) 가이드 */}
+        <div
+          ref={verticalGuideRef}
+          className="pointer-events-none absolute top-0 bottom-0 z-30 border-l border-dashed border-slate-400/80 hidden transition-none"
+          style={{ width: "1px", left: 0 }}
+        />
+
         {(isLoading || (!chartData && status === "Initializing...")) && (
           <div className="absolute inset-0 z-30 bg-slate-950/70 flex items-center justify-center text-slate-400 font-medium animate-pulse">
             차트 데이터를 불러오는 중입니다...

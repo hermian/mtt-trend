@@ -11,8 +11,8 @@ import {
   HistogramSeries,
   LineStyle,
 } from "lightweight-charts";
-import { useAvwapChart } from "@/hooks/useAvwapChart";
-import type { AvwapPoint } from "@/lib/api";
+import { useAvwapChart, useStockSearch } from "@/hooks/useAvwapChart";
+import type { AvwapPoint, StockSearchResult } from "@/lib/api";
 import { toChartTime, toFiniteNumber } from "./_lib/chartTime";
 
 const MA_COLORS: Record<string, string> = {
@@ -34,8 +34,16 @@ const MA_COLORS: Record<string, string> = {
 export function AvwapChart() {
   const [market, setMarket] = useState<"kospi" | "kosdaq">("kospi");
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
+  const [symbol, setSymbol] = useState<string | null>(null);
 
-  const { data: chartData, isLoading, error } = useAvwapChart(market, interval);
+  // Stock Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showDropdown, setShowDropdown] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery);
+  const { data: chartData, isLoading, error } = useAvwapChart(market, interval, symbol);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const verticalGuideRef = useRef<HTMLDivElement>(null);
@@ -50,6 +58,22 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
+
+  // Close search dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(e.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(e.target as Node)
+      ) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // Initialize enabled anchors when data changes
   useEffect(() => {
@@ -71,6 +95,23 @@ export function AvwapChart() {
     ma?: Record<string, number | null>;
   } | null>(null);
 
+  // Select stock from search
+  const handleSelectStock = (stock: StockSearchResult) => {
+    setSymbol(stock.code);
+    setSearchQuery(`${stock.name} (${stock.code})`);
+    setShowDropdown(false);
+  };
+
+  // Clear stock search and return to market index mode
+  const handleClearStock = (targetMarket?: "kospi" | "kosdaq") => {
+    setSymbol(null);
+    setSearchQuery("");
+    setShowDropdown(false);
+    if (targetMarket) {
+      setMarket(targetMarket);
+    }
+  };
+
   // Toggle individual anchor
   const toggleAnchor = (id: string) => {
     setEnabledAnchors((prev) => {
@@ -91,6 +132,9 @@ export function AvwapChart() {
       setEnabledAnchors(new Set());
     }
   };
+
+  const isStockMode = !!chartData?.symbol;
+  const isEokUnit = chartData?.amount_unit === "억원";
 
   // Build chart layout when chartData arrives
   useEffect(() => {
@@ -162,11 +206,14 @@ export function AvwapChart() {
 
       scrollArea.addEventListener("wheel", onCustomWheel, { passive: false });
 
+      const targetTitle = chartData.name || (chartData.symbol ? chartData.symbol : market.toUpperCase());
+      const amountUnitLabel = chartData.amount_unit || "조원";
+
       const panels = [
         { id: "rsi", name: "RSI (14)", height: 90 },
-        { id: "main", name: `${market.toUpperCase()} 주가 & AVWAP`, height: 420 },
+        { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: 420 },
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
-        { id: "amount", name: "거래대금 (조원) & SMA50", height: 180 },
+        { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
       ];
 
       panels.forEach((panel, index) => {
@@ -223,10 +270,10 @@ export function AvwapChart() {
             vertLine: { visible: false },
             horzLine: {
               visible: true,
-              style: LineStyle.Dashed,
-              width: 1,
-              color: "#94a3b8",
               labelVisible: true,
+              style: LineStyle.Dotted,
+              width: 1,
+              color: "rgba(148, 163, 184, 0.5)",
             },
           },
         });
@@ -237,39 +284,51 @@ export function AvwapChart() {
         // 1. Panel: RSI
         if (panel.id === "rsi") {
           const rsiSeries = chart.addSeries(LineSeries, {
-            color: "#fbbf24",
+            color: "#f59e0b",
             lineWidth: 2,
             priceLineVisible: false,
             lastValueVisible: true,
           });
-          // Add 70 / 30 / 50 threshold lines
-          try {
-            rsiSeries.createPriceLine({ price: 70, color: "#ef4444", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "70" });
-            rsiSeries.createPriceLine({ price: 30, color: "#3b82f6", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "30" });
-            rsiSeries.createPriceLine({ price: 50, color: "#475569", lineWidth: 1, lineStyle: LineStyle.Dotted, axisLabelVisible: false });
-          } catch {}
+          rsiSeries.createPriceLine({
+            price: 70,
+            color: "rgba(239, 68, 68, 0.6)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "70 (과매수)",
+          });
+          rsiSeries.createPriceLine({
+            price: 30,
+            color: "rgba(59, 130, 246, 0.6)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: "30 (과매도)",
+          });
           activeSeries.push(rsiSeries);
         }
 
-        // 2. Panel: Main Price (Candlestick + MAs + BB + AVWAP)
+        // 2. Panel: Main Price & AVWAP
         else if (panel.id === "main") {
+          // Candlestick series (Up: Red, Down: Blue)
           const candleSeries = chart.addSeries(CandlestickSeries, {
             upColor: "#ef4444",
             downColor: "#3b82f6",
+            borderUpColor: "#ef4444",
+            borderDownColor: "#3b82f6",
             wickUpColor: "#ef4444",
             wickDownColor: "#3b82f6",
-            borderVisible: false,
           });
           activeSeries.push(candleSeries);
 
           // Moving Averages
-          const samplePoint = chartData.points[chartData.points.length - 1];
-          if (samplePoint && samplePoint.ma) {
-            Object.keys(samplePoint.ma).forEach((maKey) => {
-              const color = MA_COLORS[maKey] || "#94a3b8";
+          const samplePt = chartData.points[chartData.points.length - 1];
+          if (samplePt?.ma) {
+            Object.keys(samplePt.ma).forEach((maName) => {
+              const color = MA_COLORS[maName] || "#94a3b8";
               const s = chart.addSeries(LineSeries, {
                 color,
-                lineWidth: 1,
+                lineWidth: maName === "EMA_10" || maName === "SMA_10" || maName === "SMA_3" ? 2 : 1,
                 priceLineVisible: false,
                 lastValueVisible: false,
               });
@@ -277,9 +336,9 @@ export function AvwapChart() {
             });
           }
 
-          // BB Upper
+          // BB Upper line
           const bbSeries = chart.addSeries(LineSeries, {
-            color: "#64748b",
+            color: "#06b6d4",
             lineWidth: 1,
             lineStyle: LineStyle.Dotted,
             priceLineVisible: false,
@@ -287,13 +346,13 @@ export function AvwapChart() {
           });
           activeSeries.push(bbSeries);
 
-          // Base VWAP (White), HVWAP (Red), LVWAP (Yellow)
+          // Base VWAP, HVWAP, LVWAP
           const vwapSeries = chart.addSeries(LineSeries, {
-            color: "#f8fafc",
+            color: "#ffffff",
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
-            lastValueVisible: true,
+            lastValueVisible: false,
           });
           activeSeries.push(vwapSeries);
 
@@ -302,7 +361,7 @@ export function AvwapChart() {
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
-            lastValueVisible: true,
+            lastValueVisible: false,
           });
           activeSeries.push(hvwapSeries);
 
@@ -311,16 +370,16 @@ export function AvwapChart() {
             lineWidth: 2,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
-            lastValueVisible: true,
+            lastValueVisible: false,
           });
           activeSeries.push(lvwapSeries);
 
-          // Anchor series
+          // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
             chartData.anchors.forEach((anc) => {
               const aSeries = chart.addSeries(LineSeries, {
                 color: anc.color,
-                lineWidth: 1,
+                lineWidth: 2,
                 lineStyle: LineStyle.Solid,
                 priceLineVisible: false,
                 lastValueVisible: false,
@@ -358,13 +417,18 @@ export function AvwapChart() {
           activeSeries.push(vixSeries);
         }
 
-        // 4. Panel: Trading Amount (거래대금, 조원) & Amount SMA50
+        // 4. Panel: Trading Amount (거래대금) & Amount SMA50
         else if (panel.id === "amount") {
           const amtSeries = chart.addSeries(HistogramSeries, {
             priceFormat: {
               type: "custom",
-              formatter: (price: number) => `${price.toFixed(1)}조`,
-              minMove: 0.1,
+              formatter: (price: number) => {
+                if (isEokUnit) {
+                  return price >= 10000 ? `${(price / 10000).toFixed(1)}조` : `${Math.round(price).toLocaleString()}억`;
+                }
+                return `${price.toFixed(1)}조`;
+              },
+              minMove: isEokUnit ? 1 : 0.1,
             },
             priceLineVisible: false,
             lastValueVisible: false,
@@ -454,73 +518,82 @@ export function AvwapChart() {
         return out.sort((a, b) => (a.time < b.time ? -1 : 1));
       };
 
-      // Populate Series Data
+      // Populate data into series
       const pts = chartData.points;
       if (pts.length > 0) {
         // 1. RSI
-        const rsiSeries = seriesRef.current.get("rsi")?.[0];
-        if (rsiSeries) {
-          rsiSeries.setData(linePoints((p) => p.rsi));
+        const rsiSeriesList = seriesRef.current.get("rsi") || [];
+        if (rsiSeriesList[0]) {
+          rsiSeriesList[0].setData(linePoints((p) => p.rsi));
         }
 
-        // 2. Main Candle + MAs + BB + VWAP
+        // 2. Main (Candlesticks, MAs, BB Upper, VWAPs, Anchors)
         const mainSeriesList = seriesRef.current.get("main") || [];
         if (mainSeriesList.length > 0) {
-          const candleSeries = mainSeriesList[0];
+          // Candlestick
           const candleData = pts
             .map((p) => {
               const time = toChartTime(p.date);
               if (!time) return null;
-              return {
-                time,
-                open: p.open,
-                high: p.high,
-                low: p.low,
-                close: p.close,
-              };
+              return { time, open: p.open, high: p.high, low: p.low, close: p.close };
             })
-            .filter((c): c is NonNullable<typeof c> => c !== null);
-          candleSeries.setData(candleData);
+            .filter((v): v is NonNullable<typeof v> => v !== null);
+          mainSeriesList[0].setData(candleData);
 
-          let sIdx = 1;
-          const samplePoint = pts[pts.length - 1];
-          if (samplePoint?.ma) {
-            Object.keys(samplePoint.ma).forEach((maKey) => {
-              const maS = mainSeriesList[sIdx++];
-              if (maS) {
-                maS.setData(linePoints((p) => p.ma[maKey]));
+          // MAs
+          let seriesIdx = 1;
+          const samplePt = pts[pts.length - 1];
+          if (samplePt?.ma) {
+            Object.keys(samplePt.ma).forEach((maName) => {
+              if (mainSeriesList[seriesIdx]) {
+                mainSeriesList[seriesIdx].setData(linePoints((p) => p.ma[maName]));
+                seriesIdx++;
               }
             });
           }
 
           // BB Upper
-          const bbS = mainSeriesList[sIdx++];
-          if (bbS) {
-            bbS.setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
+          if (mainSeriesList[seriesIdx]) {
+            if (showBbUpper) {
+              mainSeriesList[seriesIdx].setData(linePoints((p) => p.bb_upper));
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
           }
 
           // Base VWAP
-          const vwapS = mainSeriesList[sIdx++];
-          if (vwapS) {
-            vwapS.setData(showVwap ? linePoints((p) => p.vwap) : []);
+          if (mainSeriesList[seriesIdx]) {
+            if (showVwap) {
+              mainSeriesList[seriesIdx].setData(linePoints((p) => p.vwap));
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
           }
 
           // HVWAP
-          const hvwapS = mainSeriesList[sIdx++];
-          if (hvwapS) {
-            hvwapS.setData(showHvwap ? linePoints((p) => p.hvwap) : []);
+          if (mainSeriesList[seriesIdx]) {
+            if (showHvwap) {
+              mainSeriesList[seriesIdx].setData(linePoints((p) => p.hvwap));
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
           }
 
           // LVWAP
-          const lvwapS = mainSeriesList[sIdx++];
-          if (lvwapS) {
-            lvwapS.setData(showLvwap ? linePoints((p) => p.lvwap) : []);
+          if (mainSeriesList[seriesIdx]) {
+            if (showLvwap) {
+              mainSeriesList[seriesIdx].setData(linePoints((p) => p.lvwap));
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
           }
-        }
 
-        // Anchor series
-        if (chartData.anchors) {
-          chartData.anchors.forEach((anc) => {
+          // Anchors
+          chartData.anchors?.forEach((anc) => {
             const aS = anchorSeriesMapRef.current.get(anc.id);
             if (aS) {
               if (enabledAnchors.has(anc.id)) {
@@ -605,15 +678,11 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, market, interval]);
+  }, [chartData, interval, market, symbol, isEokUnit]);
 
-  // Handle dynamic toggles of VWAP, HVWAP, LVWAP, BB Upper, and Anchors without rebuilding charts
+  // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
-    if (!chartData || chartData.points.length === 0) return;
-    const pts = chartData.points;
-    const mainSeriesList = seriesRef.current.get("main") || [];
-    if (mainSeriesList.length === 0) return;
-
+    if (!chartData) return;
     const linePoints = (pick: (p: AvwapPoint) => unknown) => {
       const out: { time: string; value: number }[] = [];
       const seen = new Set<string>();
@@ -627,39 +696,29 @@ export function AvwapChart() {
       return out.sort((a, b) => (a.time < b.time ? -1 : 1));
     };
 
-    let sIdx = 1;
-    const samplePoint = pts[pts.length - 1];
-    if (samplePoint?.ma) {
-      sIdx += Object.keys(samplePoint.ma).length;
-    }
+    const mainSeriesList = seriesRef.current.get("main") || [];
+    if (mainSeriesList.length > 0) {
+      const samplePt = chartData.points[chartData.points.length - 1];
+      const maCount = samplePt?.ma ? Object.keys(samplePt.ma).length : 0;
+      const bbIdx = 1 + maCount;
+      const vwapIdx = bbIdx + 1;
+      const hvwapIdx = bbIdx + 2;
+      const lvwapIdx = bbIdx + 3;
 
-    // BB Upper
-    const bbS = mainSeriesList[sIdx++];
-    if (bbS) {
-      bbS.setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
-    }
+      if (mainSeriesList[bbIdx]) {
+        mainSeriesList[bbIdx].setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
+      }
+      if (mainSeriesList[vwapIdx]) {
+        mainSeriesList[vwapIdx].setData(showVwap ? linePoints((p) => p.vwap) : []);
+      }
+      if (mainSeriesList[hvwapIdx]) {
+        mainSeriesList[hvwapIdx].setData(showHvwap ? linePoints((p) => p.hvwap) : []);
+      }
+      if (mainSeriesList[lvwapIdx]) {
+        mainSeriesList[lvwapIdx].setData(showLvwap ? linePoints((p) => p.lvwap) : []);
+      }
 
-    // Base VWAP
-    const vwapS = mainSeriesList[sIdx++];
-    if (vwapS) {
-      vwapS.setData(showVwap ? linePoints((p) => p.vwap) : []);
-    }
-
-    // HVWAP
-    const hvwapS = mainSeriesList[sIdx++];
-    if (hvwapS) {
-      hvwapS.setData(showHvwap ? linePoints((p) => p.hvwap) : []);
-    }
-
-    // LVWAP
-    const lvwapS = mainSeriesList[sIdx++];
-    if (lvwapS) {
-      lvwapS.setData(showLvwap ? linePoints((p) => p.lvwap) : []);
-    }
-
-    // Anchors
-    if (chartData.anchors) {
-      chartData.anchors.forEach((anc) => {
+      chartData.anchors?.forEach((anc) => {
         const aS = anchorSeriesMapRef.current.get(anc.id);
         if (aS) {
           if (enabledAnchors.has(anc.id)) {
@@ -706,27 +765,114 @@ export function AvwapChart() {
     ma: latestPoint.ma,
   } : null);
 
+  const formatAmountValue = (val: number | null | undefined) => {
+    if (val === null || val === undefined) return "";
+    if (isEokUnit) {
+      return val >= 10000 ? `${(val / 10000).toFixed(1)}조` : `${Math.round(val).toLocaleString()}억`;
+    }
+    return `${val.toFixed(1)}조`;
+  };
+
   return (
     <div className="flex flex-col h-full bg-gray-950 text-white select-none">
       {/* ── 1. Top Control Bar ── */}
       <div className="bg-gray-900/80 border-b border-gray-800 p-3 flex flex-wrap items-center justify-between gap-3 backdrop-blur-md sticky top-0 z-20">
-        {/* Left: Market & Interval Selectors */}
-        <div className="flex items-center gap-3">
-          {/* Market Toggle */}
+        {/* Left: Market & Interval Selectors & Stock Search */}
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Market Toggle (Index mode) */}
           <div className="inline-flex rounded-lg bg-gray-800/80 p-1 border border-gray-700">
-            {(["kospi", "kosdaq"] as const).map((m) => (
-              <button
-                key={m}
-                onClick={() => setMarket(m)}
-                className={`px-3 py-1 text-xs font-bold rounded-md transition-all uppercase ${
-                  market === m
-                    ? "bg-blue-600 text-white shadow-md"
-                    : "text-gray-400 hover:text-white"
-                }`}
+            {(["kospi", "kosdaq"] as const).map((m) => {
+              const isSelected = !symbol && market === m;
+              return (
+                <button
+                  key={m}
+                  onClick={() => handleClearStock(m)}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all uppercase ${
+                    isSelected
+                      ? "bg-blue-600 text-white shadow-md"
+                      : "text-gray-400 hover:text-white"
+                  }`}
+                >
+                  {m.toUpperCase()}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Stock Search Box with Autocomplete */}
+          <div className="relative">
+            <div className={`flex items-center bg-gray-800/90 border rounded-lg px-2.5 py-1 text-xs transition-all ${
+              symbol ? "border-emerald-500/80 ring-1 ring-emerald-500/50" : "border-gray-700 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+            }`}>
+              <span className="text-gray-400 mr-1.5">🔍</span>
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="종목명 또는 코드 (예: 삼성전자, 005930)"
+                value={searchQuery}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setShowDropdown(true);
+                }}
+                onFocus={() => setShowDropdown(true)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    if (searchResults && searchResults.length > 0) {
+                      handleSelectStock(searchResults[0]);
+                    } else if (searchQuery.trim()) {
+                      setSymbol(searchQuery.trim());
+                      setShowDropdown(false);
+                    }
+                  }
+                }}
+                className="bg-transparent text-white placeholder-gray-500 focus:outline-none w-48 sm:w-56 text-xs"
+              />
+              {(searchQuery || symbol) && (
+                <button
+                  onClick={() => handleClearStock()}
+                  className="text-gray-400 hover:text-white ml-1 p-0.5"
+                  title="지수 모드로 복귀"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Autocomplete Dropdown */}
+            {showDropdown && searchQuery.trim().length >= 1 && (
+              <div
+                ref={dropdownRef}
+                className="absolute left-0 top-full mt-1 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar"
               >
-                {m.toUpperCase()}
-              </button>
-            ))}
+                {isSearching ? (
+                  <div className="p-3 text-xs text-gray-400 text-center">검색 중...</div>
+                ) : searchResults && searchResults.length > 0 ? (
+                  searchResults.map((stk) => (
+                    <button
+                      key={stk.code}
+                      onClick={() => handleSelectStock(stk)}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-white">{stk.name}</span>
+                        <span className="text-[11px] text-gray-400 font-mono">{stk.code}</span>
+                      </div>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                          stk.market === "KOSPI"
+                            ? "bg-blue-900/60 text-blue-300"
+                            : "bg-emerald-900/60 text-emerald-300"
+                        }`}
+                      >
+                        {stk.market}
+                      </span>
+                    </button>
+                  ))
+                ) : (
+                  <div className="p-3 text-xs text-gray-400 text-center">검색 결과가 없습니다</div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Interval Toggle */}
@@ -813,7 +959,9 @@ export function AvwapChart() {
       {/* ── 2. Preset Anchor Badges Bar ── */}
       {chartData?.anchors && chartData.anchors.length > 0 && (
         <div className="bg-gray-900/50 border-b border-gray-800/80 px-4 py-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar text-[11px]">
-          <span className="text-gray-500 font-bold mr-1 flex-shrink-0">변곡점 앵커:</span>
+          <span className="text-gray-500 font-bold mr-1 flex-shrink-0">
+            {isStockMode ? "주요 앵커:" : "변곡점 앵커:"}
+          </span>
           {chartData.anchors.map((anc) => {
             const isEnabled = enabledAnchors.has(anc.id);
             return (
@@ -830,7 +978,7 @@ export function AvwapChart() {
                   className="w-2 h-2 rounded-full"
                   style={{ backgroundColor: isEnabled ? anc.color : "#4b5563" }}
                 />
-                <span>{anc.anchor_date}</span>
+                <span>{anc.name || anc.anchor_date}</span>
               </button>
             );
           })}
@@ -839,6 +987,23 @@ export function AvwapChart() {
 
       {/* ── 3. Realtime Status / HUD Header ── */}
       <div className="bg-gray-900/30 px-4 py-1.5 border-b border-gray-800/40 text-xs font-mono flex flex-wrap items-center gap-4 text-gray-400">
+        {chartData && (
+          <span className="flex items-center gap-1.5">
+            <span
+              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                isStockMode
+                  ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800"
+                  : "bg-blue-950/80 text-blue-400 border border-blue-800"
+              }`}
+            >
+              {isStockMode ? "종목" : "지수"}
+            </span>
+            <span className="text-gray-200 font-bold">
+              {chartData.name}
+              {chartData.symbol ? ` (${chartData.symbol})` : ""}
+            </span>
+          </span>
+        )}
         {activeDisplay && (
           <>
             <span className="text-blue-400 font-bold">{activeDisplay.time}</span>
@@ -859,7 +1024,7 @@ export function AvwapChart() {
               </span>
             )}
             {activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
-              <span>거래대금: <span className="text-amber-400 font-bold">{activeDisplay.amount.toFixed(1)}조</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {activeDisplay.amountSma50.toFixed(1)}조)</span> : null}</span>
+              <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
             )}
             {activeDisplay.rsi !== null && activeDisplay.rsi !== undefined && (
               <span>RSI(14): <span className="text-amber-400 font-bold">{activeDisplay.rsi.toFixed(1)}</span></span>
@@ -879,13 +1044,13 @@ export function AvwapChart() {
         {isLoading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950/80 backdrop-blur-sm z-30 text-emerald-400 font-mono text-sm gap-2">
             <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-            <span>KOSPI/KOSDAQ AVWAP 데이터를 로드하는 중...</span>
+            <span>AVWAP 차트 데이터를 로드하는 중...</span>
           </div>
         )}
 
         {error && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-950 z-30 text-rose-400 text-sm font-medium">
-            <span>차트 데이터를 불러오는 데 실패했습니다.</span>
+            <span>차트 데이터를 불러오는 데 실패했습니다. (종목코드 또는 백엔드 상태를 확인하세요)</span>
           </div>
         )}
 
@@ -911,7 +1076,9 @@ export function AvwapChart() {
           {/* Panel 2: Main Candlestick & AVWAP */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
             <div className="absolute top-2 left-3 z-10 flex items-center gap-2 text-xs font-bold text-gray-300 bg-gray-900/70 px-2.5 py-1 rounded border border-gray-700/80 backdrop-blur-sm">
-              <span className="text-white uppercase">{market}</span>
+              <span className="text-white uppercase">
+                {chartData?.name || (symbol ? symbol : market)}
+              </span>
               <span className="text-blue-400">{interval}</span>
               <span className="text-gray-500">|</span>
               <span className="text-gray-400">AVWAP & MAs</span>
@@ -930,7 +1097,7 @@ export function AvwapChart() {
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           <div className="w-full relative bg-[#090d16]">
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              거래대금 (조원) & SMA (주황 실선)
+              거래대금 ({chartData?.amount_unit || "조원"}) & SMA (주황 실선)
             </div>
             <div data-chart-id="amount" className="w-full" />
           </div>

@@ -402,9 +402,18 @@ class AvwapAnchorSeries(BaseModel):
     values: List[AvwapAnchorValue]
 
 
+class StockSearchResult(BaseModel):
+    code: str
+    name: str
+    market: str
+
+
 class AvwapChartResponse(BaseModel):
     market: str
+    symbol: Optional[str] = None
+    name: Optional[str] = None
     interval: str
+    amount_unit: str = "조원"
     points: List[AvwapPoint]
     anchors: List[AvwapAnchorSeries]
     preset_dates: List[str]

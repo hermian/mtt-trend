@@ -94,14 +94,34 @@
 
 - **주요 파일**:
   - 컴포넌트: `frontend/src/app/trend/_components/AvwapChart.tsx`
-  - API 클라이언트: `frontend/src/lib/api.ts` (`api.getAvwapChartData`)
-  - Hook: `frontend/src/hooks/useAvwapChart.ts` (`useAvwapChart`)
+  - API 클라이언트: `frontend/src/lib/api.ts` (`api.getAvwapChartData`, `api.searchStocks`)
+  - Hook: `frontend/src/hooks/useAvwapChart.ts` (`useAvwapChart`, `useStockSearch`)
   - 페이지 연결: `frontend/src/app/trend/page.tsx` (`tab=avwap`)
   - 내비게이션: `Sidebar.tsx`, `MobileSidebar.tsx` ('AVWAP 차트' 메뉴)
 - **UI 및 차트 동기화**:
   - 4개 `createChart` 인스턴스 간 `timeScale.subscribeVisibleLogicalRangeChange`를 통한 가로축 동기화
   - `subscribeCrosshairMove` 및 절대 위치 수직 가이드 점선 라인 (`verticalGuideRef`) 동기화
   - 상단 HUD 상태 바에 날짜, OHLCV, 등락률, RSI, VIX Fix, 거래대금, SMA 실시간 수치 표기
+  - 종목 검색 자동완성 입력창(드롭다운 제안, 엔터 선택, ✕ 복귀 버튼) 및 개별 종목과 지수 간 매끄러운 전환
+
+---
+
+## 3.4 Individual Stock Search & Plotting Extension (개별 종목 지원)
+
+1. **종목 검색 및 식별**:
+   - `GET /api/charts/stocks/search?q=...` 엔드포인트를 통해 종목명(예: `삼성전자`) 또는 종목코드(예: `005930`)로 실시간 자동완성 제공.
+   - `~/.cache/db/stock_master.db` 및 `~/.cache/db/marcap.duckdb`의 `marcap_adj` 테이블을 활용하여 종목코드, 종목명, 소속 시장(KOSPI/KOSDAQ)을 정확하게 조회.
+2. **개별 종목 기술 지표 및 리샘플링**:
+   - `GET /api/charts/avwap?symbol=005930&interval=1D`
+   - 수정주가(OHLCV + Amount) 데이터를 1D, 1W, 1M, 1Y로 리샘플링하여 동일한 4단 패널 포맷으로 렌더링.
+   - 거래대금 단위: 개별 종목은 `억원` 단위(`Amount / 1e8`), 지수는 `조원` 단위(`Amount / 1e12`)로 동적 포맷팅 지원.
+3. **개별 종목 동적 앵커**:
+   - `YTD (올해 초)`
+   - `52주 최고가 (52W High)`
+   - `52주 최저가 (52W Low)`
+   - `역대 최고가 (ATH)`
+   - `역대 최저가 (ATL)`
+   - 기본 `VWAP`, `HVWAP`, `LVWAP` 및 볼린저 밴드 상단(BB Upper) 지원.
 
 ---
 
@@ -112,11 +132,14 @@
    - `test_avwap_kospi_1w`: KOSPI 주봉 리샘플링 및 지표 검증
    - `test_avwap_kospi_1m`: KOSPI 월봉 리샘플링 및 지표 검증
    - `test_avwap_kospi_1y`: KOSPI 년봉 리샘플링 및 2000년 이후 전체 데이터셋 검증
-   - `test_avwap_kosdaq_1d`: KOSDAQ 일봉 및 코스닥 전용 앵커 포인트 검증
+   - `test_avwap_kosdaq`: KOSDAQ 일/주/월/년봉 및 코스닥 전용 앵커 포인트 검증
+   - `test_stock_search`: 종목 검색 자동완성 API 검증
+   - `test_avwap_stock_by_code_and_name`: 종목코드(`005930`) 및 종목명(`SK하이닉스`) 기반 개별 종목 4패널 AVWAP 차트 및 404 예외 검증
 2. **프론트엔드 컴포넌트 테스트 (`frontend/src/app/trend/_components/__tests__/AvwapChart.test.tsx`)**:
-   - 컨트롤 바 렌더링(시장 선택, 주기 선택, 빠른 토글 버튼, 앵커 뱃지)
+   - 컨트롤 바 렌더링(시장 선택, 검색 인풋, 주기 선택, 빠른 토글 버튼, 앵커 뱃지)
    - 시장 및 주기 전환 시 쿼리 파라미터 호출 검증
+   - 종목 검색 자동완성 입력 및 종목 선택 플롯 검증
    - 앵커 개별/전체 토글 동작 검증
-   - 거래대금(조원) 및 SMA 패널 라벨 렌더링 검증
+   - 거래대금(조원/억원) 및 SMA 패널 라벨 렌더링 검증
 3. **프로덕션 빌드 검증 (`npm run build`)**:
    - Next.js Turbopack 정적 페이지 빌드 및 TypeScript 타입 체크 100% 무결성 검증

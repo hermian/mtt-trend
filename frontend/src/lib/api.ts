@@ -700,14 +700,30 @@ export const api = {
   // GET /api/charts/avwap → AvwapChartResponse
   getAvwapChartData: async (
     market: string = "kospi",
-    interval: string = "1D"
+    interval: string = "1D",
+    symbol?: string | null
   ): Promise<AvwapChartResponse> => {
     const { data } = await apiClient.get<AvwapChartResponse>("/api/charts/avwap", {
-      params: { market, interval },
+      params: { market, interval, symbol: symbol || undefined },
+    });
+    return data;
+  },
+
+  // GET /api/charts/stocks/search → StockSearchResult[]
+  searchStocks: async (query: string): Promise<StockSearchResult[]> => {
+    if (!query || !query.trim()) return [];
+    const { data } = await apiClient.get<StockSearchResult[]>("/api/charts/stocks/search", {
+      params: { q: query.trim() },
     });
     return data;
   },
 };
+
+export interface StockSearchResult {
+  code: string;
+  name: string;
+  market: string;
+}
 
 export interface AvwapPoint {
   date: string;
@@ -744,7 +760,10 @@ export interface AvwapAnchorSeries {
 
 export interface AvwapChartResponse {
   market: string;
+  symbol?: string | null;
+  name?: string | null;
   interval: string;
+  amount_unit?: string;
   points: AvwapPoint[];
   anchors: AvwapAnchorSeries[];
   preset_dates: string[];

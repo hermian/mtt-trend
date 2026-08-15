@@ -1,7 +1,7 @@
 import os
 import sqlite3
 from datetime import date as date_cls, timedelta
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query
 from app.schemas import (
     ChartDataResponse,
@@ -27,6 +27,7 @@ from app.schemas import (
     ForeignFlowResponse,
     ForeignFlowPoint,
     AvwapChartResponse,
+    StockSearchResult,
 )
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
@@ -36,7 +37,7 @@ from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
-from app.utils.avwap_utils import load_avwap_chart_data
+from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
 from app.utils.valuation_band_utils import (
     ALLOWED_INDEXES,
     compute_band_levels,
@@ -1107,18 +1108,31 @@ async def get_wics_index_all(
         conn.close()
 
 
+@router.get("/stocks/search", response_model=List[StockSearchResult])
+async def search_stocks_endpoint(
+    q: str = Query(..., min_length=1, description="검색할 종목명 또는 종목코드"),
+    limit: int = Query(10, ge=1, le=50, description="최대 반환 개수")
+):
+    """
+    종목명 또는 종목코드로 주식 검색 목록을 반환합니다.
+    """
+    return search_stocks_db(query=q, limit=limit)
+
+
 @router.get("/avwap", response_model=AvwapChartResponse)
 async def get_avwap_chart_data(
     market: str = Query("kospi", description="kospi | kosdaq"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
+    symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자)"),
 ):
     """
-    KOSPI / KOSDAQ AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    KOSPI / KOSDAQ 또는 개별 주식의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
     """
-    data = load_avwap_chart_data(market=market, interval=interval)
+    data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
     if not data:
+        target_desc = f"stock '{symbol}'" if symbol else f"market '{market}'"
         raise HTTPException(
             status_code=404,
-            detail=f"AVWAP chart data not found for market '{market}' with interval '{interval}'."
+            detail=f"AVWAP chart data not found for {target_desc} with interval '{interval}'."
         )
     return data

@@ -29,7 +29,9 @@ vi.mock("lightweight-charts", () => ({
 describe("AvwapChart Component", () => {
   const mockChartData = {
     market: "kospi",
+    name: "KOSPI",
     interval: "1D",
+    amount_unit: "조원",
     points: [
       {
         date: "2024-01-02",
@@ -69,10 +71,14 @@ describe("AvwapChart Component", () => {
       isLoading: false,
       error: null,
     } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
 
     render(<AvwapChart />);
 
-    expect(screen.getByText("KOSPI")).toBeInTheDocument();
+    expect(screen.getAllByText("KOSPI")[0]).toBeInTheDocument();
     expect(screen.getByText("KOSDAQ")).toBeInTheDocument();
     expect(screen.getByText("일봉")).toBeInTheDocument();
     expect(screen.getByText("주봉")).toBeInTheDocument();
@@ -81,9 +87,10 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("VWAP")).toBeInTheDocument();
     expect(screen.getByText("HVWAP(최고)")).toBeInTheDocument();
     expect(screen.getByText("LVWAP(최저)")).toBeInTheDocument();
-    expect(screen.getByText("2021-06-28")).toBeInTheDocument();
+    expect(screen.getByText(/2021-06-28/)).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();
     expect(screen.getByText(/거래대금 \(조원\) & SMA/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/종목명 또는 코드/)).toBeInTheDocument();
   });
 
   it("allows switching market and interval", () => {
@@ -91,6 +98,10 @@ describe("AvwapChart Component", () => {
       data: mockChartData,
       isLoading: false,
       error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
     } as any);
 
     render(<AvwapChart />);
@@ -101,7 +112,31 @@ describe("AvwapChart Component", () => {
     const weeklyBtn = screen.getByText("주봉");
     fireEvent.click(weeklyBtn);
 
-    expect(useAvwapSpy).toHaveBeenCalledWith("kosdaq", "1W");
+    expect(useAvwapSpy).toHaveBeenCalledWith("kosdaq", "1W", null);
+  });
+
+  it("allows searching and selecting a stock", () => {
+    const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [{ code: "005930", name: "삼성전자", market: "KOSPI" }],
+      isLoading: false,
+    } as any);
+
+    render(<AvwapChart />);
+
+    const input = screen.getByPlaceholderText(/종목명 또는 코드/);
+    fireEvent.change(input, { target: { value: "삼성" } });
+
+    const stockOption = screen.getByText("삼성전자");
+    expect(stockOption).toBeInTheDocument();
+    fireEvent.click(stockOption);
+
+    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "005930");
   });
 
   it("toggles anchor buttons", () => {
@@ -110,10 +145,14 @@ describe("AvwapChart Component", () => {
       isLoading: false,
       error: null,
     } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
 
     render(<AvwapChart />);
 
-    const anchorBadge = screen.getByText("2021-06-28");
+    const anchorBadge = screen.getByText(/2021-06-28/);
     expect(anchorBadge).toBeInTheDocument();
     fireEvent.click(anchorBadge);
 

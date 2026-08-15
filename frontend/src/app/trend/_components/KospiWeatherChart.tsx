@@ -90,7 +90,15 @@ export function KospiWeatherChart() {
     if (!containerRef.current) return;
     setStatus("Building KOSPI Weather 20-Panel Engine...");
 
+    const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
+    if (!scrollArea) return;
+
+    let onCustomWheel: ((e: WheelEvent) => void) | null = null;
+
     const cleanup = () => {
+      if (onCustomWheel && scrollArea) {
+        scrollArea.removeEventListener("wheel", onCustomWheel);
+      }
       chartsRef.current.forEach((c) => c.remove());
       chartsRef.current.clear();
       seriesRef.current.clear();
@@ -98,8 +106,55 @@ export function KospiWeatherChart() {
     cleanup();
 
     try {
-      const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
-      if (!scrollArea) return;
+      onCustomWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) {
+          e.preventDefault();
+          const firstChart = chartsRef.current.values().next().value;
+          if (!firstChart) return;
+          const currentRange = firstChart.timeScale().getVisibleLogicalRange();
+          if (!currentRange) return;
+
+          const delta = e.deltaY;
+          const zoomFactor = delta > 0 ? 1.15 : 0.85;
+          const length = currentRange.to - currentRange.from;
+          const newLength = Math.max(15, Math.min(10000, length * zoomFactor));
+          const diff = newLength - length;
+
+          const rect = scrollArea.getBoundingClientRect();
+          const cursorRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          const newFrom = currentRange.from - diff * cursorRatio;
+          const newTo = currentRange.to + diff * (1 - cursorRatio);
+
+          isSyncingRef.current = true;
+          chartsRef.current.forEach((c) => {
+            try {
+              c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+            } catch {}
+          });
+          isSyncingRef.current = false;
+        } else if (e.shiftKey) {
+          e.preventDefault();
+          const firstChart = chartsRef.current.values().next().value;
+          if (!firstChart) return;
+          const currentRange = firstChart.timeScale().getVisibleLogicalRange();
+          if (!currentRange) return;
+
+          const length = currentRange.to - currentRange.from;
+          const shiftAmount = (e.deltaY || e.deltaX) * (length / 600);
+          const newFrom = currentRange.from + shiftAmount;
+          const newTo = currentRange.to + shiftAmount;
+
+          isSyncingRef.current = true;
+          chartsRef.current.forEach((c) => {
+            try {
+              c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+            } catch {}
+          });
+          isSyncingRef.current = false;
+        }
+      };
+
+      scrollArea.addEventListener("wheel", onCustomWheel, { passive: false });
 
       WEATHER_20PANEL_CONFIGS.forEach((config, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${config.id}"]`) as HTMLElement;
@@ -114,8 +169,8 @@ export function KospiWeatherChart() {
           grid: { vertLines: { color: "#1e293b" }, horzLines: { color: "#1e293b" } },
           timeScale: { visible: index === WEATHER_20PANEL_CONFIGS.length - 1, borderColor: "#334155", rightOffset: 20, barSpacing: 10 },
           rightPriceScale: { borderColor: "#334155", scaleMargins: { top: 0.1, bottom: 0.1 }, autoScale: true, minimumWidth: 105 },
-          handleScroll: { mouseWheel: true, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: false },
-          handleScale: { axisPressedMouseMove: true, mouseWheel: true, pinch: true },
+          handleScroll: { mouseWheel: false, pressedMouseMove: true, horzTouchDrag: true, vertTouchDrag: true },
+          handleScale: { axisPressedMouseMove: true, mouseWheel: false, pinch: true },
           crosshair: {
             vertLine: {
               visible: false,
@@ -679,6 +734,9 @@ export function KospiWeatherChart() {
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${status === "Ready" ? "bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" : "bg-blue-500 animate-pulse"}`} />
           <h3 className="font-bold text-slate-100 text-xs uppercase tracking-tight">KOSPI Weather Full-Period (1995~Present)</h3>
+          <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40">
+            휠: 패널 세로 이동 | Ctrl+휠: 줌 | Shift+휠: 가로 이동
+          </span>
           <button onClick={scrollToLatest} className="text-[9px] bg-slate-800 hover:bg-emerald-600 text-slate-300 hover:text-white px-2 py-0.5 rounded border border-slate-700 transition-all font-bold uppercase tracking-wider">
             Sync Latest
           </button>

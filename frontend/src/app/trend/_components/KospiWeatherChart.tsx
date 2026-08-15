@@ -424,7 +424,7 @@ export function KospiWeatherChart() {
             lineColor: "#3b82f6",
             lineWidth: 2,
           }));
-        } else if (config.id === "rsi_14") {
+        } else if (config.id === "rsi" || config.id === "rsi_14") {
           const s = addPanelSeries(BaselineSeries, {
             baseValue: { type: "price", price: 50 },
             topFillColor1: "rgba(239, 68, 68, 0.35)",
@@ -436,8 +436,8 @@ export function KospiWeatherChart() {
             lineWidth: 2,
           });
           try {
-            s.createPriceLine({ price: 70, color: "#ef4444", lineStyle: LineStyle.Dashed, axisLabelVisible: false });
-            s.createPriceLine({ price: 30, color: "#3b82f6", lineStyle: LineStyle.Dashed, axisLabelVisible: false });
+            s.createPriceLine({ price: 70, color: "#ffffff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true });
+            s.createPriceLine({ price: 30, color: "#ffffff", lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true });
           } catch {}
           activeSeries.push(s);
         } else if (config.id === "macd") {
@@ -651,6 +651,8 @@ export function KospiWeatherChart() {
       } else if (config.id === "macd") {
         safeSet(activeSeries[0], linePoints((p) => p.indicators?.macd));
         safeSet(activeSeries[1], linePoints((p) => p.indicators?.macd_signal));
+      } else if (config.id === "rsi" || config.id === "rsi_14") {
+        safeSet(activeSeries[0], linePoints((p) => p.indicators?.rsi ?? p.indicators?.rsi_14));
       } else {
         const alias: Record<string, string> = {
           mcclellan_summation: "mcclellan_summation_indicator",

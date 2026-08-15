@@ -364,25 +364,15 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   };
 
   return (
-    <div ref={containerRef} className="relative flex flex-col w-full h-screen bg-slate-900 overflow-hidden border-t border-slate-800">
-      <style jsx global>{`
-        @media (max-width: 767px) {
-          .indicator-scroll-area::-webkit-scrollbar { width: 12px; display: block !important; } 
-          .indicator-scroll-area::-webkit-scrollbar-track { background: #1e293b; } 
-          .indicator-scroll-area::-webkit-scrollbar-thumb { background: #475569; border-radius: 10px; border: 2px solid #1e293b; } 
-          .indicator-scroll-area::-webkit-scrollbar-thumb:hover { background: #64748b; }
-          .indicator-scroll-area { -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-        }
-        @media (min-width: 768px) {
-          .indicator-scroll-area::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; }
-          .indicator-scroll-area { scrollbar-width: none; -ms-overflow-style: none; -webkit-overflow-scrolling: touch; scroll-behavior: smooth; }
-        }
-      `}</style>
-      <div className="px-3 py-1 border-b border-slate-800 bg-slate-800/40 flex items-center justify-between gap-4 shrink-0 h-9">
+    <div ref={containerRef} className="relative flex flex-col w-full h-[calc(100vh-3.5rem)] md:h-full min-h-0 bg-slate-950 overflow-hidden border-t border-slate-800">
+      <div className="px-3 py-1 border-b border-slate-800 bg-slate-900/60 flex items-center justify-between gap-4 shrink-0 h-9">
         <div className="flex items-center gap-3">
           <div className={`w-2 h-2 rounded-full ${status === "Ready" ? "bg-green-500 shadow-[0_0_5px_rgba(34,197,94,0.8)]" : "bg-blue-500 animate-pulse"}`}></div>
           <h3 className="font-bold text-slate-200 text-xs uppercase tracking-tighter truncate">{chartData?.symbol || symbol}</h3>
-          <button onClick={scrollToLatest} className="text-[8px] bg-slate-700 hover:bg-blue-600 text-slate-300 hover:text-white px-1.5 py-0.5 rounded border border-slate-600 transition-all font-bold tracking-tighter uppercase">Sync</button>
+          <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40">
+            휠: 패널 세로 이동 | Ctrl+휠: 줌 | Shift+휠: 가로 이동
+          </span>
+          <button onClick={scrollToLatest} className="text-[8px] bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white px-1.5 py-0.5 rounded border border-slate-700 transition-all font-bold tracking-tighter uppercase">Sync Latest</button>
         </div>
         {hoveredData && (
           <div className="flex items-center gap-3 text-[9px] font-mono">
@@ -407,7 +397,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           if (verticalGuideRef.current) verticalGuideRef.current.style.display = "none";
           setHoveredData(null);
         }}
-        className="flex-1 overflow-y-auto indicator-scroll-area bg-slate-950 relative"
+        className="flex-1 overflow-y-auto custom-scrollbar bg-slate-950 relative pb-16"
       >
         {/* 심층지표 모든 패널을 관통하는 실시간 수직선(Crosshair 세로선) 가이드 */}
         <div
@@ -438,6 +428,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             </div>
           ))}
         </div>
+        {/* 최하단 패널 잘림 방지 여백 스페이스 */}
+        <div className="h-24 w-full bg-slate-950 shrink-0" />
       </div>
     </div>
   );

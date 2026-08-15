@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from app.utils.chart_utils import load_chart_data, normalize_chart_time
 
@@ -18,3 +19,33 @@ def test_kospi_api_times_are_yyyy_mm_dd():
     assert "T" not in sample
     assert len(sample) == 10
     assert sample[4] == "-" and sample[7] == "-"
+
+
+def test_kosdaq_amount_volume_populated():
+    response = load_chart_data("kospi")
+    if response is None or not response.data:
+        pytest.skip("kospi_mtt.csv not available")
+    assert len(response.data) > 0
+    # Every data point should have indicators
+    for p in response.data:
+        assert p.indicators is not None
+        assert "kosdaq_amount" in p.indicators
+        assert "kosdaq_volume" in p.indicators
+
+
+def test_kosdaq_amount_volume_2013_real_cache(monkeypatch):
+    real_cache = Path.home() / ".cache" / "db" / "kodex_leverage"
+    if not (real_cache / "kospi_mtt.csv").exists() or not (real_cache / "kosdaq_mtt.csv").exists():
+        pytest.skip("Real cache not available")
+    monkeypatch.setenv("MTT_LEVERAGE_CSV_DIR", str(real_cache))
+    response = load_chart_data("kospi")
+    assert response is not None
+    points_2013 = [p for p in response.data if p.time.startswith("2013")]
+    assert len(points_2013) > 200
+    for p in points_2013:
+        assert p.indicators.get("kosdaq_amount") is not None
+        assert p.indicators.get("kosdaq_amount") > 0
+        assert p.indicators.get("kosdaq_volume") is not None
+        assert p.indicators.get("kosdaq_volume") > 0
+
+

@@ -1,7 +1,7 @@
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 
 import polars as pl
 from app.schemas import ChartDataPoint, ChartDataResponse
@@ -52,65 +52,71 @@ def normalize_chart_time(value) -> str:
     return s
 
 
-_MMT_CACHE = None
+_MMT_CACHE: Dict[str, Any] = {}
 
 def _get_mmt_dict():
     global _MMT_CACHE
-    if _MMT_CACHE is not None:
-        return _MMT_CACHE
     mmt_path = Path("/Users/hosung/workspace/git/marcap/imarcap/mmt_all_count.log")
+    if not mmt_path.exists():
+        return {}
+    current_mtime = mmt_path.stat().st_mtime
+    if _MMT_CACHE.get("mtime") == current_mtime:
+        return _MMT_CACHE.get("data", {})
+
     res = {}
-    if mmt_path.exists():
-        try:
-            mdf = pl.read_csv(mmt_path)
-            for row in mdf.to_dicts():
-                d = str(row.get("Date"))[:10]
-                mmt_val = row.get("MMT")
-                stocks_val = row.get("Stocks")
-                if mmt_val is not None and stocks_val and float(stocks_val) > 0:
-                    raw_mmt = float(mmt_val)
-                    mmt_r_val = raw_mmt / float(stocks_val) * 100.0
-                    res[d] = {
-                        "mmt": min(raw_mmt, 200.0),
-                        "mmt_r": round(mmt_r_val, 2)
-                    }
-        except Exception as e:
-            logger.warning(f"Failed to load MMT log: {e}")
-    _MMT_CACHE = res
+    try:
+        mdf = pl.read_csv(mmt_path)
+        for row in mdf.to_dicts():
+            d = str(row.get("Date"))[:10]
+            mmt_val = row.get("MMT")
+            stocks_val = row.get("Stocks")
+            if mmt_val is not None and stocks_val and float(stocks_val) > 0:
+                raw_mmt = float(mmt_val)
+                mmt_r_val = raw_mmt / float(stocks_val) * 100.0
+                res[d] = {
+                    "mmt": min(raw_mmt, 200.0),
+                    "mmt_r": round(mmt_r_val, 2)
+                }
+    except Exception as e:
+        logger.warning(f"Failed to load MMT log: {e}")
+    _MMT_CACHE = {"mtime": current_mtime, "data": res}
     return res
 
 
-_KOSDAQ_CACHE = None
+_KOSDAQ_CACHE: Dict[str, Any] = {}
 
 def _get_kosdaq_dict():
     global _KOSDAQ_CACHE
-    if _KOSDAQ_CACHE is not None:
-        return _KOSDAQ_CACHE
     kq_path = _leverage_csv_dir() / "kosdaq_mtt.csv"
+    if not kq_path.exists():
+        return {}
+    current_mtime = kq_path.stat().st_mtime
+    if _KOSDAQ_CACHE.get("mtime") == current_mtime:
+        return _KOSDAQ_CACHE.get("data", {})
+
     res = {}
-    if kq_path.exists():
-        try:
-            kdf = pl.read_csv(kq_path)
-            for row in kdf.to_dicts():
-                d = str(row.get("Date"))[:10]
-                v = row.get("Volume")
-                c = row.get("Close")
-                amt = row.get("Amount")
-                if v is not None:
-                    v_val = float(v) / 1e7
-                    if amt is not None:
-                        a_val = float(amt) / 1e11
-                    elif c is not None:
-                        a_val = (float(c) * float(v)) / 1e11
-                    else:
-                        a_val = None
-                    res[d] = {
-                        "kosdaq_volume": round(v_val, 2),
-                        "kosdaq_amount": round(a_val, 2) if a_val is not None else None
-                    }
-        except Exception as e:
-            logger.warning(f"Failed to load KOSDAQ csv: {e}")
-    _KOSDAQ_CACHE = res
+    try:
+        kdf = pl.read_csv(kq_path)
+        for row in kdf.to_dicts():
+            d = str(row.get("Date"))[:10]
+            v = row.get("Volume")
+            c = row.get("Close")
+            amt = row.get("Amount")
+            if v is not None:
+                v_val = float(v) / 1e7
+                if amt is not None:
+                    a_val = float(amt) / 1e11
+                elif c is not None:
+                    a_val = (float(c) * float(v)) / 1e11
+                else:
+                    a_val = None
+                res[d] = {
+                    "kosdaq_volume": round(v_val, 2),
+                    "kosdaq_amount": round(a_val, 2) if a_val is not None else None
+                }
+    except Exception as e:
+        logger.warning(f"Failed to load KOSDAQ csv: {e}")
+    _KOSDAQ_CACHE = {"mtime": current_mtime, "data": res}
     return res
 
 

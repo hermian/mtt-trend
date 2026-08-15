@@ -30,6 +30,7 @@ import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
 import { MarketFlowChart } from "./_components/MarketFlowChart";
 import { ForeignFlowChart } from "./_components/ForeignFlowChart";
 import { StockbeeMmPanel } from "./_components/StockbeeMmPanel";
+import { AvwapChart } from "./_components/AvwapChart";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -74,6 +75,8 @@ function TrendPageContent() {
       ? "chart"
       : (rawTab === "kospi_weather" || rawTab === "weather_20panel")
       ? "kospi_weather"
+      : rawTab === "avwap"
+      ? "avwap"
       : rawTab === "above_ma"
       ? "above_ma"
       : rawTab === "macro"
@@ -138,7 +141,7 @@ function TrendPageContent() {
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && activeTab !== "stockbee_mm" && (
+        {activeTab !== "chart" && activeTab !== "avwap" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && activeTab !== "stockbee_mm" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-3">
@@ -193,8 +196,8 @@ function TrendPageContent() {
         )}
 
         {/* Scrollable Content - 차트 탭일 때는 내부에서 스크롤을 제어하므로 overflow-hidden 및 패딩 제거 */}
-        <div className={`flex-1 ${activeTab === "chart" || activeTab === "kospi_weather" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "stockbee_mm" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
-          {!selectedDate && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" && activeTab !== "stockbee_mm" && activeTab !== "kospi_weather" ? (
+        <div className={`flex-1 ${activeTab === "chart" || activeTab === "avwap" || activeTab === "kospi_weather" || activeTab === "wics_ranking" || activeTab === "wics_index" || activeTab === "stockbee_mm" ? "overflow-hidden pr-[20px] md:pr-0" : "overflow-y-auto p-4 md:p-8"} custom-scrollbar`}>
+          {!selectedDate && activeTab !== "avwap" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "above_ma" && activeTab !== "foreign_flow" && activeTab !== "macro" && activeTab !== "stockbee_mm" && activeTab !== "kospi_weather" ? (
             <div className="flex flex-col items-center justify-center h-full text-gray-400 gap-2 font-medium">
               {datesLoading ? (
                 <div className="animate-pulse">데이터를 로드하고 있습니다...</div>
@@ -365,6 +368,12 @@ function TrendPageContent() {
               {activeTab === "kospi_weather" && (
                 <div className="w-full h-full flex flex-col">
                   <KospiWeatherChart />
+                </div>
+              )}
+
+              {activeTab === "avwap" && (
+                <div className="w-full h-full flex flex-col">
+                  <AvwapChart />
                 </div>
               )}
 

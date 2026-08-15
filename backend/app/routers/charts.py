@@ -26,6 +26,7 @@ from app.schemas import (
     MarketFlowPoint,
     ForeignFlowResponse,
     ForeignFlowPoint,
+    AvwapChartResponse,
 )
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
@@ -35,6 +36,7 @@ from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
+from app.utils.avwap_utils import load_avwap_chart_data
 from app.utils.valuation_band_utils import (
     ALLOWED_INDEXES,
     compute_band_levels,
@@ -1103,3 +1105,20 @@ async def get_wics_index_all(
         return empty
     finally:
         conn.close()
+
+
+@router.get("/avwap", response_model=AvwapChartResponse)
+async def get_avwap_chart_data(
+    market: str = Query("kospi", description="kospi | kosdaq"),
+    interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
+):
+    """
+    KOSPI / KOSDAQ AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    """
+    data = load_avwap_chart_data(market=market, interval=interval)
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"AVWAP chart data not found for market '{market}' with interval '{interval}'."
+        )
+    return data

@@ -1,0 +1,126 @@
+import { describe, it, expect, vi } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import React from "react";
+import AvwapChart from "../AvwapChart";
+import * as useAvwapChartModule from "@/hooks/useAvwapChart";
+
+// Mock lightweight-charts
+vi.mock("lightweight-charts", () => ({
+  createChart: vi.fn(() => ({
+    addSeries: vi.fn(() => ({
+      setData: vi.fn(),
+      createPriceLine: vi.fn(),
+    })),
+    remove: vi.fn(),
+    timeScale: vi.fn(() => ({
+      subscribeVisibleLogicalRangeChange: vi.fn(),
+      getVisibleLogicalRange: vi.fn(() => ({ from: 0, to: 100 })),
+      setVisibleLogicalRange: vi.fn(),
+    })),
+    subscribeCrosshairMove: vi.fn(),
+  })),
+  ColorType: { Solid: "solid" },
+  CandlestickSeries: "CandlestickSeries",
+  LineSeries: "LineSeries",
+  HistogramSeries: "HistogramSeries",
+  LineStyle: { Solid: 0, Dotted: 1, Dashed: 2, LargeDashed: 3, SparseDotted: 4 },
+}));
+
+describe("AvwapChart Component", () => {
+  const mockChartData = {
+    market: "kospi",
+    interval: "1D",
+    points: [
+      {
+        date: "2024-01-02",
+        open: 2600.0,
+        high: 2620.0,
+        low: 2590.0,
+        close: 2610.0,
+        volume: 50000000,
+        change_pct: 0.5,
+        ma: { EMA_10: 2590.0, SMA_50: 2550.0 },
+        vol_ma: 48000000,
+        amount: 15.4,
+        amount_sma50: 12.1,
+        bb_upper: 2650.0,
+        vix_fix: 5.2,
+        rsi: 58.4,
+        vwap: 2605.0,
+        hvwap: 2615.0,
+        lvwap: 2595.0,
+      },
+    ],
+    anchors: [
+      {
+        id: "anchor_20210628",
+        name: "AVWAP (2021-06-28)",
+        anchor_date: "2021-06-28",
+        color: "#ec4899",
+        values: [{ date: "2024-01-02", value: 2700.0 }],
+      },
+    ],
+    preset_dates: ["2021-06-28"],
+  };
+
+  it("renders market and interval controls and amount panel", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<AvwapChart />);
+
+    expect(screen.getByText("KOSPI")).toBeInTheDocument();
+    expect(screen.getByText("KOSDAQ")).toBeInTheDocument();
+    expect(screen.getByText("일봉")).toBeInTheDocument();
+    expect(screen.getByText("주봉")).toBeInTheDocument();
+    expect(screen.getByText("월봉")).toBeInTheDocument();
+    expect(screen.getByText("년봉")).toBeInTheDocument();
+    expect(screen.getByText("VWAP")).toBeInTheDocument();
+    expect(screen.getByText("HVWAP(최고)")).toBeInTheDocument();
+    expect(screen.getByText("LVWAP(최저)")).toBeInTheDocument();
+    expect(screen.getByText("2021-06-28")).toBeInTheDocument();
+    expect(screen.getByText("15.4조")).toBeInTheDocument();
+    expect(screen.getByText(/거래대금 \(조원\) & SMA/)).toBeInTheDocument();
+  });
+
+  it("allows switching market and interval", () => {
+    const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<AvwapChart />);
+
+    const kosdaqBtn = screen.getByText("KOSDAQ");
+    fireEvent.click(kosdaqBtn);
+
+    const weeklyBtn = screen.getByText("주봉");
+    fireEvent.click(weeklyBtn);
+
+    expect(useAvwapSpy).toHaveBeenCalledWith("kosdaq", "1W");
+  });
+
+  it("toggles anchor buttons", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(<AvwapChart />);
+
+    const anchorBadge = screen.getByText("2021-06-28");
+    expect(anchorBadge).toBeInTheDocument();
+    fireEvent.click(anchorBadge);
+
+    const offAllBtn = screen.getByText("앵커 전체OFF");
+    fireEvent.click(offAllBtn);
+
+    const onAllBtn = screen.getByText("앵커 전체ON");
+    fireEvent.click(onAllBtn);
+  });
+});

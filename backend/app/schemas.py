@@ -364,3 +364,47 @@ class StockHeatmapResponse(BaseModel):
     groups: List[HeatmapGroupItem]
 
 
+# --- AVWAP Chart Schemas ---
+class AvwapPoint(BaseModel):
+    date: str
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    change_pct: Optional[float] = None
+    
+    # Dynamic MA overlays (e.g. EMA_10, SMA_50, etc.)
+    ma: Dict[str, Optional[float]] = {}
+    
+    vol_ma: Optional[float] = None
+    amount: Optional[float] = None          # 거래대금 (조원)
+    amount_sma50: Optional[float] = None    # 거래대금 SMA (조원)
+    bb_upper: Optional[float] = None
+    vix_fix: Optional[float] = None
+    rsi: Optional[float] = None
+    
+    vwap: Optional[float] = None
+    hvwap: Optional[float] = None
+    lvwap: Optional[float] = None
+
+
+class AvwapAnchorValue(BaseModel):
+    date: str
+    value: float
+
+
+class AvwapAnchorSeries(BaseModel):
+    id: str
+    name: str
+    anchor_date: str
+    color: str
+    values: List[AvwapAnchorValue]
+
+
+class AvwapChartResponse(BaseModel):
+    market: str
+    interval: str
+    points: List[AvwapPoint]
+    anchors: List[AvwapAnchorSeries]
+    preset_dates: List[str]

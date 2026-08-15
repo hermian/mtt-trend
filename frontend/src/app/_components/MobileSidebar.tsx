@@ -125,6 +125,8 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
   const isWeatherActive =
     pathname.startsWith("/trend") &&
     (searchParams.get("tab") === "kospi_weather" || searchParams.get("tab") === "weather_20panel");
+  const isAvwapActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "avwap";
   return (
     <div
       className={clsx(
@@ -250,6 +252,34 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
             </svg>
             <span className="truncate">KOSPI Weather</span>
+          </Link>
+
+          {/* AVWAP 차트 Button-styled Link */}
+          <Link
+            href="/trend?tab=avwap"
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+              isAvwapActive
+                ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/20 font-bold"
+                : "bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600/30 border border-indigo-600/30"
+            )}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 flex-shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 20V10" />
+              <path d="M18 20V4" />
+              <path d="M6 20v-4" />
+            </svg>
+            <span className="truncate">AVWAP 차트</span>
           </Link>
 
           {/* Above MA & 수급 Button-styled Link */}

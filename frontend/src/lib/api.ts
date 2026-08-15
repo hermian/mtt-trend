@@ -696,7 +696,59 @@ export const api = {
     );
     return data;
   },
+
+  // GET /api/charts/avwap → AvwapChartResponse
+  getAvwapChartData: async (
+    market: string = "kospi",
+    interval: string = "1D"
+  ): Promise<AvwapChartResponse> => {
+    const { data } = await apiClient.get<AvwapChartResponse>("/api/charts/avwap", {
+      params: { market, interval },
+    });
+    return data;
+  },
 };
+
+export interface AvwapPoint {
+  date: string;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  change_pct: number | null;
+  ma: Record<string, number | null>;
+  vol_ma: number | null;
+  amount: number | null;
+  amount_sma50: number | null;
+  bb_upper: number | null;
+  vix_fix: number | null;
+  rsi: number | null;
+  vwap: number | null;
+  hvwap: number | null;
+  lvwap: number | null;
+}
+
+export interface AvwapAnchorValue {
+  date: string;
+  value: number;
+}
+
+export interface AvwapAnchorSeries {
+  id: string;
+  name: string;
+  anchor_date: string;
+  color: string;
+  values: AvwapAnchorValue[];
+}
+
+export interface AvwapChartResponse {
+  market: string;
+  interval: string;
+  points: AvwapPoint[];
+  anchors: AvwapAnchorSeries[];
+  preset_dates: string[];
+}
 
 export { API_CONFIG };
 export default apiClient;

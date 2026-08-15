@@ -441,7 +441,7 @@ export function KospiWeatherChart() {
           } catch {}
           activeSeries.push(s);
         } else if (config.id === "macd") {
-          const s = addPanelSeries(BaselineSeries, {
+          const s1 = addPanelSeries(BaselineSeries, {
             baseValue: { type: "price", price: 0 },
             topFillColor1: "rgba(239, 68, 68, 0.35)",
             topFillColor2: "rgba(239, 68, 68, 0.05)",
@@ -451,8 +451,13 @@ export function KospiWeatherChart() {
             bottomLineColor: "#3b82f6",
             lineWidth: 2,
           });
-          addZeroLine(s);
-          activeSeries.push(s);
+          addZeroLine(s1);
+          activeSeries.push(s1);
+          activeSeries.push(addPanelSeries(LineSeries, {
+            color: "#f97316",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+          }));
         } else if (config.id === "zbt") {
           const s = addPanelSeries(BaselineSeries, {
             baseValue: { type: "price", price: 0.5 },
@@ -643,6 +648,9 @@ export function KospiWeatherChart() {
         safeSet(activeSeries[0], linePoints((p) => (p.indicators?.mmt_r !== undefined ? p.indicators.mmt_r : p.indicators?.above_sma40)));
       } else if (config.id === "mmt") {
         safeSet(activeSeries[0], linePoints((p) => (p.indicators?.mmt !== undefined ? p.indicators.mmt : p.indicators?.adv)));
+      } else if (config.id === "macd") {
+        safeSet(activeSeries[0], linePoints((p) => p.indicators?.macd));
+        safeSet(activeSeries[1], linePoints((p) => p.indicators?.macd_signal));
       } else {
         const alias: Record<string, string> = {
           mcclellan_summation: "mcclellan_summation_indicator",
@@ -712,7 +720,7 @@ export function KospiWeatherChart() {
         ) : config.id === "rsi" ? (
           <span className="text-emerald-400 font-bold">RSI_14: {ind["rsi"] ?? 0}</span>
         ) : config.id === "macd" ? (
-          <span className="text-emerald-400 font-bold">MACD: {ind["macd"] ?? 0}</span>
+          <><span className="text-blue-400 font-bold">MACD: {ind["macd"] ?? 0}</span><span className="text-orange-400 font-bold ml-1">Sig: {ind["macd_signal"] ?? 0}</span></>
         ) : config.id === "zbt" ? (
           <span className="text-emerald-400 font-bold">ZBT: {ind["zbt"] ?? 0}</span>
         ) : config.id === "mcclellan_oscilator" ? (

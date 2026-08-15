@@ -38,11 +38,11 @@ const SOURCE_LABELS: Record<DataSource, string> = {
 };
 
 const CHART_CONFIGS: IndicatorConfig[] = [
-  { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 5 },
   { id: "above_sma_group", name: "Above SMA 10/20/50 (R/G/B)", type: "line", heightRatio: 1.5 },
-  { id: "vix_fix", name: "VIX Fix (22) & Fear", type: "line", heightRatio: 2, color: "#ef4444" },
   { id: "above_sma200", name: "Above SMA 200 (Breadth)", type: "line", heightRatio: 1, color: "#60a5fa" },
+  { id: "vix_fix", name: "VIX Fix (22) & Fear", type: "line", heightRatio: 2, color: "#ef4444" },
   { id: "adr_group", name: "ADR 14/20 (Ratio)", type: "line", heightRatio: 2 },
+  { id: "main", name: "주가 (OHLC)", type: "candlestick", heightRatio: 5 },
   { id: "disparity_sma50", name: "SMA50 이격도", type: "line", heightRatio: 2, color: "#eab308" },
   { id: "rsi", name: "RSI (14)", type: "line", heightRatio: 2, color: "#fbbf24" },
   { id: "stochastic", name: "Stochastic (5,3,3)", type: "line", heightRatio: 2 },

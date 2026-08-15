@@ -47,8 +47,6 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
 
-  const mainConfig = useMemo(() => configs.find(c => c.id === "main"), [configs]);
-  const indicatorConfigs = useMemo(() => configs.filter(c => c.id !== "main"), [configs]);
 
   const indicatorNames = useMemo(() => {
     const names = configs.filter(c => !["main", "above_sma_group", "adr_group", "disparity_sma50"].includes(c.id)).map(c => c.id);
@@ -90,7 +88,15 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   useEffect(() => {
     if (!containerRef.current) return;
     setStatus("Building High-End Charts...");
+    const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
+    if (!scrollArea) return;
+
+    let onCustomWheel: ((e: WheelEvent) => void) | null = null;
+
     const cleanup = () => {
+      if (onCustomWheel && scrollArea) {
+        scrollArea.removeEventListener("wheel", onCustomWheel);
+      }
       chartsRef.current.forEach(c => c.remove());
       chartsRef.current.clear();
       seriesRef.current.clear();
@@ -98,11 +104,58 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     cleanup();
 
     try {
-      const scrollArea = containerRef.current.querySelector("[data-scroll-area]") as HTMLElement;
-      if (!scrollArea) return;
-      
       // @MX:NOTE: 모바일 기기 여부 감지
       const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+
+      onCustomWheel = (e: WheelEvent) => {
+        if (e.ctrlKey || e.metaKey || e.altKey) {
+          e.preventDefault();
+          const firstChart = chartsRef.current.values().next().value;
+          if (!firstChart) return;
+          const currentRange = firstChart.timeScale().getVisibleLogicalRange();
+          if (!currentRange) return;
+
+          const delta = e.deltaY;
+          const zoomFactor = delta > 0 ? 1.15 : 0.85;
+          const length = currentRange.to - currentRange.from;
+          const newLength = Math.max(15, Math.min(10000, length * zoomFactor));
+          const diff = newLength - length;
+
+          const rect = scrollArea.getBoundingClientRect();
+          const cursorRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+          const newFrom = currentRange.from - diff * cursorRatio;
+          const newTo = currentRange.to + diff * (1 - cursorRatio);
+
+          isSyncingRef.current = true;
+          chartsRef.current.forEach((c) => {
+            try {
+              c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+            } catch {}
+          });
+          isSyncingRef.current = false;
+        } else if (e.shiftKey) {
+          e.preventDefault();
+          const firstChart = chartsRef.current.values().next().value;
+          if (!firstChart) return;
+          const currentRange = firstChart.timeScale().getVisibleLogicalRange();
+          if (!currentRange) return;
+
+          const length = currentRange.to - currentRange.from;
+          const shiftAmount = (e.deltaY || e.deltaX) * (length / 600);
+          const newFrom = currentRange.from + shiftAmount;
+          const newTo = currentRange.to + shiftAmount;
+
+          isSyncingRef.current = true;
+          chartsRef.current.forEach((c) => {
+            try {
+              c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+            } catch {}
+          });
+          isSyncingRef.current = false;
+        }
+      };
+
+      scrollArea.addEventListener("wheel", onCustomWheel, { passive: false });
 
       configs.forEach((config, index) => {
         const el = scrollArea.querySelector(`[data-chart-id="${config.id}"]`) as HTMLElement;
@@ -125,13 +178,18 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           handleScale: isMobile ? false : {
             axisPressedMouseMove: config.id === "main",
             pinch: config.id === "main",
-            mouseWheel: true,
+            mouseWheel: false,
           },
           // @MX:NOTE: 스크롤(Scroll) 조작 제어
           handleScroll: isMobile ? {
             horzTouchDrag: config.id === "main", // 좌우 이동만 허용
             vertTouchDrag: false,               // @MX:NOTE: Y축 방향 드래그 차단 (오토 스케일 유지 핵심)
-          } : true, // @MX:NOTE: PC는 기본값(true)을 사용하여 모든 스크롤 기능 활성화 (마우스 드래그 포함)
+          } : {
+            mouseWheel: false,
+            pressedMouseMove: true,
+            horzTouchDrag: true,
+            vertTouchDrag: true,
+          },
           crosshair: { mode: CrosshairMode.Normal, vertLine: { visible: false }, horzLine: { color: "#64748b", width: 1, style: 1 } },
         });
 
@@ -370,19 +428,11 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           </div>
         )}
 
-        {mainConfig && (
-          <div className="relative shrink-0 bg-slate-950 border-b-2 border-slate-800 shadow-xl z-20 pr-[0px] sticky top-0">
-            {renderTooltip(mainConfig)}
-            <div data-chart-id="main" className="w-full" style={{ height: '400px' }}>
-              <div className="absolute top-1 left-2 z-20 pointer-events-none"><span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{mainConfig.name}</span></div>
-            </div>
-          </div>
-        )}
         <div className="flex flex-col">
-          {indicatorConfigs.map((config) => (
+          {configs.map((config) => (
             <div key={config.id} className="relative border-b border-slate-900/50 last:border-0 group shrink-0">
               {renderTooltip(config)}
-              <div data-chart-id={config.id} className="w-full" style={{ height: '100px' }}>
+              <div data-chart-id={config.id} className="w-full" style={{ height: config.id === 'main' ? '400px' : '100px' }}>
                 <div className="absolute top-1 left-2 z-20 pointer-events-none"><span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{config.name}</span></div>
               </div>
             </div>

@@ -157,6 +157,21 @@ export function AvwapChart() {
     cleanup();
 
     try {
+      const syncRightPriceScaleWidths = () => {
+        let maxW = 95;
+        chartsRef.current.forEach((c) => {
+          try {
+            const w = c.priceScale("right").width();
+            if (w > maxW) maxW = w;
+          } catch {}
+        });
+        chartsRef.current.forEach((c) => {
+          try {
+            c.priceScale("right").applyOptions({ minimumWidth: maxW });
+          } catch {}
+        });
+      };
+
       // Zoom & Pan handler with wheel
       onCustomWheel = (e: WheelEvent) => {
         if (e.ctrlKey || e.metaKey || e.altKey) {
@@ -181,8 +196,10 @@ export function AvwapChart() {
           chartsRef.current.forEach((c) => {
             try {
               c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+              c.priceScale("right").applyOptions({ autoScale: true });
             } catch {}
           });
+          syncRightPriceScaleWidths();
           isSyncingRef.current = false;
         } else if (e.shiftKey) {
           e.preventDefault();
@@ -200,8 +217,10 @@ export function AvwapChart() {
           chartsRef.current.forEach((c) => {
             try {
               c.timeScale().setVisibleLogicalRange({ from: newFrom, to: newTo });
+              c.priceScale("right").applyOptions({ autoScale: true });
             } catch {}
           });
+          syncRightPriceScaleWidths();
           isSyncingRef.current = false;
         }
       };
@@ -213,7 +232,7 @@ export function AvwapChart() {
 
       const panels = [
         { id: "rsi", name: "RSI (14)", height: 90 },
-        { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: 420 },
+        { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: 550 },
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
         { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
       ];
@@ -245,26 +264,24 @@ export function AvwapChart() {
             scaleMargins: panel.id === "amount" 
               ? { top: 0.05, bottom: 0 } 
               : panel.id === "volume" 
-                ? { top: 0.08, bottom: 0 } 
-                : { top: 0.1, bottom: 0.1 },
+                ? { top: 0.05, bottom: 0 } 
+                : panel.id === "main"
+                  ? { top: 0.02, bottom: 0.02 }
+                  : { top: 0.05, bottom: 0.05 },
             autoScale: true,
-            minimumWidth: 85,
+            minimumWidth: 95,
             mode: panel.id === "main"
               ? (priceScaleMode === "log" ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal)
               : PriceScaleMode.Normal,
           },
           leftPriceScale: {
-            visible: panel.id === "volume",
-            borderColor: "#334155",
-            scaleMargins: { top: 0.2, bottom: 0.1 },
-            autoScale: true,
-            minimumWidth: 50,
+            visible: false,
           },
           handleScroll: {
             mouseWheel: false,
             pressedMouseMove: true,
             horzTouchDrag: true,
-            vertTouchDrag: true,
+            vertTouchDrag: false,
           },
           handleScale: {
             axisPressedMouseMove: true,
@@ -300,7 +317,6 @@ export function AvwapChart() {
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: "70 (과매수)",
           });
           rsiSeries.createPriceLine({
             price: 30,
@@ -308,7 +324,6 @@ export function AvwapChart() {
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: true,
-            title: "30 (과매도)",
           });
           activeSeries.push(rsiSeries);
         }
@@ -415,9 +430,13 @@ export function AvwapChart() {
             color: "#10b981",
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            priceScaleId: "left",
+            priceScaleId: "overlay",
             priceLineVisible: false,
-            lastValueVisible: true,
+            lastValueVisible: false,
+          });
+          chart.priceScale("overlay").applyOptions({
+            scaleMargins: { top: 0.1, bottom: 0.1 },
+            autoScale: true,
           });
           activeSeries.push(vixSeries);
         }
@@ -451,17 +470,25 @@ export function AvwapChart() {
 
         seriesRef.current.set(panel.id, activeSeries);
 
-        // TimeScale sync
+        // TimeScale sync & dynamic vertical autoScale on scroll/pan
         chart.timeScale().subscribeVisibleLogicalRangeChange((range) => {
-          if (isSyncingRef.current || !range) return;
+          if (!range) return;
+
+          try {
+            chart.priceScale("right").applyOptions({ autoScale: true });
+          } catch {}
+
+          if (isSyncingRef.current) return;
           isSyncingRef.current = true;
           chartsRef.current.forEach((otherChart, otherId) => {
             if (otherId !== panel.id) {
               try {
                 otherChart.timeScale().setVisibleLogicalRange(range);
+                otherChart.priceScale("right").applyOptions({ autoScale: true });
               } catch {}
             }
           });
+          syncRightPriceScaleWidths();
           isSyncingRef.current = false;
         });
 
@@ -675,6 +702,10 @@ export function AvwapChart() {
           const to = totalBars + 5;
           firstChart.timeScale().setVisibleLogicalRange({ from, to });
         }
+
+        requestAnimationFrame(() => {
+          syncRightPriceScaleWidths();
+        });
       }
     } catch (err) {
       console.error("Error setting up AVWAP charts:", err);
@@ -751,6 +782,7 @@ export function AvwapChart() {
     try {
       mainChart.priceScale("right").applyOptions({
         mode: priceScaleMode === "log" ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal,
+        autoScale: true,
       });
     } catch (e) {
       console.error("Error applying priceScale mode:", e);

@@ -214,7 +214,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           activeSeries.push(chart.addSeries(LineSeries, { color: "#a78bfa", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f472b6", lineWidth: 2 }));
         } else if (config.id === "disparity_sma50") {
-          activeSeries.push(chart.addSeries(BaselineSeries, {
+          const s = chart.addSeries(BaselineSeries, {
             baseValue: { type: "price", price: 100 },
             topLineColor: "#eab308",
             bottomLineColor: "#eab308",
@@ -223,7 +223,17 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             bottomFillColor1: "rgba(234, 179, 8, 0.05)",
             bottomFillColor2: "rgba(234, 179, 8, 0.45)",
             lineWidth: 2,
-          }));
+          });
+          try {
+            s.createPriceLine({
+              price: 100,
+              color: "#ffffff",
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+            });
+          } catch {}
+          activeSeries.push(s);
         } else if (config.id === "macd") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f97316", lineWidth: 2, lineStyle: 2 }));

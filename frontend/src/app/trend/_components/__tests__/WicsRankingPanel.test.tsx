@@ -224,4 +224,82 @@ describe("WicsRankingPanel Component - Unit Tests", () => {
     expect(screen.getAllByText("3M▲")[0]).toBeInTheDocument();
     expect(screen.getAllByText("2M▲")[0]).toBeInTheDocument();
   });
+
+  it("should open floating PiP panel with 12M return and top 2 stocks when cell is clicked, and close on close button click", async () => {
+    vi.spyOn(useWicsData, "useWicsMonths").mockReturnValue({
+      data: ["2026-07"],
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.spyOn(useWicsData, "useWicsRankings").mockReturnValue({
+      data: {
+        months: [
+          {
+            YearMonth: "2026-07",
+            rankings: [
+              {
+                WICS: "반도체와반도체장비",
+                Rank_EW: 1,
+                Rank_MC: 1,
+                EW_12m_Return: 0.25,
+                MC_12m_Return: 0.35,
+                Top2_Share: 0.55,
+                top_stocks: [
+                  {
+                    stock_name: "삼성전자",
+                    stock_code: "005930",
+                    stock_12m_return: 0.4,
+                    sector_weight: 0.6,
+                    marcap: 400000000000000,
+                    rank_in_sector: 1,
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    render(
+      <TestWrapper>
+        <WicsRankingPanel />
+      </TestWrapper>
+    );
+
+    const cell = screen.getByText("반도체와반도체장비");
+    expect(cell).toBeInTheDocument();
+
+    // Normal hover should not pop up anything
+    fireEvent.mouseEnter(cell);
+    expect(screen.queryByText("PiP 상세 & 차트")).not.toBeInTheDocument();
+
+    // Click cell to open PiP panel
+    fireEvent.click(cell);
+
+    // PiP panel should display 12M return, top2 share, top2 stocks, and index chart
+    expect(await screen.findByText("PiP 상세 & 차트")).toBeInTheDocument();
+    expect(screen.getByText("12M 수익률")).toBeInTheDocument();
+    expect(screen.getAllByText("+35.0%").length).toBeGreaterThanOrEqual(2); // One in cell, one in PiP panel
+    expect(screen.getByText("55%")).toBeInTheDocument();
+    expect(screen.getByText("삼성전자")).toBeInTheDocument();
+    expect(screen.getByTitle("차트 최소화")).toBeInTheDocument();
+
+    // Click minimize button
+    const minimizeBtn = screen.getByTitle("차트 최소화");
+    fireEvent.click(minimizeBtn);
+    expect(screen.getByTitle("차트 펼치기")).toBeInTheDocument();
+
+    // Click close button
+    const closeBtn = screen.getByTitle("차트 닫기");
+    fireEvent.click(closeBtn);
+
+    // PiP panel should be closed
+    await waitFor(() => {
+      expect(screen.queryByText("PiP 상세 & 차트")).not.toBeInTheDocument();
+    });
+  });
 });

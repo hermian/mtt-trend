@@ -79,10 +79,16 @@ export function AvwapChart() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize enabled anchors when data changes
+  // Initialize enabled anchors when data changes (ATL anchor defaults to off)
   useEffect(() => {
     if (chartData?.anchors) {
-      setEnabledAnchors(new Set(chartData.anchors.map((a) => a.id)));
+      setEnabledAnchors(
+        new Set(
+          chartData.anchors
+            .filter((a) => !a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL"))
+            .map((a) => a.id)
+        )
+      );
     }
   }, [chartData]);
 

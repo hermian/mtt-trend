@@ -43,6 +43,12 @@ function isoWeekToRange(yw: string): { start: string; end: string } {
   };
 }
 
+interface SelectedCellState {
+  wics: string;
+  month: string;
+  item: WicsRankingItem;
+}
+
 export const WicsRankingPanel: React.FC = () => {
   const { data: months, isLoading: monthsLoading, error: monthsError } = useWicsMonths();
   const [startMonth, setStartMonth] = useState<string>("");
@@ -54,9 +60,12 @@ export const WicsRankingPanel: React.FC = () => {
 
   const [viewMode, setViewMode] = useState<"monthly" | "weekly">("monthly");
   const [rankType, setRankType] = useState<"MC" | "EW">("MC");
-  const [activeWics, setActiveWics] = useState<string | null>(null);
+  const [selectedCell, setSelectedCell] = useState<SelectedCellState | null>(null);
+  const [isChartMinimized, setIsChartMinimized] = useState<boolean>(false);
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
   const [baseColumnWidth, setBaseColumnWidth] = useState<number>(150);
+
+  const activeWics = selectedCell?.wics ?? null;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const outerRef = useRef<HTMLDivElement>(null);
@@ -66,58 +75,6 @@ export const WicsRankingPanel: React.FC = () => {
   const hasDraggedRef = useRef(false);
   const clickStartCoord = useRef({ x: 0, y: 0 });
   const isResizingRef = useRef(false);
-
-  const [hoveredCell, setHoveredCell] = useState<{
-    item: WicsRankingItem;
-    x: number;
-    y: number;
-    month: string;
-  } | null>(null);
-  // Constrain tooltip X coordinate within the outer container boundaries
-  const constrainedX = useMemo(() => {
-    if (!hoveredCell || !outerRef.current) return 0;
-    const outerWidth = outerRef.current.getBoundingClientRect().width;
-    const tooltipHalfWidth = 128; // w-64 is 256px, so half is 128px
-    const padding = 8; // Margin from edges
-
-    let x = hoveredCell.x;
-    
-    // Left edge constraint
-    if (x - tooltipHalfWidth < padding) {
-      x = tooltipHalfWidth + padding;
-    }
-    // Right edge constraint
-    if (x + tooltipHalfWidth > outerWidth - padding) {
-      x = outerWidth - tooltipHalfWidth - padding;
-    }
-    
-    return x;
-  }, [hoveredCell]);
-
-  const arrowLeft = useMemo(() => {
-    if (!hoveredCell) return "50%";
-    const shift = constrainedX - hoveredCell.x;
-    const arrowX = 128 - shift;
-    // Clamp arrow position to prevent it from going off the tooltip rounded corners
-    const clampedArrowX = Math.max(16, Math.min(240, arrowX));
-    return `${clampedArrowX}px`;
-  }, [hoveredCell, constrainedX]);
-  const handleCellMouseEnter = (item: WicsRankingItem, month: string, e: React.MouseEvent) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const outerRect = outerRef.current?.getBoundingClientRect();
-    if (!outerRect) return;
-
-    setHoveredCell({
-      item,
-      month,
-      x: rect.left - outerRect.left + rect.width / 2,
-      y: rect.top - outerRect.top,
-    });
-  };
-
-  const handleCellMouseLeave = () => {
-    setHoveredCell(null);
-  };
 
   const formatMarcap = (val?: number) => {
     if (!val) return "";
@@ -129,13 +86,11 @@ export const WicsRankingPanel: React.FC = () => {
     return `${billion.toLocaleString(undefined, { maximumFractionDigits: 0 })}억원`;
   };
 
-
-
   // Resize handler
   const handleResizeStart = (ym: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     isResizingRef.current = true;
     const startX = e.clientX;
     const startWidth = columnWidths[ym] || baseColumnWidth;
@@ -460,11 +415,16 @@ export const WicsRankingPanel: React.FC = () => {
     }
   }, [visibleMonths]);
 
-  const handleCellClick = (wics: string) => {
-    if (activeWics === wics) {
-      setActiveWics(null);
+  const handleCellClick = (item: WicsRankingItem, month: string) => {
+    if (selectedCell && selectedCell.wics === item.WICS && selectedCell.month === month) {
+      setSelectedCell(null);
     } else {
-      setActiveWics(wics);
+      setSelectedCell({
+        wics: item.WICS,
+        month,
+        item,
+      });
+      setIsChartMinimized(false);
     }
   };
 
@@ -515,161 +475,162 @@ export const WicsRankingPanel: React.FC = () => {
   return (
     <div ref={outerRef} className="flex flex-col h-full space-y-6 relative">
       {/* Filters & Header Controls */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between bg-gray-900/60 p-4 rounded-xl border border-gray-800 gap-4">
-        <div className="flex flex-wrap items-center gap-4">
-          {/* View Mode Toggle */}
-          <div className="flex items-center bg-black/30 p-1 rounded-lg border border-gray-800 self-start md:self-auto shrink-0">
-            <button
-              onClick={() => setViewMode("monthly")}
-              className={clsx(
-                "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                viewMode === "monthly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-              )}
-            >
-              월간 랭킹
-            </button>
-            <button
-              onClick={() => setViewMode("weekly")}
-              className={clsx(
-                "px-3 py-1 text-xs font-bold rounded-md transition-all",
-                viewMode === "weekly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-              )}
-            >
-              주간 랭킹
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">
-              {viewMode === "monthly" ? "시작월" : "시작주"}
-            </span>
-            {activeLoading ? (
-              <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
-            ) : (
-              <select
-                value={viewMode === "monthly" ? startMonth : startWeek}
-                onChange={handleStartPeriodChange}
-                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
-              >
-                {selectableStartPeriods.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 font-medium">
-              {viewMode === "monthly" ? "종료월" : "종료주"}
-            </span>
-            {activeLoading ? (
-              <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
-            ) : (
-              <select
-                value={viewMode === "monthly" ? endMonth : endWeek}
-                onChange={handleEndPeriodChange}
-                className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
-              >
-                {selectableEndPeriods.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
-
-          {/* Column Width Slider & Preset Controls */}
-          <div className="flex flex-wrap items-center gap-3 bg-black/20 px-3 py-1.5 rounded-lg border border-gray-800/80">
-            <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">열 너비</span>
-            <input
-              type="range"
-              min="80"
-              max="300"
-              value={baseColumnWidth}
-              onChange={(e) => {
-                setBaseColumnWidth(Number(e.target.value));
-                setColumnWidths({}); // Reset individual column overrides for consistency when adjusting slider
-              }}
-              className="w-20 md:w-28 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-            />
-            <span className="text-[10px] text-gray-500 font-mono w-8">{baseColumnWidth}px</span>
-            <div className="flex gap-1 border-l border-gray-800 pl-2">
+      <div className="flex flex-col bg-gray-900/60 p-4 rounded-xl border border-gray-800 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-4">
+            {/* View Mode Toggle */}
+            <div className="flex items-center bg-black/30 p-1 rounded-lg border border-gray-800 self-start md:self-auto shrink-0">
               <button
-                onClick={() => {
-                  setBaseColumnWidth(90);
-                  setColumnWidths({});
-                }}
+                onClick={() => setViewMode("monthly")}
                 className={clsx(
-                  "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
-                  baseColumnWidth === 90 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                  "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                  viewMode === "monthly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
                 )}
               >
-                좁게
+                월간 랭킹
               </button>
               <button
-                onClick={() => {
-                  setBaseColumnWidth(150);
-                  setColumnWidths({});
-                }}
+                onClick={() => setViewMode("weekly")}
                 className={clsx(
-                  "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
-                  baseColumnWidth === 150 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                  "px-3 py-1 text-xs font-bold rounded-md transition-all",
+                  viewMode === "weekly" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
                 )}
               >
-                보통
-              </button>
-              <button
-                onClick={() => {
-                  setBaseColumnWidth(220);
-                  setColumnWidths({});
-                }}
-                className={clsx(
-                  "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
-                  baseColumnWidth === 220 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
-                )}
-              >
-                넓게
+                주간 랭킹
               </button>
             </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 font-medium">
+                {viewMode === "monthly" ? "시작월" : "시작주"}
+              </span>
+              {activeLoading ? (
+                <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
+              ) : (
+                <select
+                  value={viewMode === "monthly" ? startMonth : startWeek}
+                  onChange={handleStartPeriodChange}
+                  className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
+                >
+                  {selectableStartPeriods.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-gray-400 font-medium">
+                {viewMode === "monthly" ? "종료월" : "종료주"}
+              </span>
+              {activeLoading ? (
+                <div className="h-9 w-24 bg-gray-800 rounded animate-pulse" />
+              ) : (
+                <select
+                  value={viewMode === "monthly" ? endMonth : endWeek}
+                  onChange={handleEndPeriodChange}
+                  className="bg-gray-800 text-xs border border-gray-700 rounded px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer text-white max-h-60"
+                >
+                  {selectableEndPeriods.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              )}
+            </div>
+
+            {/* Column Width Slider & Preset Controls */}
+            <div className="flex flex-wrap items-center gap-3 bg-black/20 px-3 py-1.5 rounded-lg border border-gray-800/80">
+              <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">열 너비</span>
+              <input
+                type="range"
+                min="80"
+                max="300"
+                value={baseColumnWidth}
+                onChange={(e) => {
+                  setBaseColumnWidth(Number(e.target.value));
+                  setColumnWidths({}); // Reset individual column overrides for consistency when adjusting slider
+                }}
+                className="w-20 md:w-28 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
+              />
+              <span className="text-[10px] text-gray-500 font-mono w-8">{baseColumnWidth}px</span>
+              <div className="flex gap-1 border-l border-gray-800 pl-2">
+                <button
+                  onClick={() => {
+                    setBaseColumnWidth(90);
+                    setColumnWidths({});
+                  }}
+                  className={clsx(
+                    "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
+                    baseColumnWidth === 90 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                  )}
+                >
+                  좁게
+                </button>
+                <button
+                  onClick={() => {
+                    setBaseColumnWidth(150);
+                    setColumnWidths({});
+                  }}
+                  className={clsx(
+                    "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
+                    baseColumnWidth === 150 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                  )}
+                >
+                  보통
+                </button>
+                <button
+                  onClick={() => {
+                    setBaseColumnWidth(220);
+                    setColumnWidths({});
+                  }}
+                  className={clsx(
+                    "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
+                    baseColumnWidth === 220 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                  )}
+                >
+                  넓게
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Rank Type Toggle */}
+          <div className="flex items-center bg-black/30 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
+            <button
+              onClick={() => setRankType("MC")}
+              className={clsx(
+                "px-4 py-1.5 text-xs font-bold rounded-md transition-all",
+                rankType === "MC" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              시가총액 가중 (MC)
+            </button>
+            <button
+              onClick={() => setRankType("EW")}
+              className={clsx(
+                "px-4 py-1.5 text-xs font-bold rounded-md transition-all",
+                rankType === "EW" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
+              )}
+            >
+              동등 가중 (EW)
+            </button>
           </div>
         </div>
 
-        {/* Rank Type Toggle */}
-        <div className="flex items-center bg-black/30 p-1 rounded-lg border border-gray-800 self-start md:self-auto">
-          <button
-            onClick={() => setRankType("MC")}
-            className={clsx(
-              "px-4 py-1.5 text-xs font-bold rounded-md transition-all",
-              rankType === "MC" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            시가총액 가중 (MC)
-          </button>
-          <button
-            onClick={() => setRankType("EW")}
-            className={clsx(
-              "px-4 py-1.5 text-xs font-bold rounded-md transition-all",
-              rankType === "EW" ? "bg-gray-700 text-white shadow-sm" : "text-gray-500 hover:text-gray-300"
-            )}
-          >
-            동등 가중 (EW)
-          </button>
+        {/* Tip Guidance Banner */}
+        <div className="flex flex-wrap items-center justify-between gap-3 bg-blue-950/20 px-3.5 py-2 rounded-lg border border-blue-900/30 text-xs text-gray-300">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">💡</span>
+            <span>
+              테이블의 특정 셀을 클릭하면 화면 우측 하단 <strong>PiP 미니 패널</strong>에서 해당 섹터의 <strong>12M 수익률, Top 2 종목 상세 및 일별 지수 차트</strong>를 스크롤과 무관하게 실시간으로 확인할 수 있습니다.
+            </span>
+          </div>
         </div>
       </div>
-
-      {activeWics && (
-        <WicsIndexChart
-          key={activeWics}
-          wics={activeWics}
-          weight={rankType}
-          onWeightChange={setRankType}
-          startDate={indexDateRange.start}
-          endDate={indexDateRange.end}
-        />
-      )}
 
       {/* Main Ranking Grid */}
       <div className="flex-1 bg-gray-900/40 border border-gray-800 rounded-2xl overflow-hidden flex flex-col min-h-[600px]">
@@ -690,17 +651,14 @@ export const WicsRankingPanel: React.FC = () => {
             onMouseLeave={handleMouseLeave}
             className={clsx(
               "flex-1 overflow-auto custom-scrollbar flex",
-              isDownRef.current ? "cursor-grabbing" : "cursor-default"
+              isDownRef.current ? "cursor-grabbing select-none" : "cursor-grab"
             )}
           >
-            {/* Fixed Rank Column */}
-            <div className="flex-shrink-0 bg-gray-900/80 border-r border-gray-800 sticky left-0 z-20 w-16">
+            {/* Sticky Left Rank Column */}
+            <div className="sticky left-0 z-20 bg-gray-900 border-r border-gray-800 flex-shrink-0 w-12 flex flex-col">
               <div
-                onClick={() => {
-                  if (hasDraggedRef.current) return;
-                  setActiveWics(null);
-                }}
-                className="h-12 border-b border-gray-800 flex items-center justify-center font-bold text-xs text-gray-400 bg-gray-900 sticky top-0 left-0 z-40 cursor-pointer hover:bg-gray-800 transition-colors"
+                style={{ width: "48px" }}
+                className="h-12 border-b border-gray-800 flex items-center justify-center font-bold text-xs text-gray-400 bg-gray-900 sticky top-0 z-30"
               >
                 순위
               </div>
@@ -716,7 +674,7 @@ export const WicsRankingPanel: React.FC = () => {
               </div>
             </div>
 
-            {/* Monthly Columns */}
+            {/* Monthly / Weekly Columns */}
             <div className="flex flex-1">
               {visibleMonths.map((monthObj) => {
                 const isLastMonth = monthObj.YearMonth === activeEnd;
@@ -733,7 +691,7 @@ export const WicsRankingPanel: React.FC = () => {
                     <div
                       onClick={() => {
                         if (hasDraggedRef.current) return;
-                        setActiveWics(null);
+                        setSelectedCell(null);
                       }}
                       className={clsx(
                         "h-12 border-b border-gray-800 flex flex-col items-center justify-center px-4 font-bold text-sm bg-gray-900/80 sticky top-0 z-30 cursor-pointer hover:bg-gray-800/80 transition-colors",
@@ -754,6 +712,7 @@ export const WicsRankingPanel: React.FC = () => {
                         const hasColor = wicsColorMap.has(item.WICS);
                         const colorClass = hasColor ? wicsColorMap.get(item.WICS) : "bg-gray-900/30 border border-gray-800/50 text-gray-300 hover:border-gray-700";
                         const isMatch = activeWics === item.WICS;
+                        const isExactCell = selectedCell?.wics === item.WICS && selectedCell?.month === monthObj.YearMonth;
                         const hasActiveSelection = activeWics !== null;
                         const isRising3M = risingSectors3M.has(item.WICS);
                         const isRising2M = risingSectors2M.has(item.WICS);
@@ -763,14 +722,13 @@ export const WicsRankingPanel: React.FC = () => {
                             key={item.WICS}
                             onClick={() => {
                               if (hasDraggedRef.current) return;
-                              handleCellClick(item.WICS);
+                              handleCellClick(item, monthObj.YearMonth);
                             }}
-                            onMouseEnter={(e) => handleCellMouseEnter(item, monthObj.YearMonth, e)}
-                            onMouseLeave={handleCellMouseLeave}
                             className={clsx(
                               "h-[35px] px-2 py-0.5 flex flex-col justify-center border-b border-gray-800/30 cursor-pointer select-none transition-all duration-200",
                               colorClass,
                               isMatch && "ring-2 ring-yellow-400 border-yellow-400 scale-[1.02] shadow-lg shadow-yellow-400/20 z-10 opacity-100",
+                              isExactCell && "ring-2 ring-white border-white scale-[1.04] z-20 shadow-white/30",
                               isRising3M && !hasActiveSelection && "ring-2 ring-emerald-500 border-emerald-500 scale-[1.01] shadow-md shadow-emerald-500/10 z-10",
                               isRising2M && !hasActiveSelection && "ring-2 ring-blue-500/80 border-blue-500 scale-[1.01] shadow-md shadow-blue-500/10 z-10",
                               hasActiveSelection && !isMatch && "opacity-25"
@@ -778,7 +736,7 @@ export const WicsRankingPanel: React.FC = () => {
                           >
                             <div className="flex items-center justify-between w-full">
                               <div className="flex items-center min-w-0 flex-1 mr-1">
-                                <span className="font-bold text-[10px] md:text-xs truncate" title={item.WICS}>
+                                <span className="font-bold text-[10px] md:text-xs truncate">
                                   {item.WICS}
                                 </span>
                                 {isRising3M && (
@@ -846,7 +804,7 @@ export const WicsRankingPanel: React.FC = () => {
             • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 {viewMode === "monthly" ? "월(종료월)" : "주(종료주)"}의 상위 10개 WICS 섹터는 각각 서로 다른 10가지 색상을 가집니다. 이전 {viewMode === "monthly" ? "월" : "주"}의 동일 WICS 섹터에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 쉽게 추적할 수 있습니다.
           </p>
           <p>
-            • <strong className="text-gray-200">하이라이트 기능:</strong> 특정 Cell을 클릭하면 선택한 WICS 섹터가 전체 {viewMode === "monthly" ? "월" : "주"}에서 하이라이트 되며, 다른 섹터들은 흐려져 해당 섹터의 순위 흐름에만 집중할 수 있습니다. 다시 클릭하면 하이라이트가 해제됩니다.
+            • <strong className="text-gray-200">하이라이트 & PiP 미니 패널:</strong> 특정 Cell을 클릭하면 선택한 WICS 섹터가 전체 {viewMode === "monthly" ? "월" : "주"}에서 하이라이트 되며, 화면 우측 하단에 해당 시점의 상세 수익률, Top 2 종목 및 일별 지수 차트가 표시됩니다. 다시 클릭하면 닫힙니다.
           </p>
           <p>
             • <strong className="text-gray-200">가중치 유형:</strong> <strong className="text-gray-300">시가총액 가중(MC)</strong>은 각 섹터 내 대형주 위주 성과를 반영하고, <strong className="text-gray-300">동등 가중(EW)</strong>은 섹터 내 개별 종목들의 평균 성과를 균등하게 반영합니다.
@@ -854,117 +812,157 @@ export const WicsRankingPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Dynamic Hover Tooltip */}
-      {hoveredCell && (
+      {/* Floating PiP Mini Chart & Detail Widget */}
+      {selectedCell && (
         <div
-          style={{
-            position: "absolute",
-            left: `${constrainedX}px`,
-            top: `${hoveredCell.y}px`,
-            transform: "translate(-50%, -105%)",
-          }}
-          className="z-50 w-64 bg-gray-900/95 border border-gray-800 rounded-xl p-3.5 shadow-2xl backdrop-blur-md text-xs pointer-events-auto transition-all duration-150 animate-fade-in"
+          className={clsx(
+            "fixed z-40 transition-all duration-300 shadow-2xl backdrop-blur-md rounded-2xl border border-gray-700 bg-gray-900/95 overflow-hidden ring-1 ring-white/10 animate-fade-in",
+            "bottom-3 left-3 right-3 sm:left-auto sm:right-6 sm:bottom-6",
+            isChartMinimized ? "w-auto sm:w-80 p-3" : "w-auto sm:w-[640px] max-w-[calc(100vw-1.5rem)] p-3 sm:p-3.5"
+          )}
         >
-          <div className="flex items-center justify-between border-b border-gray-800/80 pb-2 mb-2">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="font-bold text-gray-250 text-[11px] truncate">{hoveredCell.item.WICS}</span>
-              <span className="text-[10px] text-gray-500 font-mono shrink-0">{hoveredCell.month}</span>
-            </div>
-            <button
-              onClick={() => setHoveredCell(null)}
-              className="text-gray-500 hover:text-gray-300 p-0.5 rounded hover:bg-gray-800 transition-colors shrink-0 ml-2"
-              title="닫기"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
-
-          <div className="space-y-2.5">
-            <div className="flex justify-between items-center text-[11px]">
-              <span className="text-gray-400 font-medium">섹터 12M 수익률</span>
-              <span className={clsx(
-                "font-bold font-mono",
-                ((rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return) ?? 0) > 0 
-                  ? "text-red-400" 
-                  : ((rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return) ?? 0) < 0 
-                    ? "text-blue-400" 
-                    : "text-gray-400"
-              )}>
-                {(() => {
-                  const ret = rankType === "MC" ? hoveredCell.item.MC_12m_Return : hoveredCell.item.EW_12m_Return;
-                  if (ret === undefined || ret === null) return "-";
-                  const pct = ret * 100;
-                  return pct > 0 ? `+${pct.toFixed(2)}%` : `${pct.toFixed(2)}%`;
-                })()}
+          {/* Header */}
+          <div className="flex items-center justify-between gap-2 border-b border-gray-800 pb-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+              <span className="text-[9px] sm:text-[10px] font-bold text-blue-400 bg-blue-900/40 border border-blue-700/50 px-1.5 py-0.5 rounded font-mono tracking-wider uppercase shrink-0">
+                PiP 상세 & 차트
+              </span>
+              <h3 className="text-xs sm:text-sm font-bold text-white truncate">{selectedCell.wics}</h3>
+              <span className="text-[10px] sm:text-[11px] text-gray-400 font-mono shrink-0">
+                {selectedCell.month}
               </span>
             </div>
 
-            {hoveredCell.item.Top2_Share !== undefined && hoveredCell.item.Top2_Share !== null && (
-              <div className="flex justify-between items-center text-[11px] border-b border-gray-800/40 pb-2">
-                <span className="text-gray-400 font-medium">Top 2 시총 비중</span>
-                <span className="font-bold text-gray-300 font-mono">
-                  {(hoveredCell.item.Top2_Share * 100).toFixed(1)}%
-                </span>
+            {/* Weight Switcher & Window Controls */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex items-center bg-black/40 p-0.5 rounded border border-gray-800 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setRankType("MC")}
+                  className={clsx(
+                    "px-1.5 py-0.5 rounded font-bold transition-all",
+                    rankType === "MC" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"
+                  )}
+                >
+                  시총
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRankType("EW")}
+                  className={clsx(
+                    "px-1.5 py-0.5 rounded font-bold transition-all",
+                    rankType === "EW" ? "bg-gray-700 text-white" : "text-gray-400 hover:text-gray-200"
+                  )}
+                >
+                  동일
+                </button>
               </div>
-            )}
-
-            {hoveredCell.item.top_stocks && hoveredCell.item.top_stocks.length > 0 ? (
-              <div className="space-y-2 mt-1">
-                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Top 2 종목 상세</p>
-                {hoveredCell.item.top_stocks.map((stock) => {
-                  const retPct = stock.stock_12m_return !== undefined ? stock.stock_12m_return * 100 : null;
-                  const weightPct = stock.sector_weight !== undefined ? stock.sector_weight * 100 : null;
-                  
-                  return (
-                    <div key={stock.stock_code} className="bg-black/35 p-2 rounded-lg border border-gray-800/40">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="font-bold text-gray-350 truncate max-w-[120px] text-[11px]">
-                          {stock.rank_in_sector}.{" "}
-                          <StockNameLink name={stock.stock_name} />
-                        </span>
-                        <span className="text-[8px] text-gray-500 font-mono">
-                          {stock.stock_code}
-                        </span>
-                      </div>
-                      <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-[9px] text-gray-400 font-mono">
-                        <div className="flex justify-between">
-                          <span>수익률:</span>
-                          <span className={clsx(
-                            "font-bold",
-                            retPct && retPct > 0 ? "text-red-400" : retPct && retPct < 0 ? "text-blue-400" : "text-gray-400"
-                          )}>
-                            {retPct !== null ? (retPct > 0 ? `+${retPct.toFixed(1)}%` : `${retPct.toFixed(1)}%`) : "-"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span>비중:</span>
-                          <span className="font-bold text-gray-300">
-                            {weightPct !== null ? `${weightPct.toFixed(1)}%` : "-"}
-                          </span>
-                        </div>
-                        {stock.marcap !== undefined && (
-                          <div className="col-span-2 flex justify-between mt-0.5 text-[8px] text-gray-500">
-                            <span>시가총액:</span>
-                            <span>{formatMarcap(stock.marcap)}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <p className="text-[10px] text-gray-500 italic mt-1">상세 종목 정보 없음</p>
-            )}
+              <button
+                onClick={() => setIsChartMinimized((prev) => !prev)}
+                className="px-1.5 py-0.5 rounded text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-xs font-mono"
+                title={isChartMinimized ? "차트 펼치기" : "차트 최소화"}
+              >
+                {isChartMinimized ? "□" : "─"}
+              </button>
+              <button
+                onClick={() => setSelectedCell(null)}
+                className="px-1.5 py-0.5 rounded text-gray-400 hover:text-red-400 hover:bg-gray-800 transition-colors text-xs font-mono"
+                title="차트 닫기"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
-          {/* Little arrow at the bottom */}
-          <div
-            style={{ left: arrowLeft }}
-            className="absolute top-full -translate-x-1/2 border-8 border-transparent border-t-gray-900/95"
-          />
+          {!isChartMinimized && (
+            <div className="mt-2.5 flex flex-row gap-2.5 sm:gap-3 items-stretch">
+              {/* Left Column: Sector 12M Return + Top 2 Stocks */}
+              <div className="w-[140px] sm:w-[210px] shrink-0 flex flex-col justify-between space-y-1.5">
+                {/* Sector 12M Return & Top2 Share */}
+                <div className="bg-black/40 p-1.5 sm:p-2 rounded-lg border border-gray-800/80">
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs">
+                    <span className="text-gray-400">12M 수익률</span>
+                    <span className="text-[9px] text-gray-500 font-mono">
+                      #{rankType === "MC" ? selectedCell.item.Rank_MC : selectedCell.item.Rank_EW}
+                    </span>
+                  </div>
+                  <div className={clsx(
+                    "font-bold font-mono text-xs sm:text-sm mt-0.5",
+                    ((rankType === "MC" ? selectedCell.item.MC_12m_Return : selectedCell.item.EW_12m_Return) ?? 0) > 0
+                      ? "text-red-400"
+                      : ((rankType === "MC" ? selectedCell.item.MC_12m_Return : selectedCell.item.EW_12m_Return) ?? 0) < 0
+                        ? "text-blue-400"
+                        : "text-gray-400"
+                  )}>
+                    {(() => {
+                      const ret = rankType === "MC" ? selectedCell.item.MC_12m_Return : selectedCell.item.EW_12m_Return;
+                      if (ret === undefined || ret === null) return "-";
+                      const pct = ret * 100;
+                      return pct > 0 ? `+${pct.toFixed(1)}%` : `${pct.toFixed(1)}%`;
+                    })()}
+                  </div>
+                  {selectedCell.item.Top2_Share !== undefined && selectedCell.item.Top2_Share !== null && (
+                    <div className="text-[9px] sm:text-[10px] text-gray-400 font-mono mt-1 pt-1 border-t border-gray-800/60 flex justify-between">
+                      <span>Top2 비중</span>
+                      <span className="font-bold text-gray-200">
+                        {(selectedCell.item.Top2_Share * 100).toFixed(0)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Top 2 Stocks List */}
+                {selectedCell.item.top_stocks && selectedCell.item.top_stocks.length > 0 ? (
+                  <div className="flex-1 flex flex-col justify-between gap-1">
+                    {selectedCell.item.top_stocks.slice(0, 2).map((stock) => {
+                      const retPct = stock.stock_12m_return !== undefined ? stock.stock_12m_return * 100 : null;
+                      const weightPct = stock.sector_weight !== undefined ? stock.sector_weight * 100 : null;
+
+                      return (
+                        <div key={stock.stock_code} className="bg-black/35 p-1.5 rounded-lg border border-gray-800/50 flex-1 flex flex-col justify-between">
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-gray-300 truncate max-w-[85px] sm:max-w-[130px] text-[10px] sm:text-[11px]">
+                              {stock.rank_in_sector}. <StockNameLink name={stock.stock_name} />
+                            </span>
+                            <span className="text-[8px] text-gray-500 font-mono">
+                              {weightPct !== null ? `${weightPct.toFixed(0)}%` : ""}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[8px] sm:text-[9px] text-gray-400 font-mono mt-0.5">
+                            <span className={clsx(
+                              "font-bold",
+                              retPct && retPct > 0 ? "text-red-400" : retPct && retPct < 0 ? "text-blue-400" : "text-gray-400"
+                            )}>
+                              {retPct !== null ? (retPct > 0 ? `+${retPct.toFixed(1)}%` : `${retPct.toFixed(1)}%`) : "-"}
+                            </span>
+                            {stock.marcap !== undefined && (
+                              <span className="text-gray-500 text-[8px] hidden sm:inline">{formatMarcap(stock.marcap)}</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="text-[9px] text-gray-500 italic p-1">종목 정보 없음</div>
+                )}
+              </div>
+
+              {/* Right Column: Index Line Chart */}
+              <div className="flex-1 min-w-0 bg-black/25 p-2 rounded-lg border border-gray-800/60 flex flex-col justify-between">
+                <WicsIndexChart
+                  key={selectedCell.wics}
+                  wics={selectedCell.wics}
+                  weight={rankType}
+                  onWeightChange={setRankType}
+                  startDate={indexDateRange.start}
+                  endDate={indexDateRange.end}
+                  height={135}
+                  compact={true}
+                />
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

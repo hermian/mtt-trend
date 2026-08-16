@@ -69,8 +69,15 @@ describe("AvwapChart Component", () => {
         color: "#ec4899",
         values: [{ date: "2024-01-02", value: 2700.0 }],
       },
+      {
+        id: "anchor_atl_20000104",
+        name: "역대 최저(ATL) (2000-01-04)",
+        anchor_date: "2000-01-04",
+        color: "#6b7280",
+        values: [{ date: "2024-01-02", value: 500.0 }],
+      },
     ],
-    preset_dates: ["2021-06-28"],
+    preset_dates: ["2021-06-28", "2000-01-04"],
   };
 
   it("renders market and interval controls and amount panel", () => {
@@ -167,6 +174,11 @@ describe("AvwapChart Component", () => {
     const anchorBadge = screen.getByText(/2021-06-28/);
     expect(anchorBadge).toBeInTheDocument();
     fireEvent.click(anchorBadge);
+
+    const atlBadge = screen.getByText(/역대 최저\(ATL\)/);
+    expect(atlBadge).toBeInTheDocument();
+    // ATL is OFF by default, clicking it turns it ON
+    fireEvent.click(atlBadge);
 
     const offAllBtn = screen.getByText("앵커 전체OFF");
     fireEvent.click(offAllBtn);

@@ -19,6 +19,7 @@ interface WicsIndexChartProps {
   startDate?: string;
   endDate?: string;
   height?: number;
+  compact?: boolean;
 }
 
 function rebaseTo100(
@@ -40,6 +41,7 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
   startDate,
   endDate,
   height = 280,
+  compact = false,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -116,6 +118,59 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
     };
   }, [height, wics, seriesData, weight]);
 
+  if (compact) {
+    return (
+      <div className="w-full flex flex-col justify-between">
+        <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
+          <span>
+            {hover ? (
+              <>
+                {hover.time}: <span className="text-gray-200 font-mono font-bold">{hover.value.toFixed(1)}</span>
+              </>
+            ) : last ? (
+              <>
+                종가 <span className="text-gray-200 font-mono font-bold">{last.value.toFixed(1)}</span>
+                {changePct != null && (
+                  <span
+                    className={clsx(
+                      "ml-1.5 font-mono text-[9px] font-bold",
+                      changePct > 0 ? "text-red-400" : changePct < 0 ? "text-blue-400" : "text-gray-400"
+                    )}
+                    title="선택된 차트 전체 조회 기간(start=100) 누적 변동률"
+                  >
+                    (차트구간 {changePct > 0 ? "+" : ""}{changePct.toFixed(1)}%)
+                  </span>
+                )}
+              </>
+            ) : (
+              "섹터 지수"
+            )}
+          </span>
+          <span className="text-[8px] text-gray-500 font-mono uppercase hidden sm:inline">start=100</span>
+        </div>
+
+        {isLoading && (
+          <div style={{ height }} className="flex items-center justify-center text-xs text-gray-500">
+            지수 로딩 중…
+          </div>
+        )}
+        {error && (
+          <div style={{ height }} className="flex items-center justify-center text-xs text-red-400">
+            지수 로드 실패
+          </div>
+        )}
+        {!isLoading && !error && seriesData.length === 0 && (
+          <div style={{ height }} className="flex items-center justify-center text-xs text-gray-500 px-2 text-center">
+            지수 데이터 없음
+          </div>
+        )}
+        {!isLoading && !error && seriesData.length > 0 && (
+          <div ref={containerRef} className="w-full" style={{ height }} />
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="bg-gray-900/60 border border-gray-800 rounded-xl p-4 space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -138,12 +193,12 @@ export const WicsIndexChart: React.FC<WicsIndexChartProps> = ({
                 {changePct != null && (
                   <span
                     className={clsx(
-                      "ml-2 font-mono",
+                      "ml-2 font-mono text-[10px]",
                       changePct > 0 ? "text-red-400" : changePct < 0 ? "text-blue-400" : "text-gray-400"
                     )}
+                    title="선택된 차트 전체 조회 기간(start=100) 누적 변동률"
                   >
-                    {changePct > 0 ? "+" : ""}
-                    {changePct.toFixed(1)}%
+                    (차트구간 {changePct > 0 ? "+" : ""}{changePct.toFixed(1)}%)
                   </span>
                 )}
               </>

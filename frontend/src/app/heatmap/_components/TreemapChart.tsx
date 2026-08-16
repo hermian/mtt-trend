@@ -177,10 +177,10 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
       {/* 데스크톱 마우스 호버 툴팁 / 팝업 */}
       {hover && (
         <div
-          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm"
+          className="pointer-events-none fixed z-50 min-w-[260px] max-w-sm rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2.5 text-xs shadow-xl backdrop-blur-sm"
           style={{
-            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 240)),
-            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 140)),
+            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 320)),
+            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 240)),
           }}
         >
           <div className="font-bold text-gray-100">{hover.group.name}</div>
@@ -206,7 +206,53 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
               <span className="text-gray-400">RS {hover.group.rs}</span>
             )}
           </div>
-          <div className="mt-1 text-[10px] text-sky-400">
+          {hover.group.stocks && hover.group.stocks.length > 0 && (
+            <div className="mt-2 space-y-1 border-t border-gray-800 pt-2 text-[11px]">
+              {(hover.group.stocks.length <= 5
+                ? hover.group.stocks
+                : hover.group.stocks.slice(0, 5)
+              ).map((s) => (
+                <div
+                  key={s.code}
+                  className="flex items-center justify-between gap-3 text-gray-300"
+                >
+                  <span className="font-semibold text-gray-100 truncate">
+                    {s.name}
+                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <span
+                      className={
+                        s.ret === null
+                          ? "text-gray-400 font-medium"
+                          : s.ret > 0
+                            ? "font-semibold text-red-400"
+                            : s.ret < 0
+                              ? "font-semibold text-blue-400"
+                              : "font-semibold text-gray-300"
+                      }
+                    >
+                      {formatReturn(s.ret)}
+                    </span>
+                    <span className="text-gray-400">
+                      시총 {formatMarcap(s.marcap)}
+                    </span>
+                    {s.rs !== null && (
+                      <span className="text-gray-400">RS {s.rs}</span>
+                    )}
+                    {s.mmt !== undefined && s.mmt !== null && (
+                      <span className="text-gray-400">MMT {s.mmt}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {hover.group.stocks.length > 5 && (
+                <div className="pt-0.5 text-right font-medium text-sky-400 text-[10px]">
+                  외 {hover.group.stocks.length - 5}개 더보기
+                </div>
+              )}
+            </div>
+          )}
+          <div className="mt-2 text-[10px] text-sky-400">
             클릭하여 종목 목록 보기 ↗
           </div>
         </div>

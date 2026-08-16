@@ -19,19 +19,21 @@ const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
 /** 시장 단일 그룹은 개요 드릴다운 없이 종목 트리맵을 바로 표시 */
 const MARKET_GROUPINGS = new Set<HeatmapControls["grouping"]>(["kospi", "kosdaq"]);
 
+export const DEFAULT_HEATMAP_CONTROLS: HeatmapControls = {
+  grouping: "industry",
+  period: "1D",
+  startDate: null,
+  endDate: null,
+  marcapMin: 3000,
+  marcapMax: null,
+  minRet: 4,
+  minRs: null,
+  mmt: [1, 2, 3],
+  limit: 0,
+};
+
 export default function StockHeatmapPage() {
-  const [controls, setControls] = useState<HeatmapControls>({
-    grouping: "sector",
-    period: "1D",
-    startDate: null,
-    endDate: null,
-    marcapMin: null,
-    marcapMax: null,
-    minRet: null,
-    minRs: null,
-    mmt: null,
-    limit: 0,
-  });
+  const [controls, setControls] = useState<HeatmapControls>(DEFAULT_HEATMAP_CONTROLS);
 
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);

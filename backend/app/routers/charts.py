@@ -1111,28 +1111,30 @@ async def get_wics_index_all(
 @router.get("/stocks/search", response_model=List[StockSearchResult])
 async def search_stocks_endpoint(
     q: str = Query(..., min_length=1, description="검색할 종목명 또는 종목코드"),
+    type: str = Query("stock", description="자산 유형: stock | etf | all"),
     limit: int = Query(10, ge=1, le=50, description="최대 반환 개수")
 ):
     """
-    종목명 또는 종목코드로 주식 검색 목록을 반환합니다.
+    종목명 또는 종목코드로 주식/ETF 검색 목록을 반환합니다.
     """
-    return search_stocks_db(query=q, limit=limit)
+    return search_stocks_db(query=q, limit=limit, asset_type=type)
 
 
 @router.get("/avwap", response_model=AvwapChartResponse)
 async def get_avwap_chart_data(
-    market: str = Query("kospi", description="kospi | kosdaq"),
+    market: str = Query("kospi", description="kospi | kosdaq | etf"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
-    symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자)"),
+    symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자, 069500, KODEX 200)"),
 ):
     """
-    KOSPI / KOSDAQ 또는 개별 주식의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    KOSPI / KOSDAQ 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
     """
     data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
     if not data:
-        target_desc = f"stock '{symbol}'" if symbol else f"market '{market}'"
+        target_desc = f"symbol '{symbol}'" if symbol else f"market '{market}'"
         raise HTTPException(
             status_code=404,
             detail=f"AVWAP chart data not found for {target_desc} with interval '{interval}'."
         )
     return data
+

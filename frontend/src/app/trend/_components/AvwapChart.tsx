@@ -41,13 +41,15 @@ export function AvwapChart() {
   const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
 
   // Stock Search state
+  const [searchType, setSearchType] = useState<"stock" | "etf">("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery);
+  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery, searchType);
   const { data: chartData, isLoading, error } = useAvwapChart(market, interval, symbol);
+
 
   const containerRef = useRef<HTMLDivElement>(null);
   const verticalGuideRef = useRef<HTMLDivElement>(null);
@@ -109,10 +111,16 @@ export function AvwapChart() {
 
   // Select stock from search
   const handleSelectStock = (stock: StockSearchResult) => {
+    if (stock.market === "ETF") {
+      setSearchType("etf");
+    } else {
+      setSearchType("stock");
+    }
     setSymbol(stock.code);
     setSearchQuery(`${stock.name} (${stock.code})`);
     setShowDropdown(false);
   };
+
 
   // Clear stock search and return to market index mode
   const handleClearStock = (targetMarket?: "kospi" | "kosdaq") => {
@@ -900,81 +908,133 @@ export function AvwapChart() {
             })}
           </div>
 
-          {/* Stock Search Box with Autocomplete */}
-          <div className="relative">
-            <div className={`flex items-center bg-gray-800/90 border rounded-lg px-2.5 py-1 text-xs transition-all ${
-              symbol ? "border-emerald-500/80 ring-1 ring-emerald-500/50" : "border-gray-700 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
-            }`}>
-              <span className="text-gray-400 mr-1.5">🔍</span>
-              <input
-                ref={searchInputRef}
-                type="text"
-                placeholder="종목명 또는 코드 (예: 삼성전자, 005930)"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowDropdown(true);
-                }}
-                onFocus={() => setShowDropdown(true)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    if (searchResults && searchResults.length > 0) {
-                      handleSelectStock(searchResults[0]);
-                    } else if (searchQuery.trim()) {
-                      setSymbol(searchQuery.trim());
-                      setShowDropdown(false);
-                    }
+          {/* Stock / ETF Toggle & Search Box */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Segment Toggle: 종목 / ETF */}
+            <div className="inline-flex rounded-lg bg-gray-800/80 p-0.5 border border-gray-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchType("stock");
+                  if (symbol && searchType === "etf") {
+                    handleClearStock();
                   }
                 }}
-                className="bg-transparent text-white placeholder-gray-500 focus:outline-none w-48 sm:w-56 text-xs"
-              />
-              {(searchQuery || symbol) && (
-                <button
-                  onClick={() => handleClearStock()}
-                  className="text-gray-400 hover:text-white ml-1 p-0.5"
-                  title="지수 모드로 복귀"
-                >
-                  ✕
-                </button>
-              )}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  searchType === "stock"
+                    ? "bg-emerald-600 text-white shadow-md"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                종목
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchType("etf");
+                  if (symbol && searchType === "stock") {
+                    handleClearStock();
+                  }
+                }}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  searchType === "etf"
+                    ? "bg-purple-600 text-white shadow-md"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                ETF
+              </button>
             </div>
 
-            {/* Autocomplete Dropdown */}
-            {showDropdown && searchQuery.trim().length >= 1 && (
-              <div
-                ref={dropdownRef}
-                className="absolute left-0 top-full mt-1 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar"
-              >
-                {isSearching ? (
-                  <div className="p-3 text-xs text-gray-400 text-center">검색 중...</div>
-                ) : searchResults && searchResults.length > 0 ? (
-                  searchResults.map((stk) => (
-                    <button
-                      key={stk.code}
-                      onClick={() => handleSelectStock(stk)}
-                      className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-white">{stk.name}</span>
-                        <span className="text-[11px] text-gray-400 font-mono">{stk.code}</span>
-                      </div>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                          stk.market === "KOSPI"
-                            ? "bg-blue-900/60 text-blue-300"
-                            : "bg-emerald-900/60 text-emerald-300"
-                        }`}
-                      >
-                        {stk.market}
-                      </span>
-                    </button>
-                  ))
-                ) : (
-                  <div className="p-3 text-xs text-gray-400 text-center">검색 결과가 없습니다</div>
+            {/* Search Box with Autocomplete */}
+            <div className="relative">
+              <div className={`flex items-center bg-gray-800/90 border rounded-lg px-2.5 py-1 text-xs transition-all ${
+                symbol
+                  ? searchType === "etf"
+                    ? "border-purple-500/80 ring-1 ring-purple-500/50"
+                    : "border-emerald-500/80 ring-1 ring-emerald-500/50"
+                  : searchType === "etf"
+                  ? "border-gray-700 focus-within:border-purple-500 focus-within:ring-1 focus-within:ring-purple-500"
+                  : "border-gray-700 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500"
+              }`}>
+                <span className="text-gray-400 mr-1.5">🔍</span>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder={
+                    searchType === "etf"
+                      ? "ETF명 또는 코드 (예: KODEX 200, 069500)"
+                      : "종목명 또는 코드 (예: 삼성전자, 005930)"
+                  }
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    setShowDropdown(true);
+                  }}
+                  onFocus={() => setShowDropdown(true)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (searchResults && searchResults.length > 0) {
+                        handleSelectStock(searchResults[0]);
+                      } else if (searchQuery.trim()) {
+                        setSymbol(searchQuery.trim());
+                        setShowDropdown(false);
+                      }
+                    }
+                  }}
+                  className="bg-transparent text-white placeholder-gray-500 focus:outline-none w-48 sm:w-56 text-xs"
+                />
+                {(searchQuery || symbol) && (
+                  <button
+                    onClick={() => handleClearStock()}
+                    className="text-gray-400 hover:text-white ml-1 p-0.5"
+                    title="지수 모드로 복귀"
+                  >
+                    ✕
+                  </button>
                 )}
               </div>
-            )}
+
+              {/* Autocomplete Dropdown */}
+              {showDropdown && searchQuery.trim().length >= 1 && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute left-0 top-full mt-1 w-64 bg-gray-900 border border-gray-700 rounded-lg shadow-2xl z-50 max-h-60 overflow-y-auto custom-scrollbar"
+                >
+                  {isSearching ? (
+                    <div className="p-3 text-xs text-gray-400 text-center">검색 중...</div>
+                  ) : searchResults && searchResults.length > 0 ? (
+                    searchResults.map((stk) => (
+                      <button
+                        key={stk.code}
+                        onClick={() => handleSelectStock(stk)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-white">{stk.name}</span>
+                          <span className="text-[11px] text-gray-400 font-mono">{stk.code}</span>
+                        </div>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
+                            stk.market === "ETF"
+                              ? "bg-purple-900/60 text-purple-300 border border-purple-700/50"
+                              : stk.market === "KOSPI"
+                              ? "bg-blue-900/60 text-blue-300"
+                              : "bg-emerald-900/60 text-emerald-300"
+                          }`}
+                        >
+                          {stk.market}
+                        </span>
+                      </button>
+                    ))
+                  ) : (
+                    <div className="p-3 text-xs text-gray-400 text-center">검색 결과가 없습니다</div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
+
 
           {/* Interval Toggle */}
           <div className="inline-flex rounded-lg bg-gray-800/80 p-1 border border-gray-700">
@@ -1110,12 +1170,14 @@ export function AvwapChart() {
           <span className="flex items-center gap-1.5">
             <span
               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
-                isStockMode
+                chartData.market === "ETF"
+                  ? "bg-purple-950/80 text-purple-400 border border-purple-800"
+                  : isStockMode
                   ? "bg-emerald-950/80 text-emerald-400 border border-emerald-800"
                   : "bg-blue-950/80 text-blue-400 border border-blue-800"
               }`}
             >
-              {isStockMode ? "종목" : "지수"}
+              {chartData.market === "ETF" ? "ETF" : isStockMode ? "종목" : "지수"}
             </span>
             <span className="text-gray-200 font-bold">
               {chartData.name}
@@ -1123,6 +1185,7 @@ export function AvwapChart() {
             </span>
           </span>
         )}
+
         {activeDisplay && (
           <>
             <span className="text-blue-400 font-bold">{activeDisplay.time}</span>

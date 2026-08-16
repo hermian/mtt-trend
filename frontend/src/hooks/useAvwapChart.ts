@@ -13,11 +13,15 @@ export const useAvwapChart = (
   });
 };
 
-export const useStockSearch = (query: string) => {
+export const useStockSearch = (
+  query: string,
+  type: "stock" | "etf" | "all" = "stock"
+) => {
   return useQuery<StockSearchResult[]>({
-    queryKey: ["stockSearch", query],
-    queryFn: () => api.searchStocks(query),
+    queryKey: ["stockSearch", query, type],
+    queryFn: () => api.searchStocks(query, type),
     enabled: !!query && query.trim().length >= 1,
     staleTime: 5 * 60 * 1000,
   });
 };
+

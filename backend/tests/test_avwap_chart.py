@@ -125,3 +125,50 @@ def test_avwap_stock_by_code_and_name():
     # Non-existent stock returns 404
     res_404 = client.get("/api/charts/avwap?symbol=999999&interval=1D")
     assert res_404.status_code == 404
+
+
+def test_etf_search():
+    # ETF search
+    res = client.get("/api/charts/stocks/search?q=KODEX&type=etf")
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data, list)
+    assert len(data) > 0
+    assert data[0]["market"] == "ETF"
+
+    # Search with type=stock should only return non-ETF
+    res_stk = client.get("/api/charts/stocks/search?q=삼성&type=stock")
+    assert res_stk.status_code == 200
+    data_stk = res_stk.json()
+    assert len(data_stk) > 0
+    assert all(item["market"] in ("KOSPI", "KOSDAQ") for item in data_stk)
+
+
+def test_avwap_etf_by_code_and_name():
+    # By code (069500: KODEX 200)
+    res_code = client.get("/api/charts/avwap?market=etf&symbol=069500&interval=1D")
+    assert res_code.status_code == 200
+    data = res_code.json()
+    assert data["symbol"] == "069500"
+    assert data["market"] == "ETF"
+    assert "KODEX 200" in data["name"]
+    assert data["amount_unit"] == "억원"
+    assert len(data["points"]) > 0
+    assert len(data["anchors"]) > 0
+    last_pt = data["points"][-1]
+    assert "amount" in last_pt
+    assert "amount_sma50" in last_pt
+    assert "mdd" in last_pt
+    assert "h52_chg" in last_pt
+    assert last_pt["mdd"] is not None
+    assert last_pt["h52_chg"] is not None
+
+    # By name (KODEX 200)
+    res_name = client.get("/api/charts/avwap?symbol=KODEX 200&interval=1W")
+    assert res_name.status_code == 200
+    data_name = res_name.json()
+    assert data_name["symbol"] == "069500"
+    assert data_name["market"] == "ETF"
+    assert "KODEX 200" in data_name["name"]
+    assert data_name["interval"] == "1W"
+

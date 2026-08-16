@@ -215,4 +215,46 @@ describe("AvwapChart Component", () => {
     fireEvent.click(logBtn);
     expect(screen.getByText("[LOG]")).toBeInTheDocument();
   });
+
+  it("allows toggling between Stock and ETF search mode and selecting an ETF", () => {
+    const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: {
+        ...mockChartData,
+        market: "ETF",
+        symbol: "069500",
+        name: "KODEX 200",
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [{ code: "069500", name: "KODEX 200", market: "ETF" }],
+      isLoading: false,
+    } as any);
+
+    render(<AvwapChart />);
+
+    const etfToggleBtn = screen.getByRole("button", { name: "ETF" });
+    const stockToggleBtn = screen.getByRole("button", { name: "종목" });
+    expect(etfToggleBtn).toBeInTheDocument();
+    expect(stockToggleBtn).toBeInTheDocument();
+
+    // Click ETF toggle
+    fireEvent.click(etfToggleBtn);
+    expect(screen.getByPlaceholderText(/ETF명 또는 코드/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/ETF명 또는 코드/);
+    fireEvent.change(input, { target: { value: "KODEX" } });
+
+    const etfOption = screen.getByText("069500");
+    expect(etfOption).toBeInTheDocument();
+    fireEvent.click(etfOption);
+
+    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "069500");
+    expect(screen.getAllByText("ETF").length).toBeGreaterThan(0);
+  });
 });
+
+
+

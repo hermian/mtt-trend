@@ -119,18 +119,32 @@ export function AvwapChart() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize enabled anchors when data changes (ATL anchor defaults to off)
+  // Initialize enabled anchors when market/symbol/interval changes
   useEffect(() => {
     if (chartData?.anchors) {
-      setEnabledAnchors(
-        new Set(
-          chartData.anchors
-            .filter((a) => !a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL"))
-            .map((a) => a.id)
-        )
+      const initial = new Set(
+        chartData.anchors
+          .filter((a) => !a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL"))
+          .map((a) => a.id)
       );
+      setEnabledAnchors(initial);
     }
-  }, [chartData]);
+  }, [chartData?.market, chartData?.symbol, chartData?.interval]);
+
+  // Ensure newly added custom anchors are automatically enabled
+  useEffect(() => {
+    if (chartData?.anchors) {
+      setEnabledAnchors((prev) => {
+        const next = new Set(prev);
+        chartData.anchors.forEach((a) => {
+          if (!a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL")) {
+            next.add(a.id);
+          }
+        });
+        return next;
+      });
+    }
+  }, [chartData?.anchors]);
 
   const [hoveredData, setHoveredData] = useState<{
     time: string;

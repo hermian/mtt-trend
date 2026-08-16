@@ -60,11 +60,42 @@ def _init_db():
         logger.error(f"Failed to initialize user_anchors.db: {e}", exc_info=True)
 
 
+TARGET_ALIAS_GROUPS = {
+    "dow": ["dow", "dow30", "dji"],
+    "dow30": ["dow", "dow30", "dji"],
+    "dji": ["dow", "dow30", "dji"],
+    "nasdaq": ["nasdaq", "nasdaq100", "ndx"],
+    "nasdaq100": ["nasdaq", "nasdaq100", "ndx"],
+    "ndx": ["nasdaq", "nasdaq100", "ndx"],
+    "sp500": ["sp500", "s&p500", "spx", "snp500"],
+    "s&p500": ["sp500", "s&p500", "spx", "snp500"],
+    "spx": ["sp500", "s&p500", "spx", "snp500"],
+    "snp500": ["sp500", "s&p500", "spx", "snp500"],
+    "kospi": ["kospi"],
+    "kosdaq": ["kosdaq"],
+}
+
+
+def get_target_aliases(target: str) -> List[str]:
+    t = target.lower().strip()
+    return TARGET_ALIAS_GROUPS.get(t, [t])
+
+
+def normalize_anchor_date(date_str: str) -> str:
+    """Normalize input date like 2026-3-27 or 2026/03/27 to standard YYYY-MM-DD format."""
+    clean = date_str.strip().replace("/", "-").replace(".", "-")
+    parts = clean.split("-")
+    if len(parts) == 3:
+        y, m, d = parts[0], parts[1].zfill(2), parts[2].zfill(2)
+        return f"{y}-{m}-{d}"
+    return clean
+
+
 def get_custom_anchors(
     market_or_symbol: Optional[str] = None,
     include_inactive: bool = False
 ) -> List[CustomAnchorResponse]:
-    """Retrieve custom anchors for a market/symbol or all targets."""
+    """Retrieve custom anchors for a market/symbol (including all aliases) or all targets."""
     _init_db()
     db_path = _get_user_anchors_db_path()
     res: List[CustomAnchorResponse] = []
@@ -73,10 +104,12 @@ def get_custom_anchors(
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             query = "SELECT * FROM custom_avwap_anchors WHERE 1=1"
-            params = []
+            params: List[Any] = []
             if market_or_symbol:
-                query += " AND lower(market_or_symbol) = lower(?)"
-                params.append(market_or_symbol.strip())
+                aliases = get_target_aliases(market_or_symbol)
+                placeholders = ",".join(["?"] * len(aliases))
+                query += f" AND lower(market_or_symbol) IN ({placeholders})"
+                params.extend(aliases)
             if not include_inactive:
                 query += " AND is_active = 1"
             query += " ORDER BY anchor_date ASC, created_at ASC"
@@ -85,7 +118,7 @@ def get_custom_anchors(
                 res.append(CustomAnchorResponse(
                     id=row["id"],
                     market_or_symbol=row["market_or_symbol"],
-                    anchor_date=row["anchor_date"],
+                    anchor_date=normalize_anchor_date(row["anchor_date"]),
                     label=row["label"],
                     color=row["color"],
                     interval_mask=row["interval_mask"] or "ALL",
@@ -99,24 +132,45 @@ def get_custom_anchors(
 
 
 def create_custom_anchor(payload: CustomAnchorCreate) -> CustomAnchorResponse:
-    """Create a new custom anchor."""
+    """Create or update a custom anchor with normalized target and date."""
     _init_db()
     db_path = _get_user_anchors_db_path()
-    anchor_id = f"anc_{uuid.uuid4().hex[:12]}"
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     target = payload.market_or_symbol.lower().strip()
     color = payload.color.strip() if payload.color else "#ec4899"
     interval_mask = (payload.interval_mask or "ALL").upper().strip()
+    norm_date = normalize_anchor_date(payload.anchor_date)
+    aliases = get_target_aliases(target)
 
     with sqlite3.connect(db_path) as conn:
-        conn.execute(
-            """
-            INSERT INTO custom_avwap_anchors (
-                id, market_or_symbol, anchor_date, label, color, interval_mask, is_active, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-            """,
-            (anchor_id, target, payload.anchor_date.strip(), payload.label, color, interval_mask, now_str, now_str)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(aliases))
+        cursor.execute(
+            f"SELECT id FROM custom_avwap_anchors WHERE lower(market_or_symbol) IN ({placeholders}) AND anchor_date = ?",
+            (*aliases, norm_date)
         )
+        row = cursor.fetchone()
+        if row:
+            anchor_id = row["id"]
+            cursor.execute(
+                """
+                UPDATE custom_avwap_anchors
+                SET label = ?, color = ?, interval_mask = ?, is_active = 1, updated_at = ?
+                WHERE id = ?
+                """,
+                (payload.label, color, interval_mask, now_str, anchor_id)
+            )
+        else:
+            anchor_id = f"anc_{uuid.uuid4().hex[:12]}"
+            cursor.execute(
+                """
+                INSERT INTO custom_avwap_anchors (
+                    id, market_or_symbol, anchor_date, label, color, interval_mask, is_active, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                (anchor_id, target, norm_date, payload.label, color, interval_mask, now_str, now_str)
+            )
         conn.commit()
 
     _invalidate_cache()
@@ -124,7 +178,7 @@ def create_custom_anchor(payload: CustomAnchorCreate) -> CustomAnchorResponse:
     return CustomAnchorResponse(
         id=anchor_id,
         market_or_symbol=target,
-        anchor_date=payload.anchor_date.strip(),
+        anchor_date=norm_date,
         label=payload.label,
         color=color,
         interval_mask=interval_mask,
@@ -132,6 +186,7 @@ def create_custom_anchor(payload: CustomAnchorCreate) -> CustomAnchorResponse:
         created_at=now_str,
         updated_at=now_str,
     )
+
 
 
 def update_custom_anchor(anchor_id: str, payload: CustomAnchorUpdate) -> Optional[CustomAnchorResponse]:
@@ -150,7 +205,7 @@ def update_custom_anchor(anchor_id: str, payload: CustomAnchorUpdate) -> Optiona
 
         new_label = payload.label if payload.label is not None else row["label"]
         new_color = payload.color if payload.color is not None else row["color"]
-        new_date = payload.anchor_date if payload.anchor_date is not None else row["anchor_date"]
+        new_date = normalize_anchor_date(payload.anchor_date) if payload.anchor_date is not None else row["anchor_date"]
         new_mask = payload.interval_mask if payload.interval_mask is not None else row["interval_mask"]
         new_active = int(payload.is_active) if payload.is_active is not None else row["is_active"]
 
@@ -194,19 +249,21 @@ def delete_custom_anchor(anchor_id: str) -> bool:
 
 
 def suppress_system_anchor(market_or_symbol: str, anchor_date: str) -> CustomAnchorResponse:
-    """Suppress (hide/delete) a system preset anchor by recording is_active = 0."""
+    """Suppress (hide/delete) a system preset anchor by recording is_active = 0 across aliases."""
     _init_db()
     db_path = _get_user_anchors_db_path()
     target = market_or_symbol.lower().strip()
-    date_clean = anchor_date.strip()
+    aliases = get_target_aliases(target)
+    date_clean = normalize_anchor_date(anchor_date)
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
     with sqlite3.connect(db_path) as conn:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
+        placeholders = ",".join(["?"] * len(aliases))
         cursor.execute(
-            "SELECT * FROM custom_avwap_anchors WHERE lower(market_or_symbol) = lower(?) AND anchor_date = ?",
-            (target, date_clean)
+            f"SELECT * FROM custom_avwap_anchors WHERE lower(market_or_symbol) IN ({placeholders}) AND anchor_date = ?",
+            (*aliases, date_clean)
         )
         row = cursor.fetchone()
         if row:
@@ -242,15 +299,17 @@ def suppress_system_anchor(market_or_symbol: str, anchor_date: str) -> CustomAnc
 
 
 def reset_all_anchors(market_or_symbol: str) -> bool:
-    """Reset all custom additions and system suppressions for a target back to default."""
+    """Reset all custom additions and system suppressions across all target aliases."""
     _init_db()
     db_path = _get_user_anchors_db_path()
-    target = market_or_symbol.lower().strip()
+    aliases = get_target_aliases(market_or_symbol)
+    placeholders = ",".join(["?"] * len(aliases))
     with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("DELETE FROM custom_avwap_anchors WHERE lower(market_or_symbol) = lower(?)", (target,))
+        cursor.execute(f"DELETE FROM custom_avwap_anchors WHERE lower(market_or_symbol) IN ({placeholders})", aliases)
         conn.commit()
         _invalidate_cache()
         return True
+
 
 

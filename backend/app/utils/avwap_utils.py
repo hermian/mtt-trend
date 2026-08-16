@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import sqlite3
 import duckdb
 from pathlib import Path
@@ -567,6 +568,14 @@ def resolve_stock_info(query: str, asset_type: Optional[str] = None) -> Optional
     q = query.strip()
     if not q:
         return None
+
+    # '삼성전자 (005930)' 형태처럼 괄호 안에 종목코드가 포함된 경우 코드 우선 추출
+    match = re.search(r'\(([0-9a-zA-Z]{6})\)', q)
+    if match:
+        extracted = match.group(1)
+        res = resolve_stock_info(extracted, asset_type)
+        if res:
+            return res
 
     # 1. ETF 모드인 경우 etf_price.db 우선 조회
     if asset_type == "etf":

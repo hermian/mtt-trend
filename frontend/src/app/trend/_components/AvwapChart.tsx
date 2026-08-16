@@ -80,8 +80,10 @@ export function AvwapChart() {
   const [searchType, setSearchType] = useState<"stock" | "etf">("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
+  const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const isSelectingRef = useRef(false);
 
   const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery, searchType);
   const { data: chartData, isLoading, error } = useAvwapChart(market, interval, symbol);
@@ -233,6 +235,7 @@ export function AvwapChart() {
 
   // Select stock from search
   const handleSelectStock = (stock: StockSearchResult) => {
+    isSelectingRef.current = true;
     if (stock.market === "ETF") {
       setSearchType("etf");
     } else {
@@ -241,17 +244,26 @@ export function AvwapChart() {
     setSymbol(stock.code);
     setSearchQuery(`${stock.name} (${stock.code})`);
     setShowDropdown(false);
+    setSelectedIndex(-1);
+    searchInputRef.current?.blur();
+    setTimeout(() => {
+      isSelectingRef.current = false;
+    }, 150);
   };
-
 
   // Clear stock search and return to market index mode
   const handleClearStock = (targetMarket?: AvwapMarket) => {
+    isSelectingRef.current = true;
     setSymbol(null);
     setSearchQuery("");
     setShowDropdown(false);
+    setSelectedIndex(-1);
     if (targetMarket) {
       setMarket(targetMarket);
     }
+    setTimeout(() => {
+      isSelectingRef.current = false;
+    }, 150);
   };
 
   const queryClient = useQueryClient();
@@ -1311,18 +1323,53 @@ export function AvwapChart() {
                   }
                   value={searchQuery}
                   onChange={(e) => {
+                    if (isSelectingRef.current) return;
                     setSearchQuery(e.target.value);
                     setShowDropdown(true);
+                    setSelectedIndex(-1);
                   }}
-                  onFocus={() => setShowDropdown(true)}
+                  onFocus={(e) => {
+                    setShowDropdown(true);
+                    if (symbol && searchQuery) {
+                      e.target.select();
+                    }
+                  }}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      if (!showDropdown) {
+                        setShowDropdown(true);
+                        return;
+                      }
                       if (searchResults && searchResults.length > 0) {
-                        handleSelectStock(searchResults[0]);
+                        setSelectedIndex((prev) => (prev < searchResults.length - 1 ? prev + 1 : 0));
+                      }
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      if (searchResults && searchResults.length > 0) {
+                        setSelectedIndex((prev) => (prev > 0 ? prev - 1 : searchResults.length - 1));
+                      }
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      if (searchResults && searchResults.length > 0) {
+                        const targetStock =
+                          selectedIndex >= 0 && selectedIndex < searchResults.length
+                            ? searchResults[selectedIndex]
+                            : searchResults[0];
+                        handleSelectStock(targetStock);
                       } else if (searchQuery.trim()) {
+                        isSelectingRef.current = true;
                         setSymbol(searchQuery.trim());
                         setShowDropdown(false);
+                        setSelectedIndex(-1);
+                        searchInputRef.current?.blur();
+                        setTimeout(() => {
+                          isSelectingRef.current = false;
+                        }, 150);
                       }
+                    } else if (e.key === "Escape") {
+                      setShowDropdown(false);
+                      setSelectedIndex(-1);
                     }
                   }}
                   className="bg-transparent text-white placeholder-gray-500 focus:outline-none w-48 sm:w-56 text-xs"
@@ -1347,11 +1394,14 @@ export function AvwapChart() {
                   {isSearching ? (
                     <div className="p-3 text-xs text-gray-400 text-center">검색 중...</div>
                   ) : searchResults && searchResults.length > 0 ? (
-                    searchResults.map((stk) => (
+                    searchResults.map((stk, idx) => (
                       <button
                         key={stk.code}
                         onClick={() => handleSelectStock(stk)}
-                        className="w-full text-left px-3 py-2 hover:bg-gray-800 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors"
+                        onMouseEnter={() => setSelectedIndex(idx)}
+                        className={`w-full text-left px-3 py-2 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors ${
+                          selectedIndex === idx ? "bg-gray-800" : "hover:bg-gray-800/60"
+                        }`}
                       >
                         <div className="flex items-center gap-2">
                           <span className="font-semibold text-white">{stk.name}</span>

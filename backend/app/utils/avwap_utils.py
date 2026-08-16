@@ -393,8 +393,39 @@ def load_avwap_chart_data(
             logger.warning(f"Failed to load custom/suppressed anchors for {market_key}: {e}")
 
         seen_dates = set()
+
+        # Dynamic YTD Anchor for index (first trading bar of current year)
+        ytd_candidates = df[df.index >= f"{df.index.max().year}-01-01"]
+        ytd_dt = ytd_candidates.index.min() if not ytd_candidates.empty else None
+        if ytd_dt is not None:
+            valid_ytd = df.index[df.index >= ytd_dt]
+            if len(valid_ytd) > 0:
+                ytd_matched_dt = valid_ytd[0]
+                ytd_str = ytd_matched_dt.strftime("%Y-%m-%d")
+                if ytd_str not in suppressed_dates and ytd_str not in seen_dates:
+                    seen_dates.add(ytd_str)
+                    start_pos = df.index.get_loc(ytd_matched_dt)
+                    if isinstance(start_pos, slice):
+                        start_pos = start_pos.start
+                    a_series = _calculate_vwap_series(df, start_idx=start_pos)
+                    val_list: List[AvwapAnchorValue] = []
+                    for i in range(start_pos, len(df)):
+                        v = a_series.iloc[i]
+                        if pd.notna(v) and np.isfinite(v):
+                            val_list.append(AvwapAnchorValue(
+                                date=df.index[i].strftime("%Y-%m-%d"),
+                                value=round(float(v), 2)
+                            ))
+                    anchors_list.append(AvwapAnchorSeries(
+                        id=f"anchor_ytd_{ytd_str.replace('-', '')}",
+                        name=f"YTD ({ytd_str})",
+                        anchor_date=ytd_str,
+                        color="#10b981",
+                        values=val_list
+                    ))
+
         for idx, ad_str in enumerate(preset_dates):
-            if ad_str in suppressed_dates:
+            if ad_str in suppressed_dates or ad_str in seen_dates:
                 continue
             seen_dates.add(ad_str)
             valid_indices = df.index[df.index >= ad_str]
@@ -854,11 +885,11 @@ def _compute_asset_avwap_chart(
     ytd_dt = ytd_candidates.index.min() if not ytd_candidates.empty else None
 
     raw_anchors = [
-        ("ytd", "YTD", ytd_dt),
-        ("h52", "52주 최고", h52_dt),
-        ("l52", "52주 최저", l52_dt),
-        ("ath", "역대 최고(ATH)", ath_dt),
-        ("atl", "역대 최저(ATL)", atl_dt),
+        ("ytd", "YTD", ytd_dt, "#10b981"),
+        ("h52", "52주 최고", h52_dt, "#ec4899"),
+        ("l52", "52주 최저", l52_dt, "#06b6d4"),
+        ("ath", "역대 최고(ATH)", ath_dt, "#f59e0b"),
+        ("atl", "역대 최저(ATL)", atl_dt, "#8b5cf6"),
     ]
 
     suppressed_dates = set()
@@ -874,8 +905,7 @@ def _compute_asset_avwap_chart(
         logger.warning(f"Failed to load custom/suppressed anchors for asset {code}: {e}")
 
     seen_dates: set = set()
-    color_idx = 0
-    for a_id, a_label, a_dt in raw_anchors:
+    for a_id, a_label, a_dt, a_color in raw_anchors:
         if a_dt is None:
             continue
         valid_indices = df.index[df.index >= a_dt]
@@ -903,10 +933,9 @@ def _compute_asset_avwap_chart(
             id=f"anchor_{a_id}_{d_str.replace('-', '')}",
             name=f"{a_label} ({d_str})",
             anchor_date=d_str,
-            color=ANCHOR_COLORS[color_idx % len(ANCHOR_COLORS)],
+            color=a_color,
             values=vals
         ))
-        color_idx += 1
 
     # 7.1 Custom Anchors from DB for individual stock/ETF
     for ca in custom_anchors_active:

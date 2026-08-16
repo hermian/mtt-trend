@@ -32,7 +32,9 @@ def test_avwap_kospi_1d():
     assert last_pt["amount"] is not None
     assert last_pt["amount_sma50"] is not None
     assert "rsi" in last_pt
+    assert "mdd" in last_pt
     assert "vix_fix" in last_pt
+    assert last_pt["mdd"] is not None
     assert len(data["anchors"]) > 0
 
 
@@ -105,6 +107,8 @@ def test_avwap_stock_by_code_and_name():
     last_pt = data["points"][-1]
     assert "amount" in last_pt
     assert "amount_sma50" in last_pt
+    assert "mdd" in last_pt
+    assert last_pt["mdd"] is not None
 
     # By name (SK Hynix)
     res_name = client.get("/api/charts/avwap?symbol=SK하이닉스&interval=1W")

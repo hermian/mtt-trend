@@ -8,6 +8,8 @@ import {
   ColorType,
   CandlestickSeries,
   LineSeries,
+  AreaSeries,
+  BaselineSeries,
   HistogramSeries,
   LineStyle,
   PriceScaleMode,
@@ -88,6 +90,7 @@ export function AvwapChart() {
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
     rsi?: number | null;
+    mdd?: number | null;
     vixFix?: number | null;
     amount?: number | null;
     amountSma50?: number | null;
@@ -231,7 +234,7 @@ export function AvwapChart() {
       const amountUnitLabel = chartData.amount_unit || "조원";
 
       const panels = [
-        { id: "rsi", name: "RSI (14)", height: 90 },
+        { id: "mdd", name: "MDD (%)", height: 90 },
         { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: 550 },
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
         { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
@@ -303,29 +306,54 @@ export function AvwapChart() {
         chartsRef.current.set(panel.id, chart);
         const activeSeries: ISeriesApi<any>[] = [];
 
-        // 1. Panel: RSI
-        if (panel.id === "rsi") {
-          const rsiSeries = chart.addSeries(LineSeries, {
-            color: "#f59e0b",
+        // 1. Panel: MDD (%)
+        if (panel.id === "mdd") {
+          const mddSeries = chart.addSeries(BaselineSeries, {
+            baseValue: { type: "price", price: 0 },
+            topLineColor: "#38bdf8",
+            bottomLineColor: "#38bdf8",
+            topFillColor1: "rgba(56, 189, 248, 0.0)",
+            topFillColor2: "rgba(56, 189, 248, 0.0)",
+            bottomFillColor1: "rgba(56, 189, 248, 0.35)",
+            bottomFillColor2: "rgba(56, 189, 248, 0.08)",
             lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toFixed(1)}%`,
+              minMove: 0.1,
+            },
             priceLineVisible: false,
             lastValueVisible: true,
           });
-          rsiSeries.createPriceLine({
-            price: 70,
-            color: "rgba(239, 68, 68, 0.6)",
+          mddSeries.createPriceLine({
+            price: 0,
+            color: "rgba(148, 163, 184, 0.6)",
             lineWidth: 1,
-            lineStyle: LineStyle.Dashed,
+            lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
           });
-          rsiSeries.createPriceLine({
-            price: 30,
-            color: "rgba(59, 130, 246, 0.6)",
+          mddSeries.createPriceLine({
+            price: -10,
+            color: "rgba(234, 179, 8, 0.3)",
             lineWidth: 1,
             lineStyle: LineStyle.Dashed,
-            axisLabelVisible: true,
+            axisLabelVisible: false,
           });
-          activeSeries.push(rsiSeries);
+          mddSeries.createPriceLine({
+            price: -20,
+            color: "rgba(249, 115, 22, 0.3)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: false,
+          });
+          mddSeries.createPriceLine({
+            price: -30,
+            color: "rgba(239, 68, 68, 0.3)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            axisLabelVisible: false,
+          });
+          activeSeries.push(mddSeries);
         }
 
         // 2. Panel: Main Price & AVWAP
@@ -524,6 +552,7 @@ export function AvwapChart() {
                 changePct: matchedPoint.change_pct,
               },
               rsi: matchedPoint.rsi,
+              mdd: matchedPoint.mdd,
               vixFix: matchedPoint.vix_fix,
               amount: matchedPoint.amount,
               amountSma50: matchedPoint.amount_sma50,
@@ -553,10 +582,10 @@ export function AvwapChart() {
       // Populate data into series
       const pts = chartData.points;
       if (pts.length > 0) {
-        // 1. RSI
-        const rsiSeriesList = seriesRef.current.get("rsi") || [];
-        if (rsiSeriesList[0]) {
-          rsiSeriesList[0].setData(linePoints((p) => p.rsi));
+        // 1. MDD
+        const mddSeriesList = seriesRef.current.get("mdd") || [];
+        if (mddSeriesList[0]) {
+          mddSeriesList[0].setData(linePoints((p) => p.mdd));
         }
 
         // 2. Main (Candlesticks, MAs, BB Upper, VWAPs, Anchors)
@@ -806,6 +835,7 @@ export function AvwapChart() {
       changePct: latestPoint.change_pct,
     },
     rsi: latestPoint.rsi,
+    mdd: latestPoint.mdd,
     vixFix: latestPoint.vix_fix,
     amount: latestPoint.amount,
     amountSma50: latestPoint.amount_sma50,
@@ -1094,8 +1124,21 @@ export function AvwapChart() {
             {activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
               <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
             )}
-            {activeDisplay.rsi !== null && activeDisplay.rsi !== undefined && (
-              <span>RSI(14): <span className="text-amber-400 font-bold">{activeDisplay.rsi.toFixed(1)}</span></span>
+            {activeDisplay.mdd !== null && activeDisplay.mdd !== undefined && (
+              <span>
+                MDD:{" "}
+                <span
+                  className={`font-bold ${
+                    activeDisplay.mdd === 0
+                      ? "text-emerald-400"
+                      : activeDisplay.mdd <= -20
+                      ? "text-rose-400"
+                      : "text-sky-400"
+                  }`}
+                >
+                  {activeDisplay.mdd.toFixed(1)}%
+                </span>
+              </span>
             )}
             {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
               <span>VIX Fix: <span className="text-emerald-400 font-bold">{activeDisplay.vixFix.toFixed(1)}%</span></span>
@@ -1133,12 +1176,12 @@ export function AvwapChart() {
             style={{ borderLeft: "1px dashed rgba(148, 163, 184, 0.7)" }}
           />
 
-          {/* Panel 1: RSI */}
+          {/* Panel 1: MDD */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              RSI (14)
+              MDD (%)
             </div>
-            <div data-chart-id="rsi" className="w-full" />
+            <div data-chart-id="mdd" className="w-full" />
           </div>
 
           {/* Panel 2: Main Candlestick & AVWAP */}

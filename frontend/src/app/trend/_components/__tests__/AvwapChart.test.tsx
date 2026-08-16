@@ -122,11 +122,12 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("MDD (%)")).toBeInTheDocument();
     expect(screen.getByText("-3.5%")).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();
-    expect(screen.getByText(/거래대금 \(조원\) & SMA/)).toBeInTheDocument();
+    expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/종목명 또는 코드/)).toBeInTheDocument();
     expect(screen.getByText("+ 앵커 추가")).toBeInTheDocument();
     expect(screen.getByText("⚙ 관리")).toBeInTheDocument();
   });
+
 
   it("allows switching market and interval", () => {
     const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({

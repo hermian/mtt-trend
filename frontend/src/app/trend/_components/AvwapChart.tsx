@@ -1580,8 +1580,17 @@ export function AvwapChart() {
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           <div className="w-full relative bg-[#090d16]">
-            <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              거래대금 ({chartData?.amount_unit || "조원"}) & SMA (주황 실선)
+            <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+              <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
+              {Boolean(
+                chartData?.amount_unit === "조$" ||
+                (!symbol && ["sp500", "nasdaq100", "dow", "dow30"].includes(market.toLowerCase()))
+              ) && (
+                <span className="text-[10px] font-normal text-amber-300 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-800/60 font-mono">
+                  [추정식: 종가(Close) × 거래량(Volume)]
+                </span>
+              )}
+              <span>& SMA (주황 실선)</span>
             </div>
             <div data-chart-id="amount" className="w-full" />
           </div>

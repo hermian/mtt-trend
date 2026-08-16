@@ -181,15 +181,10 @@ export const WicsRankingPanel: React.FC = () => {
     }
   }, [weeks]);
 
-  // Column width transition on mode change
+  // Column width reset on mode change
   useEffect(() => {
-    if (viewMode === "weekly") {
-      setBaseColumnWidth(90);
-      setColumnWidths({});
-    } else {
-      setBaseColumnWidth(150);
-      setColumnWidths({});
-    }
+    setBaseColumnWidth(150);
+    setColumnWidths({});
   }, [viewMode]);
 
   // API fetch start months
@@ -547,7 +542,7 @@ export const WicsRankingPanel: React.FC = () => {
               <span className="text-[11px] text-gray-400 font-medium whitespace-nowrap">열 너비</span>
               <input
                 type="range"
-                min="80"
+                min="100"
                 max="300"
                 value={baseColumnWidth}
                 onChange={(e) => {
@@ -560,12 +555,12 @@ export const WicsRankingPanel: React.FC = () => {
               <div className="flex gap-1 border-l border-gray-800 pl-2">
                 <button
                   onClick={() => {
-                    setBaseColumnWidth(90);
+                    setBaseColumnWidth(120);
                     setColumnWidths({});
                   }}
                   className={clsx(
                     "px-1.5 py-0.5 text-[10px] font-bold rounded transition-colors",
-                    baseColumnWidth === 90 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
+                    baseColumnWidth === 120 ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800"
                   )}
                 >
                   좁게

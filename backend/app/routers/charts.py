@@ -1123,12 +1123,13 @@ async def get_wics_index_all(
 async def search_stocks_endpoint(
     q: str = Query(..., min_length=1, description="검색할 종목명 또는 종목코드"),
     type: str = Query("stock", description="자산 유형: stock | etf | all"),
+    market: Optional[str] = Query(None, description="국가/시장 구분: kr | us | all"),
     limit: int = Query(10, ge=1, le=50, description="최대 반환 개수")
 ):
     """
     종목명 또는 종목코드로 주식/ETF 검색 목록을 반환합니다.
     """
-    return search_stocks_db(query=q, limit=limit, asset_type=type)
+    return search_stocks_db(query=q, limit=limit, asset_type=type, market=market)
 
 
 @router.get("/avwap", response_model=AvwapChartResponse)

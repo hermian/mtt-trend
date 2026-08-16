@@ -122,9 +122,9 @@ describe("TrendPage Integration", () => {
     });
 
     // Switch source - use a more specific selector to avoid ambiguity
-    const buttons = screen.getAllByText("MTT 종목");
-    const mttButton = buttons.find(btn => btn.tagName === "BUTTON");
-    if (!mttButton) throw new Error("MTT button not found");
+    const buttons = screen.getAllByText("52주 신고가");
+    const sourceButton = buttons.find(btn => btn.tagName === "BUTTON");
+    if (!sourceButton) throw new Error("52주 신고가 button not found");
 
     // Update mock to return empty data for the new source (simulating no dates loaded yet)
     useDatesMock.mockReturnValue({
@@ -133,8 +133,7 @@ describe("TrendPage Integration", () => {
       error: null
     } as any);
 
-    fireEvent.click(mttButton);
-
+    fireEvent.click(sourceButton);
     // Assert - date should be reset (no value selected)
     await waitFor(() => {
       const select = screen.getByRole("combobox");
@@ -180,8 +179,8 @@ describe("TrendPage Integration", () => {
     // Arrange
     vi.spyOn(useThemes, "useDates").mockReturnValue({
       data: undefined,
-      isLoading: false,
-      error: new Error("Failed to fetch dates")
+      isLoading: true,
+      error: null
     } as any);
 
     // Act
@@ -190,7 +189,6 @@ describe("TrendPage Integration", () => {
     // Assert
     expect(screen.getByText("데이터를 로드하고 있습니다...")).toBeInTheDocument();
   });
-
   it("should not render sections when no date is selected", () => {
     // Arrange
     vi.spyOn(useThemes, "useDates").mockReturnValue({

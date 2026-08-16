@@ -77,6 +77,7 @@ export function AvwapChart() {
   const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
 
   // Stock Search state
+  const [searchCountry, setSearchCountry] = useState<"kr" | "us">("kr");
   const [searchType, setSearchType] = useState<"stock" | "etf">("stock");
   const [searchQuery, setSearchQuery] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
@@ -85,7 +86,7 @@ export function AvwapChart() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isSelectingRef = useRef(false);
 
-  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery, searchType);
+  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery, searchType, searchCountry);
   const { data: chartData, isLoading, error } = useAvwapChart(market, interval, symbol);
 
 
@@ -236,10 +237,21 @@ export function AvwapChart() {
   // Select stock from search
   const handleSelectStock = (stock: StockSearchResult) => {
     isSelectingRef.current = true;
-    if (stock.market === "ETF") {
+    if (stock.market === "ETF" || stock.market === "US_ETF") {
       setSearchType("etf");
     } else {
       setSearchType("stock");
+    }
+    if (
+      stock.market === "US_ETF" ||
+      stock.market === "US" ||
+      stock.market === "NASDAQ" ||
+      stock.market === "NYSE" ||
+      stock.market === "AMEX"
+    ) {
+      setSearchCountry("us");
+    } else {
+      setSearchCountry("kr");
     }
     setSymbol(stock.code);
     setSearchQuery(`${stock.name} (${stock.code})`);
@@ -1227,10 +1239,16 @@ export function AvwapChart() {
 
   const formatAmountValue = (val: number | null | undefined) => {
     if (val === null || val === undefined) return "";
-    if (isEokUnit) {
+    const unit = chartData?.amount_unit || "조원";
+    if (isEokUnit || unit === "억원") {
       return val >= 10000 ? `${(val / 10000).toFixed(1)}조` : `${Math.round(val).toLocaleString()}억`;
     }
-    const unit = chartData?.amount_unit || "조원";
+    if (unit === "백만$") {
+      return val >= 1000 ? `${(val / 1000).toFixed(1)}B$` : `${Math.round(val).toLocaleString()}M$`;
+    }
+    if (unit === "억$") {
+      return val >= 10000 ? `${(val / 10000).toFixed(1)}조$` : `${Math.round(val).toLocaleString()}억$`;
+    }
     if (unit === "조$") {
       return `${val.toFixed(1)}조$`;
     }
@@ -1263,8 +1281,44 @@ export function AvwapChart() {
             })}
           </div>
 
-          {/* Stock / ETF Toggle & Search Box */}
+          {/* Stock / ETF & Country Toggle & Search Box */}
           <div className="flex items-center gap-1.5 flex-wrap">
+            {/* Segment Toggle: KR / US */}
+            <div className="inline-flex rounded-lg bg-gray-800/80 p-0.5 border border-gray-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchCountry("kr");
+                  if (symbol && searchCountry === "us") {
+                    handleClearStock();
+                  }
+                }}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  searchCountry === "kr"
+                    ? "bg-blue-600 text-white shadow-md"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                KR
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchCountry("us");
+                  if (symbol && searchCountry === "kr") {
+                    handleClearStock();
+                  }
+                }}
+                className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
+                  searchCountry === "us"
+                    ? "bg-indigo-600 text-white shadow-md"
+                    : "text-gray-400 hover:text-white"
+                }`}
+              >
+                US
+              </button>
+            </div>
+
             {/* Segment Toggle: 종목 / ETF */}
             <div className="inline-flex rounded-lg bg-gray-800/80 p-0.5 border border-gray-700">
               <button
@@ -1317,9 +1371,13 @@ export function AvwapChart() {
                   ref={searchInputRef}
                   type="text"
                   placeholder={
-                    searchType === "etf"
-                      ? "ETF명 또는 코드 (예: KODEX 200, 069500)"
-                      : "종목명 또는 코드 (예: 삼성전자, 005930)"
+                    searchCountry === "kr"
+                      ? searchType === "etf"
+                        ? "국내 ETF명 또는 코드 (예: KODEX 200, 069500)"
+                        : "종목명 또는 코드 (예: 삼성전자, 005930)"
+                      : searchType === "etf"
+                      ? "미국 ETF명 또는 티커 (예: QQQ, SPY, TQQQ)"
+                      : "미국 종목명 또는 티커 (예: AAPL, 테슬라, NVDA)"
                   }
                   value={searchQuery}
                   onChange={(e) => {
@@ -1409,11 +1467,19 @@ export function AvwapChart() {
                         </div>
                         <span
                           className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${
-                            stk.market === "ETF"
+                            stk.market === "ETF" || stk.market === "US_ETF"
                               ? "bg-purple-900/60 text-purple-300 border border-purple-700/50"
                               : stk.market === "KOSPI"
                               ? "bg-blue-900/60 text-blue-300"
-                              : "bg-emerald-900/60 text-emerald-300"
+                              : stk.market === "KOSDAQ"
+                              ? "bg-emerald-900/60 text-emerald-300"
+                              : stk.market === "NASDAQ"
+                              ? "bg-sky-900/60 text-sky-300 border border-sky-700/50"
+                              : stk.market === "NYSE"
+                              ? "bg-amber-900/60 text-amber-300 border border-amber-700/50"
+                              : stk.market === "AMEX"
+                              ? "bg-rose-900/60 text-rose-300 border border-rose-700/50"
+                              : "bg-cyan-900/60 text-cyan-300"
                           }`}
                         >
                           {stk.market}

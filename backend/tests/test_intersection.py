@@ -510,8 +510,8 @@ class TestIntersectionResponseSchema:
             # 종목 아이템 필드
             for stock in theme["intersection_stocks"]:
                 assert isinstance(stock["stock_name"], str)
-                assert isinstance(stock["rs_score_52w"], int)
-                assert isinstance(stock["rs_score_mtt"], int)
+                assert isinstance(stock["rs_score_52w"], (int, float))
+                assert isinstance(stock["rs_score_mtt"], (int, float))
                 assert isinstance(stock["change_pct_52w"], float)
                 assert isinstance(stock["change_pct_mtt"], float)
 

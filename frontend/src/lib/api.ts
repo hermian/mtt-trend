@@ -713,11 +713,12 @@ export const api = {
   searchStocks: async (
     query: string,
     type: "stock" | "etf" | "all" = "stock",
-    limit: number = 10
+    limit: number = 10,
+    market?: "kr" | "us" | "all" | string
   ): Promise<StockSearchResult[]> => {
     if (!query || !query.trim()) return [];
     const { data } = await apiClient.get<StockSearchResult[]>("/api/charts/stocks/search", {
-      params: { q: query.trim(), type, limit },
+      params: { q: query.trim(), type, limit, market: market || undefined },
     });
     return data;
   },

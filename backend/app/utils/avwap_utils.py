@@ -140,13 +140,18 @@ ANCHOR_COLORS = [
 ]
 
 _AVWAP_CACHE: Dict[str, Any] = {}
+_ETF_MASTER_CACHE: Optional[List[Tuple[str, str]]] = None
+_US_STOCK_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
+_US_ETF_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
 
 
 def invalidate_avwap_cache():
     """Clear in-memory AVWAP cache when custom anchors change."""
-    global _AVWAP_CACHE
+    global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE
     _AVWAP_CACHE.clear()
-
+    _ETF_MASTER_CACHE = None
+    _US_STOCK_MASTER_CACHE = None
+    _US_ETF_MASTER_CACHE = None
 
 
 def _get_macro_db_path() -> Path:
@@ -155,6 +160,33 @@ def _get_macro_db_path() -> Path:
         return Path(override).expanduser().resolve()
     return Path(os.path.expanduser("~/.cache/db/macro.db"))
 
+
+def _get_stock_us_master_path() -> Path:
+    override = os.environ.get("MTT_STOCK_US_MASTER_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(os.path.expanduser("~/.cache/db/stock_us_master.db"))
+
+
+def _get_stock_us_price_path() -> Path:
+    override = os.environ.get("MTT_STOCK_US_PRICE_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(os.path.expanduser("~/.cache/db/stock_us_price.db"))
+
+
+def _get_etf_us_master_path() -> Path:
+    override = os.environ.get("MTT_ETF_US_MASTER_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(os.path.expanduser("~/.cache/db/etf_us_master.db"))
+
+
+def _get_etf_us_price_path() -> Path:
+    override = os.environ.get("MTT_ETF_US_PRICE_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(os.path.expanduser("~/.cache/db/etf_us_price.db"))
 
 def _load_index_raw_df(market_key: str) -> Optional[Tuple[pd.DataFrame, float]]:
     """
@@ -246,17 +278,32 @@ def load_avwap_chart_data(
     
     if symbol and symbol.strip():
         sym = symbol.strip()
-        if market.lower() == "etf":
-            return load_etf_avwap_chart_data(sym, interval)
+        raw_m = market.lower().strip()
+        if raw_m in ("etf", "us_etf"):
+            res = load_etf_avwap_chart_data(sym, interval)
+            if res is not None:
+                return res
+            return load_us_etf_avwap_chart_data(sym, interval)
         
         info = resolve_stock_info(sym)
-        if info and info[2] == "ETF":
-            return load_etf_avwap_chart_data(sym, interval)
-        res = load_stock_avwap_chart_data(sym, interval)
-        if res is not None:
-            return res
-        return load_etf_avwap_chart_data(sym, interval)
+        if info:
+            code, name, m_type = info
+            if m_type == "ETF":
+                return load_etf_avwap_chart_data(code, interval)
+            elif m_type in ("US_ETF", "ETF_US"):
+                return load_us_etf_avwap_chart_data(code, interval)
+            elif m_type in ("NASDAQ", "NYSE", "AMEX", "US"):
+                return load_us_stock_avwap_chart_data(code, interval)
+            else:
+                res = load_stock_avwap_chart_data(code, interval)
+                if res is not None:
+                    return res
 
+        for loader in (load_stock_avwap_chart_data, load_etf_avwap_chart_data, load_us_stock_avwap_chart_data, load_us_etf_avwap_chart_data):
+            res = loader(sym, interval)
+            if res is not None:
+                return res
+        return None
     raw_market_key = market.lower().strip()
     market_key = INDEX_MARKET_MAP.get(raw_market_key, "kospi")
         
@@ -579,7 +626,7 @@ def _get_etf_master_list() -> List[Tuple[str, str]]:
         return []
 
     try:
-        conn = sqlite3.connect(e_path)
+        conn = sqlite3.connect(f"file:{Path(e_path).resolve()}?mode=ro", uri=True)
         cur = conn.cursor()
         cur.execute("SELECT DISTINCT 종목코드, 종목명 FROM etf_price")
         _ETF_MASTER_CACHE = cur.fetchall()
@@ -591,112 +638,251 @@ def _get_etf_master_list() -> List[Tuple[str, str]]:
     return _ETF_MASTER_CACHE
 
 
+def _get_us_stock_master_list() -> List[Tuple[str, str, str, str]]:
+    """
+    stock_us_master.db에서 고유한 (symbol, hname, name, primary_exchange_name) 목록을 반환합니다.
+    """
+    global _US_STOCK_MASTER_CACHE
+    if _US_STOCK_MASTER_CACHE is not None:
+        return _US_STOCK_MASTER_CACHE
+
+    db_path = _get_stock_us_master_path()
+    if not db_path.exists():
+        return []
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True)
+        cur = conn.cursor()
+        cur.execute("SELECT symbol, hname, name, primary_exchange_name FROM stock_master")
+        rows = cur.fetchall()
+        conn.close()
+        _US_STOCK_MASTER_CACHE = [(r[0] or "", r[1] or "", r[2] or "", r[3] or "US") for r in rows if r[0]]
+    except Exception as e:
+        logger.warning(f"Error loading US stock master list: {e}")
+        _US_STOCK_MASTER_CACHE = []
+
+    return _US_STOCK_MASTER_CACHE
+
+
+def _get_us_etf_master_list() -> List[Tuple[str, str, str, str]]:
+    """
+    etf_us_master.db에서 고유한 (Symbol, Name, Exchange, url) 목록을 반환합니다.
+    """
+    global _US_ETF_MASTER_CACHE
+    if _US_ETF_MASTER_CACHE is not None:
+        return _US_ETF_MASTER_CACHE
+
+    db_path = _get_etf_us_master_path()
+    if not db_path.exists():
+        return []
+
+    try:
+        conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True)
+        cur = conn.cursor()
+        cur.execute("SELECT Symbol, Name, Exchange, url FROM etf_master")
+        rows = cur.fetchall()
+        conn.close()
+        _US_ETF_MASTER_CACHE = [(r[0] or "", r[1] or "", r[2] or "US_ETF", r[3] or r[0] or "") for r in rows if r[0]]
+    except Exception as e:
+        logger.warning(f"Error loading US ETF master list: {e}")
+        _US_ETF_MASTER_CACHE = []
+
+    return _US_ETF_MASTER_CACHE
+
+
 def resolve_stock_info(query: str, asset_type: Optional[str] = None) -> Optional[Tuple[str, str, str]]:
     """
     종목코드 또는 종목명으로 (종목코드, 종목명, 시장구분)을 조회합니다.
-    asset_type: 'stock' | 'etf' | None (None이면 stock -> etf 순으로 조회)
+    asset_type: 'stock' | 'etf' | None (None이면 stock -> etf -> us_stock -> us_etf 순으로 조회)
     """
     q = query.strip()
     if not q:
         return None
 
-    # '삼성전자 (005930)' 형태처럼 괄호 안에 종목코드가 포함된 경우 코드 우선 추출
-    match = re.search(r'\(([0-9a-zA-Z]{6})\)', q)
+    # '애플 (AAPL)' 또는 '삼성전자 (005930)' 형태처럼 괄호 안에 종목코드가 포함된 경우 코드 우선 추출
+    match = re.search(r'\(([0-9a-zA-Z\.\-_]{1,10})\)', q)
     if match:
         extracted = match.group(1)
         res = resolve_stock_info(extracted, asset_type)
         if res:
             return res
 
-    # 1. ETF 모드인 경우 etf_price.db 우선 조회
+    q_lower = q.lower()
+    q_upper = q.upper()
+
+    # 1. ETF 모드인 경우
     if asset_type == "etf":
+        # 1-1. Exact match (KR ETF -> US ETF)
         etfs = _get_etf_master_list()
-        q_upper = q.upper()
         if q.isdigit() or len(q) == 6:
             code_target = q.zfill(6).upper()
             for code, name in etfs:
                 if code.upper() == code_target:
                     return code, name, "ETF"
         for code, name in etfs:
-            if name.lower() == q.lower():
+            if code.lower() == q_lower or name.lower() == q_lower:
                 return code, name, "ETF"
+
+        us_etfs = _get_us_etf_master_list()
+        for sym, name, exch, url in us_etfs:
+            if sym.upper() == q_upper:
+                return sym, name, "US_ETF"
+        for sym, name, exch, url in us_etfs:
+            if name.lower() == q_lower:
+                return sym, name, "US_ETF"
+
+        # 1-2. Substring match
         for code, name in etfs:
-            if q.lower() in name.lower() or q.lower() in code.lower():
+            if q_lower in name.lower() or q_lower in code.lower():
                 return code, name, "ETF"
+
+        for sym, name, exch, url in us_etfs:
+            if q_lower in name.lower() or q_lower in sym.lower():
+                return sym, name, "US_ETF"
         return None
 
-    # 2. 일반 주식 stock_master.db 우선 조회
-    sm_path = os.path.expanduser("~/.cache/db/stock_master.db")
-    if os.path.exists(sm_path):
-        try:
-            conn = sqlite3.connect(sm_path)
-            cur = conn.cursor()
-            if q.isdigit():
-                code = q.zfill(6)
-                cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목코드 = ?", (code,))
+    # 2. 일반 주식 모드인 경우
+    if asset_type == "stock":
+        # 2-1. KR stock exact
+        sm_path = os.path.expanduser("~/.cache/db/stock_master.db")
+        if os.path.exists(sm_path):
+            try:
+                conn = sqlite3.connect(f"file:{Path(sm_path).resolve()}?mode=ro", uri=True)
+                cur = conn.cursor()
+                if q.isdigit():
+                    code = q.zfill(6)
+                    cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목코드 = ?", (code,))
+                    row = cur.fetchone()
+                    if row:
+                        conn.close()
+                        return row[0], row[1], row[2] or "KOSPI"
+
+                cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 = ?", (q,))
                 row = cur.fetchone()
                 if row:
                     conn.close()
-                    return row[0], row[1], row[2]
-            
-            # 정확한 종목명 일치
-            cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 = ?", (q,))
-            row = cur.fetchone()
-            if row:
+                    return row[0], row[1], row[2] or "KOSPI"
                 conn.close()
-                return row[0], row[1], row[2]
-                
-            # 부분 일치
-            cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 LIKE ? OR 종목코드 LIKE ? LIMIT 1", (f"%{q}%", f"%{q}%"))
-            row = cur.fetchone()
-            conn.close()
-            if row:
-                return row[0], row[1], row[2]
-        except Exception as e:
-            logger.warning(f"Error querying stock_master.db for {query}: {e}")
+            except Exception as e:
+                logger.warning(f"Error querying stock_master.db for {query}: {e}")
 
-    # 3. marcap.duckdb 폴백
-    m_path = os.path.expanduser("~/.cache/db/marcap.duckdb")
-    if os.path.exists(m_path):
-        try:
-            con = duckdb.connect(m_path, read_only=True)
-            if q.isdigit():
-                code = q.zfill(6)
-                row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Code = ? ORDER BY Date DESC LIMIT 1", [code]).fetchone()
+        # 2-2. US Stock exact (symbol or name)
+        us_stocks = _get_us_stock_master_list()
+        for sym, hname, name, exch in us_stocks:
+            if sym.upper() == q_upper:
+                display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+                return sym, display_name, exch or "US"
+        for sym, hname, name, exch in us_stocks:
+            if (hname and hname.lower() == q_lower) or (name and name.lower() == q_lower):
+                display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+                return sym, display_name, exch or "US"
+
+        # 2-3. KR stock partial
+        if os.path.exists(sm_path):
+            try:
+                conn = sqlite3.connect(f"file:{Path(sm_path).resolve()}?mode=ro", uri=True)
+                cur = conn.cursor()
+                cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 LIKE ? OR 종목코드 LIKE ? LIMIT 1", (f"%{q}%", f"%{q}%"))
+                row = cur.fetchone()
+                conn.close()
                 if row:
                     return row[0], row[1], row[2] or "KOSPI"
-            row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name = ? ORDER BY Date DESC LIMIT 1", [q]).fetchone()
-            if row:
-                return row[0], row[1], row[2] or "KOSPI"
-            row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name LIKE ? ORDER BY Date DESC LIMIT 1", [f"%{q}%"]).fetchone()
-            if row:
-                return row[0], row[1], row[2] or "KOSPI"
-        except Exception as e:
-            logger.warning(f"Error querying marcap.duckdb for {query}: {e}")
+            except Exception as e:
+                logger.warning(f"Error querying stock_master.db for {query}: {e}")
 
-    # 4. 일반 주식에서 찾지 못했고 asset_type이 'stock'으로 고정되지 않았다면 ETF에서 조회
-    if asset_type != "stock":
-        etfs = _get_etf_master_list()
-        q_upper = q.upper()
-        if q.isdigit() or len(q) == 6:
-            code_target = q.zfill(6).upper()
-            for code, name in etfs:
-                if code.upper() == code_target:
-                    return code, name, "ETF"
-        for code, name in etfs:
-            if name.lower() == q.lower():
-                return code, name, "ETF"
-        for code, name in etfs:
-            if q.lower() in name.lower() or q.lower() in code.lower():
-                return code, name, "ETF"
+        # 2-4. US Stock partial
+        for sym, hname, name, exch in us_stocks:
+            if (hname and q_lower in hname.lower()) or (name and q_lower in name.lower()) or q_lower in sym.lower():
+                display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+                return sym, display_name, exch or "US"
+
+        # 2-5. marcap.duckdb fallback
+        m_path = os.path.expanduser("~/.cache/db/marcap.duckdb")
+        if os.path.exists(m_path):
+            try:
+                con = duckdb.connect(m_path, read_only=True)
+                if q.isdigit():
+                    code = q.zfill(6)
+                    row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Code = ? ORDER BY Date DESC LIMIT 1", [code]).fetchone()
+                    if row:
+                        return row[0], row[1], row[2] or "KOSPI"
+                row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name = ? ORDER BY Date DESC LIMIT 1", [q]).fetchone()
+                if row:
+                    return row[0], row[1], row[2] or "KOSPI"
+                row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name LIKE ? ORDER BY Date DESC LIMIT 1", [f"%{q}%"]).fetchone()
+                if row:
+                    return row[0], row[1], row[2] or "KOSPI"
+            except Exception as e:
+                logger.warning(f"Error querying marcap.duckdb for {query}: {e}")
+
+        return None
+
+    # 3. asset_type is None or "all":
+    # 3-1. 6-digit numeric -> KR stock then KR ETF
+    if q.isdigit() and len(q) <= 6:
+        kr_stock = resolve_stock_info(q, asset_type="stock")
+        if kr_stock:
+            return kr_stock
+        kr_etf = resolve_stock_info(q, asset_type="etf")
+        if kr_etf:
+            return kr_etf
+
+    # 3-2. Exact Symbol/Ticker match (US Stock vs US ETF)
+    us_stocks = _get_us_stock_master_list()
+    for sym, hname, name, exch in us_stocks:
+        if sym.upper() == q_upper:
+            display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+            return sym, display_name, exch or "US"
+
+    us_etfs = _get_us_etf_master_list()
+    for sym, name, exch, url in us_etfs:
+        if sym.upper() == q_upper:
+            return sym, name, "US_ETF"
+
+    # 3-3. Exact Korean/English Name match across KR Stock, KR ETF, US Stock, US ETF
+    kr_stock = resolve_stock_info(q, asset_type="stock")
+    if kr_stock and kr_stock[1].lower() == q_lower:
+        return kr_stock
+
+    kr_etf = resolve_stock_info(q, asset_type="etf")
+    if kr_etf and kr_etf[1].lower() == q_lower:
+        return kr_etf
+
+    for sym, hname, name, exch in us_stocks:
+        if (hname and hname.lower() == q_lower) or (name and name.lower() == q_lower):
+            display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+            return sym, display_name, exch or "US"
+
+    for sym, name, exch, url in us_etfs:
+        if name.lower() == q_lower:
+            return sym, name, "US_ETF"
+
+    # 3-4. Fallback in order: KR stock -> KR etf -> US stock -> US etf
+    if kr_stock:
+        return kr_stock
+    if kr_etf:
+        return kr_etf
+
+    us_stock = resolve_stock_info(q, asset_type="stock")
+    if us_stock:
+        return us_stock
+
+    us_etf = resolve_stock_info(q, asset_type="etf")
+    if us_etf:
+        return us_etf
 
     return None
 
-
-def search_stocks_db(query: str, limit: int = 10, asset_type: str = "stock") -> List[StockSearchResult]:
+def search_stocks_db(
+    query: str,
+    limit: int = 10,
+    asset_type: str = "stock",
+    market: Optional[str] = None
+) -> List[StockSearchResult]:
     """
     종목코드 또는 종목명 검색 자동완성 목록을 반환합니다.
     asset_type: 'stock' | 'etf' | 'all'
+    market: 'kr' | 'us' | 'all' | None
     """
     q = query.strip()
     if not q:
@@ -705,73 +891,111 @@ def search_stocks_db(query: str, limit: int = 10, asset_type: str = "stock") -> 
     results: List[StockSearchResult] = []
     seen: set = set()
     q_lower = q.lower()
+    m_lower = market.lower().strip() if market else None
 
-    # 1. ETF 검색
+    include_kr = m_lower is None or m_lower in ("kr", "korea", "kospi", "kosdaq", "all")
+    include_us = m_lower is None or m_lower in ("us", "usa", "all")
+
+    exact: List[StockSearchResult] = []
+    prefix: List[StockSearchResult] = []
+    contains: List[StockSearchResult] = []
+
+    def _add_item(item: StockSearchResult, bucket: List[StockSearchResult]):
+        if item.code not in seen:
+            seen.add(item.code)
+            bucket.append(item)
+
+    # 1. ETF 검색 (KR ETF + US ETF)
     if asset_type in ("etf", "all"):
-        etfs = _get_etf_master_list()
-        exact: List[StockSearchResult] = []
-        prefix: List[StockSearchResult] = []
-        contains: List[StockSearchResult] = []
+        # 1-1. KR ETF
+        if include_kr:
+            etfs = _get_etf_master_list()
+            for code, name in etfs:
+                c_low = code.lower()
+                n_low = name.lower()
+                item = StockSearchResult(code=code, name=name, market="ETF")
+                if c_low == q_lower or n_low == q_lower:
+                    _add_item(item, exact)
+                elif n_low.startswith(q_lower) or c_low.startswith(q_lower):
+                    _add_item(item, prefix)
+                elif q_lower in n_low or q_lower in c_low:
+                    _add_item(item, contains)
 
-        for code, name in etfs:
-            c_low = code.lower()
-            n_low = name.lower()
-            if c_low == q_lower or n_low == q_lower:
-                exact.append(StockSearchResult(code=code, name=name, market="ETF"))
-            elif n_low.startswith(q_lower) or c_low.startswith(q_lower):
-                prefix.append(StockSearchResult(code=code, name=name, market="ETF"))
-            elif q_lower in n_low or q_lower in c_low:
-                contains.append(StockSearchResult(code=code, name=name, market="ETF"))
+        # 1-2. US ETF
+        if include_us:
+            us_etfs = _get_us_etf_master_list()
+            for sym, name, exch, url in us_etfs:
+                s_low = sym.lower()
+                n_low = name.lower()
+                item = StockSearchResult(code=sym, name=name, market="US_ETF")
+                if s_low == q_lower or n_low == q_lower:
+                    _add_item(item, exact)
+                elif s_low.startswith(q_lower) or n_low.startswith(q_lower):
+                    _add_item(item, prefix)
+                elif q_lower in s_low or q_lower in n_low:
+                    _add_item(item, contains)
 
-        for item in exact + prefix + contains:
-            if item.code not in seen:
-                seen.add(item.code)
-                results.append(item)
-            if len(results) >= limit:
-                break
+    # 2. 일반 주식 검색 (KR Stock + US Stock)
+    if asset_type in ("stock", "all"):
+        # 2-1. KR Stock
+        if include_kr:
+            sm_path = os.path.expanduser("~/.cache/db/stock_master.db")
+            if os.path.exists(sm_path):
+                try:
+                    conn = sqlite3.connect(f"file:{Path(sm_path).resolve()}?mode=ro", uri=True)
+                    cur = conn.cursor()
+                    if q.isdigit():
+                        cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목코드 LIKE ?", (f"{q}%",))
+                        for row in cur.fetchall():
+                            item = StockSearchResult(code=row[0], name=row[1], market=row[2] or "KOSPI")
+                            if row[0].lower() == q_lower:
+                                _add_item(item, exact)
+                            elif row[0].lower().startswith(q_lower):
+                                _add_item(item, prefix)
+                            else:
+                                _add_item(item, contains)
+                    else:
+                        cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 LIKE ? OR 종목코드 LIKE ?", (f"%{q}%", f"%{q}%"))
+                        for row in cur.fetchall():
+                            item = StockSearchResult(code=row[0], name=row[1], market=row[2] or "KOSPI")
+                            if row[1].lower() == q_lower or row[0].lower() == q_lower:
+                                _add_item(item, exact)
+                            elif row[1].lower().startswith(q_lower) or row[0].lower().startswith(q_lower):
+                                _add_item(item, prefix)
+                            else:
+                                _add_item(item, contains)
+                    conn.close()
+                except Exception as e:
+                    logger.warning(f"Error searching stock_master.db for {query}: {e}")
 
-    # 2. 일반 주식 검색
-    if asset_type in ("stock", "all") and len(results) < limit:
-        sm_path = os.path.expanduser("~/.cache/db/stock_master.db")
-        if os.path.exists(sm_path):
-            try:
-                conn = sqlite3.connect(sm_path)
-                cur = conn.cursor()
-                if q.isdigit():
-                    cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목코드 LIKE ? LIMIT ?", (f"{q}%", limit - len(results)))
-                    for row in cur.fetchall():
-                        if row[0] not in seen:
-                            seen.add(row[0])
-                            results.append(StockSearchResult(code=row[0], name=row[1], market=row[2] or "KOSPI"))
+        # 2-2. US Stock
+        if include_us:
+            us_stocks = _get_us_stock_master_list()
+            for sym, hname, name, exch in us_stocks:
+                s_low = sym.lower()
+                h_low = hname.lower() if hname else ""
+                n_low = name.lower() if name else ""
+                display_name = f"{hname} ({name})" if hname and name and hname != name else (hname or name or sym)
+                item = StockSearchResult(code=sym, name=display_name, market=exch or "US")
 
-                # 접두사 일치
-                if len(results) < limit:
-                    cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 LIKE ? LIMIT ?", (f"{q}%", limit - len(results)))
-                    for row in cur.fetchall():
-                        if row[0] not in seen:
-                            seen.add(row[0])
-                            results.append(StockSearchResult(code=row[0], name=row[1], market=row[2] or "KOSPI"))
+                if s_low == q_lower or h_low == q_lower or n_low == q_lower:
+                    _add_item(item, exact)
+                elif s_low.startswith(q_lower) or h_low.startswith(q_lower) or n_low.startswith(q_lower):
+                    _add_item(item, prefix)
+                elif q_lower in s_low or q_lower in h_low or q_lower in n_low:
+                    _add_item(item, contains)
 
-                # 부분 일치
-                if len(results) < limit:
-                    cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목명 LIKE ? OR 종목코드 LIKE ? LIMIT ?", (f"%{q}%", f"%{q}%", limit - len(results)))
-                    for row in cur.fetchall():
-                        if row[0] not in seen:
-                            seen.add(row[0])
-                            results.append(StockSearchResult(code=row[0], name=row[1], market=row[2] or "KOSPI"))
-                conn.close()
-            except Exception as e:
-                logger.warning(f"Error searching stock_master.db for {query}: {e}")
-
-    return results[:limit]
-
+    all_ordered = exact + prefix + contains
+    return all_ordered[:limit]
 
 def _compute_asset_avwap_chart(
     raw_df: pd.DataFrame,
     code: str,
     name: str,
     market_type: str,
-    interval_key: str
+    interval_key: str,
+    amount_unit: str = "억원",
+    amount_divisor: float = 1e8,
 ) -> Optional[AvwapChartResponse]:
     """
     주식 또는 ETF의 raw OHLCV DataFrame으로부터 다중 주기 AVWAP 및 지표를 계산하여 AvwapChartResponse를 생성합니다.
@@ -841,7 +1065,7 @@ def _compute_asset_avwap_chart(
     vol_ma_len = cfg["vol_ma_length"]
     vol_ma_series = df["Volume"].rolling(window=vol_ma_len, min_periods=1).mean()
 
-    amount_series = df["Amount"] / 1e8
+    amount_series = df["Amount"] / amount_divisor
     amt_ma_len = 50 if interval_key == "1D" else 10 if interval_key == "1W" else 12 if interval_key == "1M" else 3
     amount_sma50_series = amount_series.rolling(window=amt_ma_len, min_periods=1).mean()
 
@@ -1027,7 +1251,7 @@ def _compute_asset_avwap_chart(
         symbol=code,
         name=name,
         interval=interval_key,
-        amount_unit="억원",
+        amount_unit=amount_unit,
         points=points,
         anchors=anchors_list,
         preset_dates=preset_dates
@@ -1137,8 +1361,157 @@ def load_etf_avwap_chart_data(
         if response:
             _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
         return response
-
     except Exception as e:
         logger.error(f"Error computing ETF AVWAP chart data for {symbol_or_name} ({interval}): {e}", exc_info=True)
         return None
 
+
+def load_us_stock_avwap_chart_data(
+    symbol_or_name: str,
+    interval: str = "1D"
+) -> Optional[AvwapChartResponse]:
+    """
+    미국 개별 종목(US Stock)의 1D, 1W, 1M, 1Y AVWAP 및 기술 지표 차트 데이터를 생성합니다.
+    """
+    global _AVWAP_CACHE
+
+    stock_info = resolve_stock_info(symbol_or_name, asset_type="stock")
+    if stock_info and stock_info[2] in ("NASDAQ", "NYSE", "AMEX", "US"):
+        code, name, market_type = stock_info
+    else:
+        code = symbol_or_name.strip().upper()
+        name = code
+        market_type = "US"
+
+    interval_key = interval.upper()
+    if interval_key not in INTERVAL_CONFIGS:
+        interval_key = "1D"
+
+    sp_path = _get_stock_us_price_path()
+    if not sp_path.exists():
+        logger.warning(f"stock_us_price.db not found: {sp_path}")
+        return None
+
+    current_mtime = os.path.getmtime(sp_path)
+    cache_key = f"us_stock_{code}_{interval_key}"
+    if cache_key in _AVWAP_CACHE:
+        cached = _AVWAP_CACHE[cache_key]
+        if cached["last_mtime"] == current_mtime:
+            return cached["data"]
+
+    try:
+        conn = sqlite3.connect(f"file:{sp_path.resolve()}?mode=ro", uri=True)
+        raw_df = pd.read_sql_query(
+            "SELECT Date, Open, High, Low, Close, Volume FROM stock_us_price WHERE Code = ? ORDER BY Date ASC",
+            conn,
+            params=(code,)
+        )
+        if raw_df.empty:
+            alt_code = code.replace(".", "-") if "." in code else code.replace("-", ".")
+            raw_df = pd.read_sql_query(
+                "SELECT Date, Open, High, Low, Close, Volume FROM stock_us_price WHERE Code = ? ORDER BY Date ASC",
+                conn,
+                params=(alt_code,)
+            )
+        conn.close()
+
+        if raw_df.empty:
+            logger.warning(f"No price data for US stock code: {code}")
+            return None
+
+        raw_df["Amount"] = raw_df["Close"] * raw_df["Volume"]
+
+        response = _compute_asset_avwap_chart(
+            raw_df, code, name, market_type, interval_key, amount_unit="백만$", amount_divisor=1e6
+        )
+        if response:
+            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+        return response
+
+    except Exception as e:
+        logger.error(f"Error computing US stock AVWAP chart data for {symbol_or_name} ({interval}): {e}", exc_info=True)
+        return None
+
+
+def load_us_etf_avwap_chart_data(
+    symbol_or_name: str,
+    interval: str = "1D"
+) -> Optional[AvwapChartResponse]:
+    """
+    미국 ETF(US ETF)의 1D, 1W, 1M, 1Y AVWAP 및 기술 지표 차트 데이터를 생성합니다.
+    """
+    global _AVWAP_CACHE
+
+    sym_clean = symbol_or_name.strip().upper()
+    etf_info = resolve_stock_info(symbol_or_name, asset_type="etf")
+    if etf_info and etf_info[2] in ("US_ETF", "ETF_US"):
+        code, name, market_type = etf_info
+    else:
+        code = sym_clean
+        name = sym_clean
+        market_type = "US_ETF"
+
+    interval_key = interval.upper()
+    if interval_key not in INTERVAL_CONFIGS:
+        interval_key = "1D"
+
+    ep_path = _get_etf_us_price_path()
+    if not ep_path.exists():
+        logger.warning(f"etf_us_price.db not found: {ep_path}")
+        return None
+
+    current_mtime = os.path.getmtime(ep_path)
+    cache_key = f"us_etf_{code}_{interval_key}"
+    if cache_key in _AVWAP_CACHE:
+        cached = _AVWAP_CACHE[cache_key]
+        if cached["last_mtime"] == current_mtime:
+            return cached["data"]
+
+    candidates = []
+    us_etfs = _get_us_etf_master_list()
+    for s, n, ex, url in us_etfs:
+        if s.upper() == code.upper():
+            if url and url not in candidates:
+                candidates.append(url)
+            break
+    for c in [code, f"{code}.O", f"{code}.K", f"{code}.N"]:
+        if c not in candidates:
+            candidates.append(c)
+
+    try:
+        conn = sqlite3.connect(f"file:{ep_path.resolve()}?mode=ro", uri=True)
+        raw_df = pd.DataFrame()
+        for cand in candidates:
+            df_cand = pd.read_sql_query(
+                "SELECT Date, Open, High, Low, Close, Volume FROM etf_us_price WHERE Code = ? ORDER BY Date ASC",
+                conn,
+                params=(cand,)
+            )
+            if not df_cand.empty:
+                raw_df = df_cand
+                break
+
+        if raw_df.empty:
+            raw_df = pd.read_sql_query(
+                "SELECT Date, Open, High, Low, Close, Volume FROM etf_us_price WHERE Code LIKE ? ORDER BY Date ASC LIMIT 2000",
+                conn,
+                params=(f"{code}%",)
+            )
+        conn.close()
+
+        if raw_df.empty:
+            logger.warning(f"No price data for US ETF code: {code}")
+            return None
+
+        raw_df["Amount"] = raw_df["Close"] * raw_df["Volume"]
+
+        response = _compute_asset_avwap_chart(
+            raw_df, code, name, "US_ETF", interval_key, amount_unit="백만$", amount_divisor=1e6
+        )
+        if response:
+            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+        return response
+
+    except Exception as e:
+        logger.error(f"Error computing US ETF AVWAP chart data for {symbol_or_name} ({interval}): {e}", exc_info=True)
+        return None

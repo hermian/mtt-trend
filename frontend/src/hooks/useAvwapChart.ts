@@ -15,11 +15,12 @@ export const useAvwapChart = (
 
 export const useStockSearch = (
   query: string,
-  type: "stock" | "etf" | "all" = "stock"
+  type: "stock" | "etf" | "all" = "stock",
+  market: "kr" | "us" | "all" | string = "kr"
 ) => {
   return useQuery<StockSearchResult[]>({
-    queryKey: ["stockSearch", query, type],
-    queryFn: () => api.searchStocks(query, type),
+    queryKey: ["stockSearch", query, type, market],
+    queryFn: () => api.searchStocks(query, type, 10, market),
     enabled: !!query && query.trim().length >= 1,
     staleTime: 5 * 60 * 1000,
   });

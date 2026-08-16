@@ -289,8 +289,120 @@ def test_custom_avwap_anchor_crud(monkeypatch, tmp_path):
 
     chart_after_reset = client.get("/api/charts/avwap?market=sp500&interval=1D").json()
     assert any(a["anchor_date"] == "2018-12-24" for a in chart_after_reset["anchors"])
+def test_us_stock_search_and_avwap():
+    # 1. US Stock search by ticker (AAPL) and Korean name (애플, 테슬라)
+    res_ticker = client.get("/api/charts/stocks/search?q=AAPL&type=stock")
+    assert res_ticker.status_code == 200
+    data_ticker = res_ticker.json()
+    assert len(data_ticker) > 0
+    assert any(item["code"] == "AAPL" for item in data_ticker)
+
+    res_ko = client.get("/api/charts/stocks/search?q=애플&type=stock")
+    assert res_ko.status_code == 200
+    data_ko = res_ko.json()
+    assert len(data_ko) > 0
+    assert any(item["code"] == "AAPL" for item in data_ko)
+
+    # 2. AVWAP chart data for AAPL across intervals
+    for interval in ["1D", "1W", "1M", "1Y"]:
+        res = client.get(f"/api/charts/avwap?symbol=AAPL&interval={interval}")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["symbol"] == "AAPL"
+        assert data["interval"] == interval
+        assert data["amount_unit"] == "백만$"
+        assert len(data["points"]) > 0
+        assert len(data["anchors"]) > 0
+        last_pt = data["points"][-1]
+        assert "amount" in last_pt
+        assert "amount_sma50" in last_pt
+        assert "vwap" in last_pt
+        assert "rsi" in last_pt
+        assert "mdd" in last_pt
+        assert "h52_chg" in last_pt
+
+    # 3. AVWAP chart data by Korean name (엔비디아)
+    res_nvda = client.get("/api/charts/avwap?symbol=엔비디아&interval=1D")
+    assert res_nvda.status_code == 200
+    data_nvda = res_nvda.json()
+    assert data_nvda["symbol"] == "NVDA"
+    assert data_nvda["amount_unit"] == "백만$"
+    assert len(data_nvda["points"]) > 0
 
 
+def test_us_etf_search_and_avwap():
+    # 1. US ETF search (QQQ, SPY, SOXX, TQQQ)
+    res_qqq = client.get("/api/charts/stocks/search?q=QQQ&type=etf")
+    assert res_qqq.status_code == 200
+    data_qqq = res_qqq.json()
+    assert len(data_qqq) > 0
+    assert any(item["code"] == "QQQ" for item in data_qqq)
+    assert any(item["market"] == "US_ETF" for item in data_qqq)
+
+    # 2. AVWAP chart data for QQQ across intervals
+    for interval in ["1D", "1W", "1M", "1Y"]:
+        res = client.get(f"/api/charts/avwap?market=etf&symbol=QQQ&interval={interval}")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["market"] == "US_ETF"
+        assert data["interval"] == interval
+        assert data["amount_unit"] == "백만$"
+        assert len(data["points"]) > 0
+        assert len(data["anchors"]) > 0
+
+    # 3. AVWAP chart data for SPY
+    res_spy = client.get("/api/charts/avwap?symbol=SPY&interval=1D")
+    assert res_spy.status_code == 200
+    data_spy = res_spy.json()
+    assert data_spy["market"] == "US_ETF"
+    assert len(data_spy["points"]) > 0
 
 
+def test_search_all_asset_types():
+    res_all = client.get("/api/charts/stocks/search?q=SPY&type=all")
+    assert res_all.status_code == 200
+    data = res_all.json()
+    assert len(data) > 0
+    assert any(item["code"] == "SPY" and item["market"] == "US_ETF" for item in data)
 
+
+def test_search_by_market_kr_and_us():
+    # 1. KR Stock search should only return KR stocks
+    res_kr_stock = client.get("/api/charts/stocks/search?q=삼성&type=stock&market=kr")
+    assert res_kr_stock.status_code == 200
+    data_kr_stk = res_kr_stock.json()
+    assert len(data_kr_stk) > 0
+    assert all(item["market"] in ("KOSPI", "KOSDAQ", "KONEX") for item in data_kr_stk)
+
+    # KR stock search for US ticker should return nothing
+    res_kr_no_us = client.get("/api/charts/stocks/search?q=AAPL&type=stock&market=kr")
+    assert res_kr_no_us.status_code == 200
+    assert len(res_kr_no_us.json()) == 0
+
+    # 2. US Stock search should only return US stocks
+    res_us_stock = client.get("/api/charts/stocks/search?q=AAPL&type=stock&market=us")
+    assert res_us_stock.status_code == 200
+    data_us_stk = res_us_stock.json()
+    assert len(data_us_stk) > 0
+    assert all(item["market"] in ("NASDAQ", "NYSE", "AMEX", "US") for item in data_us_stk)
+    assert any(item["code"] == "AAPL" for item in data_us_stk)
+
+    # 3. KR ETF search should only return KR ETFs
+    res_kr_etf = client.get("/api/charts/stocks/search?q=KODEX&type=etf&market=kr")
+    assert res_kr_etf.status_code == 200
+    data_kr_etf = res_kr_etf.json()
+    assert len(data_kr_etf) > 0
+    assert all(item["market"] == "ETF" for item in data_kr_etf)
+
+    # KR ETF search for US ETF should return nothing
+    res_kr_no_us_etf = client.get("/api/charts/stocks/search?q=QQQ&type=etf&market=kr")
+    assert res_kr_no_us_etf.status_code == 200
+    assert len(res_kr_no_us_etf.json()) == 0
+
+    # 4. US ETF search should only return US ETFs
+    res_us_etf = client.get("/api/charts/stocks/search?q=QQQ&type=etf&market=us")
+    assert res_us_etf.status_code == 200
+    data_us_etf = res_us_etf.json()
+    assert len(data_us_etf) > 0
+    assert all(item["market"] == "US_ETF" for item in data_us_etf)
+    assert any(item["code"] == "QQQ" for item in data_us_etf)

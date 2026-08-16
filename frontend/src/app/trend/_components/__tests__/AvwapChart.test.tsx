@@ -123,6 +123,10 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("-3.5%")).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();
     expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
+    expect(screen.getByText("KR")).toBeInTheDocument();
+    expect(screen.getByText("US")).toBeInTheDocument();
+    expect(screen.getByText("종목")).toBeInTheDocument();
+    expect(screen.getByText("ETF")).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/종목명 또는 코드/)).toBeInTheDocument();
     expect(screen.getByText("+ 앵커 추가")).toBeInTheDocument();
     expect(screen.getByText("⚙ 관리")).toBeInTheDocument();
@@ -374,5 +378,130 @@ describe("AvwapChart Component", () => {
     const releaseBtn = screen.getByText("✕ 해제");
     fireEvent.click(releaseBtn);
     expect(screen.queryByText(/선 강조 중/)).not.toBeInTheDocument();
+  });
+  it("allows toggling between KR and US search mode and updates search", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    const useSearchSpy = vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [
+        { code: "AAPL", name: "애플 (Apple Inc)", market: "NASDAQ" },
+      ],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const usBtn = screen.getByRole("button", { name: "US" });
+    const krBtn = screen.getByRole("button", { name: "KR" });
+    expect(usBtn).toBeInTheDocument();
+    expect(krBtn).toBeInTheDocument();
+
+    // Click US button
+    fireEvent.click(usBtn);
+    expect(screen.getByPlaceholderText(/미국 종목명 또는 티커/)).toBeInTheDocument();
+
+    const input = screen.getByPlaceholderText(/미국 종목명 또는 티커/);
+    fireEvent.change(input, { target: { value: "AAPL" } });
+
+    expect(useSearchSpy).toHaveBeenCalledWith("AAPL", "stock", "us");
+  });
+
+  it("allows searching and selecting US stocks and displays market badges (NASDAQ, NYSE, AMEX)", () => {
+    const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [
+        { code: "AAPL", name: "애플 (Apple Inc)", market: "NASDAQ" },
+        { code: "BRK-B", name: "버크셔 해서웨이", market: "NYSE" },
+        { code: "SPY", name: "SPDR S&P 500", market: "AMEX" },
+      ],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const usBtn = screen.getByRole("button", { name: "US" });
+    fireEvent.click(usBtn);
+
+    const input = screen.getByPlaceholderText(/미국 종목명 또는 티커/);
+    fireEvent.change(input, { target: { value: "Apple" } });
+
+    expect(screen.getByText("AAPL")).toBeInTheDocument();
+    expect(screen.getByText("NASDAQ")).toBeInTheDocument();
+    expect(screen.getByText("NYSE")).toBeInTheDocument();
+    expect(screen.getByText("AMEX")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("AAPL"));
+    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "AAPL");
+  });
+
+  it("allows searching and selecting US ETFs with US_ETF market badge", () => {
+    const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [
+        { code: "QQQ", name: "Invesco QQQ Trust", market: "US_ETF" },
+        { code: "TQQQ", name: "ProShares UltraPro QQQ", market: "US_ETF" },
+      ],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const usBtn = screen.getByRole("button", { name: "US" });
+    fireEvent.click(usBtn);
+
+    const etfToggleBtn = screen.getByRole("button", { name: "ETF" });
+    fireEvent.click(etfToggleBtn);
+
+    const input = screen.getByPlaceholderText(/미국 ETF명 또는 티커/);
+    fireEvent.change(input, { target: { value: "QQQ" } });
+
+    expect(screen.getByText("QQQ")).toBeInTheDocument();
+    expect(screen.getAllByText("US_ETF").length).toBeGreaterThan(0);
+
+    fireEvent.click(screen.getByText("QQQ"));
+    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "QQQ");
+  });
+
+  it("formats USD trading amount correctly with amount_unit 백만$", () => {
+    const usStockChartData = {
+      ...mockChartData,
+      symbol: "AAPL",
+      name: "애플 (AAPL)",
+      market: "NASDAQ",
+      amount_unit: "백만$",
+      points: [
+        {
+          ...mockChartData.points[0],
+          amount: 2500.5,
+          amount_sma50: 1800.0,
+        },
+      ],
+    };
+
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: usStockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    expect(screen.getByText(/거래대금 \(백만\$\)/)).toBeInTheDocument();
+    expect(screen.getByText("2.5B$")).toBeInTheDocument();
   });
 });

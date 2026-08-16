@@ -549,4 +549,22 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/거래대금 \(백만\$\)/)).toBeInTheDocument();
     expect(screen.getByText("2.5B$")).toBeInTheDocument();
   });
+
+  it("applies mobile responsive classes to HUD header", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    const { container } = renderWithClient(<AvwapChart />);
+
+    const hudEl = container.querySelector(".font-mono.flex.flex-wrap");
+    expect(hudEl).toHaveClass("gap-y-0.5");
+    expect(hudEl).toHaveClass("sm:gap-y-1");
+  });
 });

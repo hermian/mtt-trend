@@ -96,6 +96,18 @@ export function AvwapChart() {
   const seriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
   const anchorSeriesMapRef = useRef<Map<string, ISeriesApi<any>>>(new Map());
   const isSyncingRef = useRef(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+      const isMobileWidth = window.innerWidth < 768;
+      setIsMobile(isMobileUA || isMobileWidth);
+    };
+    checkMobile();
+    window.addEventListener("resize", checkMobile);
+    return () => window.removeEventListener("resize", checkMobile);
+  }, []);
 
   // Toggle state for base vwap, hvwap, lvwap, bb_upper, and individual anchor dates
   const [showVwap, setShowVwap] = useState(true);
@@ -525,7 +537,7 @@ export function AvwapChart() {
 
       const panels = [
         { id: "mdd", name: "MDD (%)", height: 90 },
-        { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: 550 },
+        { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: isMobile ? 360 : 550 },
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
         { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
       ];
@@ -1157,7 +1169,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -1764,7 +1776,7 @@ export function AvwapChart() {
 
 
       {/* ── 3. Realtime Status / HUD Header ── */}
-      <div className="bg-gray-900/30 px-4 py-1.5 border-b border-gray-800/40 text-xs font-mono flex flex-wrap items-center gap-4 text-gray-400">
+      <div className="bg-gray-900/30 px-3 sm:px-4 py-1 sm:py-1.5 border-b border-gray-800/40 text-[11px] sm:text-xs font-mono flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 text-gray-400 leading-tight sm:leading-normal">
         {chartData && (
           <span className="flex items-center gap-1.5">
             <span
@@ -1789,7 +1801,7 @@ export function AvwapChart() {
           <>
             <span className="text-blue-400 font-bold">{activeDisplay.time}</span>
             {activeDisplay.ohlc && (
-              <span className="flex items-center gap-2">
+              <span className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <span>O: <span className="text-gray-200">{activeDisplay.ohlc.open.toLocaleString()}</span></span>
                 <span>H: <span className="text-gray-200">{activeDisplay.ohlc.high.toLocaleString()}</span></span>
                 <span>L: <span className="text-gray-200">{activeDisplay.ohlc.low.toLocaleString()}</span></span>

@@ -721,7 +721,85 @@ export const api = {
     });
     return data;
   },
+
+  // Custom AVWAP Anchors API
+  getCustomAnchors: async (
+    target?: string,
+    includeInactive: boolean = false
+  ): Promise<CustomAnchorResponse[]> => {
+    const { data } = await apiClient.get<CustomAnchorResponse[]>("/api/charts/avwap/anchors", {
+      params: { target, include_inactive: includeInactive },
+    });
+    return data;
+  },
+
+  addCustomAnchor: async (
+    payload: CustomAnchorCreate
+  ): Promise<CustomAnchorResponse> => {
+    const { data } = await apiClient.post<CustomAnchorResponse>("/api/charts/avwap/anchors", payload);
+    return data;
+  },
+
+  updateCustomAnchor: async (
+    id: string,
+    payload: CustomAnchorUpdate
+  ): Promise<CustomAnchorResponse> => {
+    const { data } = await apiClient.put<CustomAnchorResponse>(`/api/charts/avwap/anchors/${id}`, payload);
+    return data;
+  },
+
+  deleteCustomAnchor: async (
+    id: string,
+    target?: string,
+    anchorDate?: string
+  ): Promise<{ status: string; deleted_id?: string; suppressed_id?: string }> => {
+    const { data } = await apiClient.delete<{ status: string; deleted_id?: string; suppressed_id?: string }>(
+      `/api/charts/avwap/anchors/${id}`,
+      { params: { target, anchor_date: anchorDate } }
+    );
+    return data;
+  },
+
+  resetAnchors: async (
+    target: string
+  ): Promise<{ status: string; target: string }> => {
+    const { data } = await apiClient.post<{ status: string; target: string }>(
+      "/api/charts/avwap/anchors/reset",
+      null,
+      { params: { target } }
+    );
+    return data;
+  },
 };
+
+
+export interface CustomAnchorCreate {
+  market_or_symbol: string;
+  anchor_date: string;
+  label?: string | null;
+  color?: string;
+  interval_mask?: string;
+}
+
+export interface CustomAnchorUpdate {
+  label?: string | null;
+  color?: string | null;
+  anchor_date?: string | null;
+  interval_mask?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface CustomAnchorResponse {
+  id: string;
+  market_or_symbol: string;
+  anchor_date: string;
+  label?: string | null;
+  color: string;
+  interval_mask: string;
+  is_active: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
 
 
 export interface StockSearchResult {

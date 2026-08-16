@@ -172,3 +172,107 @@ def test_avwap_etf_by_code_and_name():
     assert "KODEX 200" in data_name["name"]
     assert data_name["interval"] == "1W"
 
+
+def test_avwap_us_indices():
+    for market in ["sp500", "nasdaq100", "dow"]:
+        for interval in ["1D", "1W", "1M", "1Y"]:
+            res = client.get(f"/api/charts/avwap?market={market}&interval={interval}")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["interval"] == interval
+            assert data["amount_unit"] == "조$"
+            assert len(data["points"]) > 0
+            assert len(data["anchors"]) > 0
+            last_pt = data["points"][-1]
+            assert "close" in last_pt
+            assert "vwap" in last_pt
+            assert "hvwap" in last_pt
+            assert "lvwap" in last_pt
+            assert "rsi" in last_pt
+            assert "mdd" in last_pt
+            assert "h52_chg" in last_pt
+            assert "vix_fix" in last_pt
+            assert "amount" in last_pt
+            assert "amount_sma50" in last_pt
+
+
+def test_custom_avwap_anchor_crud(monkeypatch, tmp_path):
+    test_db = tmp_path / "user_anchors.db"
+    monkeypatch.setenv("MTT_USER_ANCHORS_DB_PATH", str(test_db))
+
+    from app.utils.avwap_utils import invalidate_avwap_cache
+    invalidate_avwap_cache()
+
+    # 1. Create custom anchor for sp500
+    create_res = client.post(
+        "/api/charts/avwap/anchors",
+        json={
+            "market_or_symbol": "sp500",
+            "anchor_date": "2025-01-15",
+            "label": "2025년 1월 변곡점",
+            "color": "#10b981",
+            "interval_mask": "ALL"
+        }
+    )
+    assert create_res.status_code == 200
+    created = create_res.json()
+    anchor_id = created["id"]
+    assert created["market_or_symbol"] == "sp500"
+    assert created["anchor_date"] == "2025-01-15"
+    assert created["label"] == "2025년 1월 변곡점"
+    assert created["color"] == "#10b981"
+
+    # 2. List custom anchors
+    list_res = client.get("/api/charts/avwap/anchors?target=sp500")
+    assert list_res.status_code == 200
+    anchors = list_res.json()
+    assert any(a["id"] == anchor_id for a in anchors)
+
+    # 3. Verify that the created anchor is included in avwap chart response
+    chart_res = client.get("/api/charts/avwap?market=sp500&interval=1D")
+    assert chart_res.status_code == 200
+    chart_data = chart_res.json()
+    assert any(a["id"] == anchor_id for a in chart_data["anchors"])
+
+    # 4. Update custom anchor
+    update_res = client.put(
+        f"/api/charts/avwap/anchors/{anchor_id}",
+        json={
+            "label": "2025년 1월 수정 라벨",
+            "color": "#3b82f6"
+        }
+    )
+    assert update_res.status_code == 200
+    updated = update_res.json()
+    assert updated["label"] == "2025년 1월 수정 라벨"
+    assert updated["color"] == "#3b82f6"
+
+    # 5. Delete custom anchor
+    del_res = client.delete(f"/api/charts/avwap/anchors/{anchor_id}")
+    assert del_res.status_code == 200
+
+    # 6. Verify deleted
+    list_after = client.get("/api/charts/avwap/anchors?target=sp500").json()
+    assert not any(a["id"] == anchor_id for a in list_after)
+
+    # 7. Delete (suppress) a system preset anchor (e.g. 2018-12-24 for sp500)
+    chart_before = client.get("/api/charts/avwap?market=sp500&interval=1D").json()
+    assert any(a["anchor_date"] == "2018-12-24" for a in chart_before["anchors"])
+
+    del_sys_res = client.delete("/api/charts/avwap/anchors/anchor_20181224?target=sp500&anchor_date=2018-12-24")
+    assert del_sys_res.status_code == 200
+
+    chart_after_sys_del = client.get("/api/charts/avwap?market=sp500&interval=1D").json()
+    assert not any(a["anchor_date"] == "2018-12-24" for a in chart_after_sys_del["anchors"])
+
+    # 8. Reset all anchors back to system defaults
+    reset_res = client.post("/api/charts/avwap/anchors/reset?target=sp500")
+    assert reset_res.status_code == 200
+
+    chart_after_reset = client.get("/api/charts/avwap?market=sp500&interval=1D").json()
+    assert any(a["anchor_date"] == "2018-12-24" for a in chart_after_reset["anchors"])
+
+
+
+
+

@@ -15,6 +15,7 @@ from app.schemas import (
     StockSearchResult,
 )
 from app.utils.chart_utils import _leverage_csv_dir, SYMBOL_MAP, normalize_chart_time
+from app.utils.custom_anchor_utils import get_custom_anchors
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +70,65 @@ PRESET_ANCHORS: Dict[str, Dict[str, List[str]]] = {
         "1W": ["2015-08-24", "2021-06-28", "2022-08-17", "2023-01-04", "2024-01-09"],
         "1M": ["2015-08-24", "2021-06-28", "2022-08-17", "2023-01-04", "2024-01-09"],
         "1Y": ["2015-08-24", "2021-06-28"],
-    }
+    },
+    "sp500": {
+        "1D": [
+            "2018-12-24", "2020-03-23", "2022-01-04", "2022-06-16", "2022-10-13",
+            "2023-10-27", "2024-08-05", "2024-11-05", "2025-04-07"
+        ],
+        "1W": ["2018-12-24", "2020-03-23", "2022-01-04", "2022-10-13", "2023-10-27", "2024-08-05", "2025-04-07"],
+        "1M": ["2018-12-24", "2020-03-23", "2022-01-04", "2022-10-13", "2023-10-27", "2025-04-07"],
+        "1Y": ["2020-03-23", "2022-01-04"],
+    },
+    "nasdaq100": {
+        "1D": [
+            "2018-12-24", "2020-03-23", "2021-11-22", "2022-10-13", "2022-12-28",
+            "2023-10-27", "2024-08-05", "2024-11-05", "2025-04-07"
+        ],
+        "1W": ["2018-12-24", "2020-03-23", "2021-11-22", "2022-10-13", "2023-10-27", "2024-08-05", "2025-04-07"],
+        "1M": ["2018-12-24", "2020-03-23", "2021-11-22", "2022-10-13", "2023-10-27", "2025-04-07"],
+        "1Y": ["2020-03-23", "2021-11-22"],
+    },
+    "dow30": {
+        "1D": [
+            "2018-12-24", "2020-03-23", "2022-01-05", "2022-09-30", "2022-10-13",
+            "2023-10-27", "2024-08-05", "2024-11-05", "2025-04-07"
+        ],
+        "1W": ["2018-12-24", "2020-03-23", "2022-01-05", "2022-10-13", "2023-10-27", "2024-08-05", "2025-04-07"],
+        "1M": ["2018-12-24", "2020-03-23", "2022-01-05", "2022-10-13", "2023-10-27", "2025-04-07"],
+        "1Y": ["2020-03-23", "2022-01-05"],
+    },
+}
+
+INDEX_MARKET_MAP: Dict[str, str] = {
+    "kospi": "kospi",
+    "kosdaq": "kosdaq",
+    "sp500": "sp500",
+    "s&p500": "sp500",
+    "spx": "sp500",
+    "snp500": "sp500",
+    "nasdaq100": "nasdaq100",
+    "nasdaq": "nasdaq100",
+    "ndx": "nasdaq100",
+    "dow": "dow30",
+    "dow30": "dow30",
+    "dji": "dow30",
+}
+
+INDEX_DISPLAY_NAMES: Dict[str, str] = {
+    "kospi": "KOSPI 지수",
+    "kosdaq": "KOSDAQ 지수",
+    "sp500": "S&P 500 지수",
+    "nasdaq100": "NDX 지수",
+    "dow30": "DOW 지수",
+}
+
+INDEX_AMOUNT_UNITS: Dict[str, str] = {
+    "kospi": "조원",
+    "kosdaq": "조원",
+    "sp500": "조$",
+    "nasdaq100": "조$",
+    "dow30": "조$",
 }
 
 ANCHOR_COLORS = [
@@ -80,6 +139,60 @@ ANCHOR_COLORS = [
 ]
 
 _AVWAP_CACHE: Dict[str, Any] = {}
+
+
+def invalidate_avwap_cache():
+    """Clear in-memory AVWAP cache when custom anchors change."""
+    global _AVWAP_CACHE
+    _AVWAP_CACHE.clear()
+
+
+
+def _get_macro_db_path() -> Path:
+    override = os.environ.get("MTT_MACRO_DB_PATH")
+    if override:
+        return Path(override).expanduser().resolve()
+    return Path(os.path.expanduser("~/.cache/db/macro.db"))
+
+
+def _load_index_raw_df(market_key: str) -> Optional[Tuple[pd.DataFrame, float]]:
+    """
+    KOSPI, KOSDAQ, S&P500, NASDAQ100, DOW30 지수의 raw OHLCV 데이터를 반환합니다.
+    1. CSV 파일 존재 시 CSV 우선 로드 (kospi, kosdaq 등)
+    2. macro.db (index_ohlcv 테이블)에서 로드
+    반환값: (DataFrame, last_mtime)
+    """
+    file_name = SYMBOL_MAP.get(market_key)
+    if file_name:
+        csv_path = _leverage_csv_dir() / file_name
+        if csv_path.exists():
+            mtime = os.path.getmtime(csv_path)
+            try:
+                df = pd.read_csv(csv_path)
+                return df, mtime
+            except Exception as e:
+                logger.warning(f"Failed to read CSV {csv_path}: {e}")
+
+    db_path = _get_macro_db_path()
+    if db_path.exists():
+        mtime = os.path.getmtime(db_path)
+        try:
+            con = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True)
+            try:
+                df = pd.read_sql_query(
+                    "SELECT date as Date, open as Open, high as High, low as Low, close as Close, volume as Volume, amount as Amount "
+                    "FROM index_ohlcv WHERE index_name = ? ORDER BY date",
+                    con,
+                    params=(market_key,)
+                )
+            finally:
+                con.close()
+            if not df.empty:
+                return df, mtime
+        except Exception as e:
+            logger.warning(f"Failed to read macro.db for {market_key}: {e}")
+
+    return None, 0.0
 
 
 def _calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
@@ -143,24 +256,19 @@ def load_avwap_chart_data(
             return res
         return load_etf_avwap_chart_data(sym, interval)
 
-    market_key = market.lower()
-    if market_key not in ("kospi", "kosdaq"):
-        market_key = "kospi"
+    raw_market_key = market.lower().strip()
+    market_key = INDEX_MARKET_MAP.get(raw_market_key, "kospi")
         
     interval_key = interval.upper()
     if interval_key not in INTERVAL_CONFIGS:
         interval_key = "1D"
         
-    file_name = SYMBOL_MAP.get(market_key)
-    if not file_name:
-        return None
-        
-    csv_path = _leverage_csv_dir() / file_name
-    if not csv_path.exists():
-        logger.warning(f"AVWAP csv not found: {csv_path}")
+    df_raw_res = _load_index_raw_df(market_key)
+    if not df_raw_res or df_raw_res[0] is None:
+        logger.warning(f"AVWAP index data not found for {market_key}")
         return None
 
-    current_mtime = os.path.getmtime(csv_path)
+    df_raw, current_mtime = df_raw_res
     cache_key = f"{market_key}_{interval_key}"
     if cache_key in _AVWAP_CACHE:
         cached = _AVWAP_CACHE[cache_key]
@@ -168,19 +276,18 @@ def load_avwap_chart_data(
             return cached["data"]
 
     try:
-        df_raw = pd.read_csv(csv_path)
         if "Date" not in df_raw.columns:
-            logger.error(f"CSV missing 'Date' column: {csv_path}")
+            logger.error(f"Index data missing 'Date' column for {market_key}")
             return None
             
         df_raw["Date"] = pd.to_datetime(df_raw["Date"].astype(str).str[:10])
         df_raw = df_raw.sort_values("Date").drop_duplicates("Date").set_index("Date")
         df_raw = df_raw[df_raw.index >= "2000-01-01"]
 
-        if "Amount" not in df_raw.columns:
-            df_raw["Amount"] = 0.0
+        if "Amount" not in df_raw.columns or df_raw["Amount"].isnull().all():
+            df_raw["Amount"] = df_raw["Close"] * df_raw["Volume"]
         else:
-            df_raw["Amount"] = pd.to_numeric(df_raw["Amount"], errors="coerce").fillna(0.0)
+            df_raw["Amount"] = pd.to_numeric(df_raw["Amount"], errors="coerce").fillna(df_raw["Close"] * df_raw["Volume"])
 
         # 1. Resample to target interval
 
@@ -217,6 +324,9 @@ def load_avwap_chart_data(
             df = df_raw[["Open", "High", "Low", "Close", "Volume", "Amount"]].copy()
 
         df = df.ffill()
+        if df.empty:
+            return None
+
         cfg = INTERVAL_CONFIGS[interval_key]
 
         # 2. Compute TA Indicator MAs
@@ -231,7 +341,7 @@ def load_avwap_chart_data(
         vol_ma_len = cfg["vol_ma_length"]
         vol_ma_series = df["Volume"].rolling(window=vol_ma_len, min_periods=1).mean()
 
-        # Amount in Jo (조원): Amount / 1e12
+        # Amount in Jo (조원 or 조$): Amount / 1e12
         amount_series = df["Amount"] / 1e12
         amt_ma_len = 50 if interval_key == "1D" else 10 if interval_key == "1W" else 12 if interval_key == "1M" else 3
         amount_sma50_series = amount_series.rolling(window=amt_ma_len, min_periods=1).mean()
@@ -263,10 +373,27 @@ def load_avwap_chart_data(
         hvwap_series = _calculate_vwap_series(df, start_idx=h_idx_loc)
         lvwap_series = _calculate_vwap_series(df, start_idx=l_idx_loc)
 
-        # 7. Preset Anchors
+        # 7. Preset & Custom Anchors
         anchors_list: List[AvwapAnchorSeries] = []
         preset_dates = PRESET_ANCHORS.get(market_key, {}).get(interval_key, [])
+
+        suppressed_dates = set()
+        custom_anchors_active = []
+        try:
+            custom_anchors_all = get_custom_anchors(market_or_symbol=market_key, include_inactive=True)
+            for ca in custom_anchors_all:
+                if not ca.is_active:
+                    suppressed_dates.add(ca.anchor_date)
+                else:
+                    custom_anchors_active.append(ca)
+        except Exception as e:
+            logger.warning(f"Failed to load custom/suppressed anchors for {market_key}: {e}")
+
+        seen_dates = set()
         for idx, ad_str in enumerate(preset_dates):
+            if ad_str in suppressed_dates:
+                continue
+            seen_dates.add(ad_str)
             valid_indices = df.index[df.index >= ad_str]
             if len(valid_indices) == 0:
                 continue
@@ -292,6 +419,40 @@ def load_avwap_chart_data(
                 color=ANCHOR_COLORS[idx % len(ANCHOR_COLORS)],
                 values=val_list
             ))
+
+        # 7.1 Custom Anchors from DB
+        for ca in custom_anchors_active:
+            if ca.interval_mask and ca.interval_mask != "ALL" and ca.interval_mask != interval_key:
+                continue
+            ad_str = ca.anchor_date
+            if ad_str in seen_dates:
+                continue
+            seen_dates.add(ad_str)
+            valid_indices = df.index[df.index >= ad_str]
+            if len(valid_indices) == 0:
+                continue
+            matched_dt = valid_indices[0]
+            start_pos = df.index.get_loc(matched_dt)
+            if isinstance(start_pos, slice):
+                start_pos = start_pos.start
+            a_series = _calculate_vwap_series(df, start_idx=start_pos)
+            val_list: List[AvwapAnchorValue] = []
+            for i in range(start_pos, len(df)):
+                v = a_series.iloc[i]
+                if pd.notna(v) and np.isfinite(v):
+                    val_list.append(AvwapAnchorValue(
+                        date=df.index[i].strftime("%Y-%m-%d"),
+                        value=round(float(v), 2)
+                    ))
+            display_name_anc = ca.label if ca.label and ca.label.strip() else f"AVWAP ({ad_str})"
+            anchors_list.append(AvwapAnchorSeries(
+                id=ca.id,
+                name=display_name_anc,
+                anchor_date=ad_str,
+                color=ca.color or "#ec4899",
+                values=val_list
+            ))
+
 
         # 8. Build response points
         points: List[AvwapPoint] = []
@@ -347,13 +508,14 @@ def load_avwap_chart_data(
                 lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,
             ))
             
-        display_name = "KOSPI 지수" if market_key == "kospi" else "KOSDAQ 지수"
+        display_name = INDEX_DISPLAY_NAMES.get(market_key, f"{market_key.upper()} 지수")
+        amount_unit = INDEX_AMOUNT_UNITS.get(market_key, "조원")
         response = AvwapChartResponse(
             market=market_key,
             symbol=None,
             name=display_name,
             interval=interval_key,
-            amount_unit="조원",
+            amount_unit=amount_unit,
             points=points,
             anchors=anchors_list,
             preset_dates=preset_dates
@@ -686,6 +848,18 @@ def _compute_asset_avwap_chart(
         ("atl", "역대 최저(ATL)", atl_dt),
     ]
 
+    suppressed_dates = set()
+    custom_anchors_active = []
+    try:
+        custom_anchors_all = get_custom_anchors(market_or_symbol=code, include_inactive=True)
+        for ca in custom_anchors_all:
+            if not ca.is_active:
+                suppressed_dates.add(ca.anchor_date)
+            else:
+                custom_anchors_active.append(ca)
+    except Exception as e:
+        logger.warning(f"Failed to load custom/suppressed anchors for asset {code}: {e}")
+
     seen_dates: set = set()
     color_idx = 0
     for a_id, a_label, a_dt in raw_anchors:
@@ -696,7 +870,7 @@ def _compute_asset_avwap_chart(
             continue
         matched_dt = valid_indices[0]
         d_str = matched_dt.strftime("%Y-%m-%d")
-        if d_str in seen_dates:
+        if d_str in suppressed_dates or d_str in seen_dates:
             continue
         seen_dates.add(d_str)
         preset_dates.append(d_str)
@@ -720,6 +894,37 @@ def _compute_asset_avwap_chart(
             values=vals
         ))
         color_idx += 1
+
+    # 7.1 Custom Anchors from DB for individual stock/ETF
+    for ca in custom_anchors_active:
+        if ca.interval_mask and ca.interval_mask != "ALL" and ca.interval_mask != interval_key:
+            continue
+        ad_str = ca.anchor_date
+        if ad_str in seen_dates:
+            continue
+        seen_dates.add(ad_str)
+        valid_indices = df.index[df.index >= ad_str]
+        if len(valid_indices) == 0:
+            continue
+        matched_dt = valid_indices[0]
+        start_pos = df.index.get_loc(matched_dt)
+        if isinstance(start_pos, slice):
+            start_pos = start_pos.start
+        a_series = _calculate_vwap_series(df, start_idx=start_pos)
+        vals_custom: List[AvwapAnchorValue] = []
+        for i in range(start_pos, len(df)):
+            v = a_series.iloc[i]
+            if pd.notna(v) and np.isfinite(v):
+                vals_custom.append(AvwapAnchorValue(date=df.index[i].strftime("%Y-%m-%d"), value=round(float(v), 2)))
+        display_name_anc = ca.label if ca.label and ca.label.strip() else f"AVWAP ({ad_str})"
+        anchors_list.append(AvwapAnchorSeries(
+            id=ca.id,
+            name=display_name_anc,
+            anchor_date=ad_str,
+            color=ca.color or "#ec4899",
+            values=vals_custom
+        ))
+
 
     # 8. Build points list
     points: List[AvwapPoint] = []

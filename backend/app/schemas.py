@@ -419,3 +419,32 @@ class AvwapChartResponse(BaseModel):
     points: List[AvwapPoint]
     anchors: List[AvwapAnchorSeries]
     preset_dates: List[str]
+
+
+class CustomAnchorCreate(BaseModel):
+    market_or_symbol: str
+    anchor_date: str
+    label: Optional[str] = None
+    color: str = "#ec4899"
+    interval_mask: str = "ALL"
+
+
+class CustomAnchorUpdate(BaseModel):
+    label: Optional[str] = None
+    color: Optional[str] = None
+    anchor_date: Optional[str] = None
+    interval_mask: Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class CustomAnchorResponse(BaseModel):
+    id: str
+    market_or_symbol: str
+    anchor_date: str
+    label: Optional[str] = None
+    color: str
+    interval_mask: str = "ALL"
+    is_active: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+

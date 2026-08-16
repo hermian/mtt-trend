@@ -28,6 +28,9 @@ from app.schemas import (
     ForeignFlowPoint,
     AvwapChartResponse,
     StockSearchResult,
+    CustomAnchorCreate,
+    CustomAnchorUpdate,
+    CustomAnchorResponse,
 )
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
@@ -38,6 +41,14 @@ from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
 from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
+from app.utils.custom_anchor_utils import (
+    get_custom_anchors,
+    create_custom_anchor,
+    update_custom_anchor,
+    delete_custom_anchor,
+    suppress_system_anchor,
+    reset_all_anchors,
+)
 from app.utils.valuation_band_utils import (
     ALLOWED_INDEXES,
     compute_band_levels,
@@ -1122,12 +1133,12 @@ async def search_stocks_endpoint(
 
 @router.get("/avwap", response_model=AvwapChartResponse)
 async def get_avwap_chart_data(
-    market: str = Query("kospi", description="kospi | kosdaq | etf"),
+    market: str = Query("kospi", description="kospi | kosdaq | sp500 | nasdaq100 | dow | etf"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
     symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자, 069500, KODEX 200)"),
 ):
     """
-    KOSPI / KOSDAQ 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    KOSPI / KOSDAQ / S&P500 / NASDAQ100 / DOW 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
     """
     data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
     if not data:
@@ -1137,4 +1148,75 @@ async def get_avwap_chart_data(
             detail=f"AVWAP chart data not found for {target_desc} with interval '{interval}'."
         )
     return data
+
+
+@router.get("/avwap/anchors", response_model=List[CustomAnchorResponse])
+async def list_custom_avwap_anchors(
+    target: Optional[str] = Query(None, description="마켓 또는 종목코드 (예: sp500, kospi, 005930)"),
+    include_inactive: bool = Query(False, description="비활성 앵커 포함 여부"),
+):
+    """
+    사용자가 등록한 커스텀 AVWAP 앵커(변곡점) 목록을 반환합니다.
+    """
+    return get_custom_anchors(market_or_symbol=target, include_inactive=include_inactive)
+
+
+@router.post("/avwap/anchors", response_model=CustomAnchorResponse)
+async def add_custom_avwap_anchor(
+    payload: CustomAnchorCreate,
+):
+    """
+    새로운 커스텀 AVWAP 앵커(변곡점 일자)를 등록합니다.
+    """
+    if not payload.anchor_date or len(payload.anchor_date.strip()) < 10:
+        raise HTTPException(status_code=400, detail="유효한 anchor_date(YYYY-MM-DD)를 입력해주세요.")
+    return create_custom_anchor(payload)
+
+
+@router.put("/avwap/anchors/{anchor_id}", response_model=CustomAnchorResponse)
+async def edit_custom_avwap_anchor(
+    anchor_id: str,
+    payload: CustomAnchorUpdate,
+):
+    """
+    기존 커스텀 AVWAP 앵커를 수정합니다.
+    """
+    updated = update_custom_anchor(anchor_id, payload)
+    if not updated:
+        raise HTTPException(status_code=404, detail="해당 앵커를 찾을 수 없습니다.")
+    return updated
+
+
+@router.delete("/avwap/anchors/{anchor_id}")
+async def remove_custom_avwap_anchor(
+    anchor_id: str,
+    target: Optional[str] = Query(None, description="마켓 또는 종목코드 (시스템 앵커 삭제 시 필요)"),
+    anchor_date: Optional[str] = Query(None, description="앵커 기준일자 (시스템 앵커 삭제 시 필요)"),
+):
+    """
+    커스텀 또는 시스템 AVWAP 앵커를 삭제(숨김)합니다.
+    """
+    success = delete_custom_anchor(anchor_id)
+    if success:
+        return {"status": "ok", "deleted_id": anchor_id}
+    
+    # If not a custom anchor in DB, check if target & anchor_date provided for system anchor suppression
+    if target and anchor_date:
+        supp = suppress_system_anchor(target, anchor_date)
+        return {"status": "ok", "suppressed_id": supp.id, "anchor_date": anchor_date}
+
+    raise HTTPException(status_code=404, detail="해당 앵커를 찾을 수 없습니다.")
+
+
+@router.post("/avwap/anchors/reset")
+async def reset_custom_avwap_anchors(
+    target: str = Query(..., description="마켓 또는 종목코드 (예: sp500, kospi, 005930)"),
+):
+    """
+    해당 대상(지수/종목)의 모든 커스텀 등록 및 시스템 삭제 이력을 초기화하여 기본 프리셋 상태로 복원합니다.
+    """
+    success = reset_all_anchors(target)
+    return {"status": "ok", "target": target}
+
+
 

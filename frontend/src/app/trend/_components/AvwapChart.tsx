@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   createChart,
   IChartApi,
@@ -15,8 +16,15 @@ import {
   PriceScaleMode,
 } from "lightweight-charts";
 import { useAvwapChart, useStockSearch } from "@/hooks/useAvwapChart";
-import type { AvwapPoint, StockSearchResult } from "@/lib/api";
+import { api, type AvwapPoint, type StockSearchResult } from "@/lib/api";
 import { toChartTime, toFiniteNumber } from "./_lib/chartTime";
+import { AvwapQuickAnchorPopover } from "./AvwapQuickAnchorPopover";
+import { AvwapAnchorManagerModal, type UnifiedAnchorItem } from "./AvwapAnchorManagerModal";
+import {
+  addLocalCustomAnchor,
+  removeLocalCustomAnchor,
+  setLocalCustomAnchors,
+} from "./_lib/avwapCalc";
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -34,8 +42,18 @@ const MA_COLORS: Record<string, string> = {
   SMA_5: "#3b82f6",
 };
 
+export type AvwapMarket = "kospi" | "kosdaq" | "sp500" | "nasdaq100" | "dow";
+
+export const MARKET_BUTTONS: { id: AvwapMarket; label: string }[] = [
+  { id: "kospi", label: "KOSPI" },
+  { id: "kosdaq", label: "KOSDAQ" },
+  { id: "sp500", label: "S&P500" },
+  { id: "nasdaq100", label: "NDX" },
+  { id: "dow", label: "DOW" },
+];
+
 export function AvwapChart() {
-  const [market, setMarket] = useState<"kospi" | "kosdaq">("kospi");
+  const [market, setMarket] = useState<AvwapMarket>("kospi");
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
   const [symbol, setSymbol] = useState<string | null>(null);
   const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
@@ -64,6 +82,26 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
+
+  // Click-to-Anchor Picker Mode
+  const [isPickerMode, setIsPickerMode] = useState(false);
+  const [pickerDate, setPickerDate] = useState<string | null>(null);
+  const isPickerModeRef = useRef(false);
+
+  useEffect(() => {
+    isPickerModeRef.current = isPickerMode;
+  }, [isPickerMode]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && isPickerMode) {
+        setIsPickerMode(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isPickerMode]);
+
 
   // Close search dropdown on click outside
   useEffect(() => {
@@ -123,7 +161,7 @@ export function AvwapChart() {
 
 
   // Clear stock search and return to market index mode
-  const handleClearStock = (targetMarket?: "kospi" | "kosdaq") => {
+  const handleClearStock = (targetMarket?: AvwapMarket) => {
     setSymbol(null);
     setSearchQuery("");
     setShowDropdown(false);
@@ -131,6 +169,101 @@ export function AvwapChart() {
       setMarket(targetMarket);
     }
   };
+
+  const queryClient = useQueryClient();
+  const [showQuickAnchorPopover, setShowQuickAnchorPopover] = useState(false);
+  const [showAnchorManagerModal, setShowAnchorManagerModal] = useState(false);
+
+  const currentTarget = symbol || market;
+  const currentTargetDisplayName =
+    chartData?.name || (symbol ? symbol : MARKET_BUTTONS.find((b) => b.id === market)?.label || market.toUpperCase());
+
+  // Unified anchor list for management modal
+  const unifiedAnchors: UnifiedAnchorItem[] = useMemo(() => {
+    if (!chartData?.anchors) return [];
+    return chartData.anchors.map((anc) => {
+      const isCustom = anc.id.startsWith("anc_") || !anc.id.startsWith("anchor_");
+      return {
+        id: anc.id,
+        name: anc.name || anc.anchor_date,
+        anchor_date: anc.anchor_date,
+        color: anc.color,
+        isCustom,
+        isEnabled: enabledAnchors.has(anc.id),
+      };
+    });
+  }, [chartData?.anchors, enabledAnchors]);
+
+  const handleAddCustomAnchor = async (date: string, label: string, color: string) => {
+    try {
+      const newAnc = await api.addCustomAnchor({
+        market_or_symbol: currentTarget,
+        anchor_date: date,
+        label: label || undefined,
+        color: color || "#ec4899",
+        interval_mask: "ALL",
+      });
+      addLocalCustomAnchor(currentTarget, {
+        id: newAnc.id,
+        market_or_symbol: currentTarget,
+        anchor_date: date,
+        label: label || undefined,
+        color: color || "#ec4899",
+      });
+      setEnabledAnchors((prev) => {
+        const next = new Set(prev);
+        next.add(newAnc.id);
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ["avwapChart"] });
+    } catch (e) {
+      console.error("Failed to add custom anchor:", e);
+      alert("앵커 추가에 실패했습니다.");
+    }
+  };
+
+  const handleUpdateCustomAnchor = async (id: string, date: string, label: string, color: string) => {
+    try {
+      await api.updateCustomAnchor(id, {
+        anchor_date: date,
+        label: label || undefined,
+        color: color,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["avwapChart"] });
+    } catch (e) {
+      console.error("Failed to update custom anchor:", e);
+      alert("앵커 수정에 실패했습니다.");
+    }
+  };
+
+  const handleDeleteAnchor = async (id: string, anchorDate: string, isCustom: boolean = true) => {
+    try {
+      await api.deleteCustomAnchor(id, currentTarget, anchorDate);
+      if (isCustom) {
+        removeLocalCustomAnchor(currentTarget, id);
+      }
+      setEnabledAnchors((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+      await queryClient.invalidateQueries({ queryKey: ["avwapChart"] });
+    } catch (e) {
+      console.error("Failed to delete anchor:", e);
+      alert("앵커 삭제에 실패했습니다.");
+    }
+  };
+
+  const handleResetToDefaults = async () => {
+    try {
+      await api.resetAnchors(currentTarget);
+      setLocalCustomAnchors(currentTarget, []);
+      await queryClient.invalidateQueries({ queryKey: ["avwapChart"] });
+    } catch (e) {
+      console.error("Failed to reset anchors:", e);
+    }
+  };
+
 
   // Toggle individual anchor
   const toggleAnchor = (id: string) => {
@@ -152,6 +285,7 @@ export function AvwapChart() {
       setEnabledAnchors(new Set());
     }
   };
+
 
   const isStockMode = !!chartData?.symbol;
   const isEokUnit = chartData?.amount_unit === "억원";
@@ -459,7 +593,31 @@ export function AvwapChart() {
               anchorSeriesMapRef.current.set(anc.id, aSeries);
             });
           }
+
+          // Click-to-Anchor coordinate subscription on main price chart
+          chart.subscribeClick((param) => {
+            if (!param.time) return;
+            const clickedDate =
+              typeof param.time === "string"
+                ? param.time
+                : typeof param.time === "object" && "year" in param.time
+                ? `${(param.time as any).year}-${String((param.time as any).month).padStart(2, "0")}-${String(
+                    (param.time as any).day
+                  ).padStart(2, "0")}`
+                : null;
+
+            if (!clickedDate) return;
+
+            const isShift = Boolean((param.sourceEvent as any)?.shiftKey);
+            if (isPickerModeRef.current || isShift) {
+              setPickerDate(clickedDate);
+              setShowQuickAnchorPopover(true);
+              setIsPickerMode(false);
+              isPickerModeRef.current = false;
+            }
+          });
         }
+
 
         // 3. Panel: Volume & VIX Fix
         else if (panel.id === "volume") {
@@ -879,6 +1037,10 @@ export function AvwapChart() {
     if (isEokUnit) {
       return val >= 10000 ? `${(val / 10000).toFixed(1)}조` : `${Math.round(val).toLocaleString()}억`;
     }
+    const unit = chartData?.amount_unit || "조원";
+    if (unit === "조$") {
+      return `${val.toFixed(1)}조$`;
+    }
     return `${val.toFixed(1)}조`;
   };
 
@@ -890,19 +1052,19 @@ export function AvwapChart() {
         <div className="flex items-center gap-2.5 flex-wrap">
           {/* Market Toggle (Index mode) */}
           <div className="inline-flex rounded-lg bg-gray-800/80 p-1 border border-gray-700">
-            {(["kospi", "kosdaq"] as const).map((m) => {
-              const isSelected = !symbol && market === m;
+            {MARKET_BUTTONS.map((m) => {
+              const isSelected = !symbol && market === m.id;
               return (
                 <button
-                  key={m}
-                  onClick={() => handleClearStock(m)}
-                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all uppercase ${
+                  key={m.id}
+                  onClick={() => handleClearStock(m.id)}
+                  className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
                     isSelected
                       ? "bg-blue-600 text-white shadow-md"
                       : "text-gray-400 hover:text-white"
                   }`}
                 >
-                  {m.toUpperCase()}
+                  {m.label}
                 </button>
               );
             })}
@@ -1135,34 +1297,115 @@ export function AvwapChart() {
         </div>
       </div>
 
-      {/* ── 2. Preset Anchor Badges Bar ── */}
-      {chartData?.anchors && chartData.anchors.length > 0 && (
-        <div className="bg-gray-900/50 border-b border-gray-800/80 px-4 py-2 flex items-center gap-1.5 overflow-x-auto custom-scrollbar text-[11px]">
+      {/* ── 2. Anchor Badges Bar & Controls ── */}
+      <div className="relative bg-gray-900/50 border-b border-gray-800/80 px-4 py-2 flex items-center justify-between gap-3 text-[11px]">
+        <div className="flex items-center gap-1.5 overflow-x-auto custom-scrollbar flex-1 py-0.5">
           <span className="text-gray-500 font-bold mr-1 flex-shrink-0">
             {isStockMode ? "주요 앵커:" : "변곡점 앵커:"}
           </span>
-          {chartData.anchors.map((anc) => {
+          {chartData?.anchors && chartData.anchors.map((anc) => {
             const isEnabled = enabledAnchors.has(anc.id);
+            const isCustom = anc.id.startsWith("anc_") || !anc.id.startsWith("anchor_");
             return (
-              <button
+              <div
                 key={anc.id}
-                onClick={() => toggleAnchor(anc.id)}
-                className={`flex-shrink-0 px-2 py-0.5 rounded-full border transition-all flex items-center gap-1.5 ${
+                className={`group flex-shrink-0 rounded-full border transition-all flex items-center gap-1 px-2 py-0.5 ${
                   isEnabled
-                    ? "bg-gray-800 text-white border-gray-600 font-medium"
+                    ? isCustom
+                      ? "bg-emerald-950/40 text-emerald-300 border-emerald-700/80 font-medium shadow-sm"
+                      : "bg-gray-800 text-white border-gray-600 font-medium"
                     : "bg-gray-900/60 text-gray-500 border-gray-800 hover:text-gray-400"
                 }`}
               >
-                <span
-                  className="w-2 h-2 rounded-full"
-                  style={{ backgroundColor: isEnabled ? anc.color : "#4b5563" }}
-                />
-                <span>{anc.name || anc.anchor_date}</span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => toggleAnchor(anc.id)}
+                  className="flex items-center gap-1.5 text-left focus:outline-none"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: isEnabled ? anc.color : "#4b5563" }}
+                  />
+                  <span className="truncate max-w-[140px]">{anc.name || anc.anchor_date}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const targetType = isCustom ? "커스텀" : "시스템";
+                    if (confirm(`'${anc.name || anc.anchor_date}' ${targetType} 앵커를 삭제(숨김)하시겠습니까?`)) {
+                      handleDeleteAnchor(anc.id, anc.anchor_date, isCustom);
+                    }
+                  }}
+                  className="ml-0.5 text-gray-400 hover:text-rose-400 p-0.5 rounded-full hover:bg-gray-800 transition-colors opacity-70 group-hover:opacity-100"
+                  title="앵커 삭제(숨김)"
+                >
+                  ✕
+                </button>
+              </div>
             );
           })}
         </div>
-      )}
+
+        {/* Action Buttons: Add Anchor, Click Picker & Manage */}
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => {
+              setIsPickerMode(!isPickerMode);
+              if (showQuickAnchorPopover) setShowQuickAnchorPopover(false);
+            }}
+            className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 shadow-sm transition-all text-[11px] ${
+              isPickerMode
+                ? "bg-emerald-600 text-white ring-2 ring-emerald-400 animate-pulse"
+                : "bg-gray-800 hover:bg-gray-700 text-emerald-400 border border-emerald-700/60"
+            }`}
+            title="차트에서 직접 캔들을 클릭하여 앵커 날짜를 지정합니다 (또는 Shift+클릭)"
+          >
+            <span>🎯 캔들 클릭</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowQuickAnchorPopover(!showQuickAnchorPopover)}
+            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold flex items-center gap-1 shadow-sm transition-colors text-[11px]"
+          >
+            <span>+ 앵커 추가</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowAnchorManagerModal(true)}
+            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg border border-gray-700 flex items-center gap-1 transition-colors text-[11px]"
+            title="변곡점 앵커 전체 관리"
+          >
+            <span>⚙ 관리</span>
+          </button>
+
+          {/* Quick Add Popover */}
+          <AvwapQuickAnchorPopover
+            isOpen={showQuickAnchorPopover}
+            onClose={() => {
+              setShowQuickAnchorPopover(false);
+              setPickerDate(null);
+            }}
+            onAddAnchor={handleAddCustomAnchor}
+            defaultDate={pickerDate || chartData?.points?.[chartData.points.length - 1]?.date || ""}
+          />
+        </div>
+      </div>
+
+      {/* Anchor Manager Modal */}
+      <AvwapAnchorManagerModal
+        isOpen={showAnchorManagerModal}
+        onClose={() => setShowAnchorManagerModal(false)}
+        targetName={currentTargetDisplayName}
+        anchors={unifiedAnchors}
+        onToggleAnchor={toggleAnchor}
+        onUpdateCustomAnchor={handleUpdateCustomAnchor}
+        onDeleteAnchor={handleDeleteAnchor}
+        onAddCustomAnchor={handleAddCustomAnchor}
+        onResetToDefaults={handleResetToDefaults}
+      />
+
 
       {/* ── 3. Realtime Status / HUD Header ── */}
       <div className="bg-gray-900/30 px-4 py-1.5 border-b border-gray-800/40 text-xs font-mono flex flex-wrap items-center gap-4 text-gray-400">
@@ -1295,7 +1538,22 @@ export function AvwapChart() {
               <span className="text-gray-500">|</span>
               <span className="text-gray-400">AVWAP & MAs</span>
             </div>
-            <div data-chart-id="main" className="w-full" />
+
+            {/* Picker Mode Guide Badge */}
+            {isPickerMode && (
+              <div className="absolute top-2 right-4 z-20 flex items-center gap-2 bg-emerald-950/90 text-emerald-300 border border-emerald-500/80 px-3 py-1 rounded-lg text-xs font-bold shadow-lg animate-pulse backdrop-blur-md">
+                <span>🎯 앵커로 설정할 캔들을 클릭하세요 (또는 Shift+클릭)</span>
+                <button
+                  type="button"
+                  onClick={() => setIsPickerMode(false)}
+                  className="ml-1 text-emerald-400 hover:text-white px-1.5 py-0.5 rounded bg-emerald-900/60 text-[10px]"
+                >
+                  ESC 취소
+                </button>
+              </div>
+            )}
+
+            <div data-chart-id="main" className={`w-full ${isPickerMode ? "cursor-crosshair" : ""}`} />
           </div>
 
           {/* Panel 3: Volume & VIX Fix */}

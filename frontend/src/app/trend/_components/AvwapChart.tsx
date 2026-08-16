@@ -104,10 +104,25 @@ export function AvwapChart() {
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
   const enabledAnchorsRef = useRef<Set<string>>(new Set());
+  const showLinesRef = useRef({
+    vwap: showVwap,
+    hvwap: showHvwap,
+    lvwap: showLvwap,
+    bb: showBbUpper,
+  });
 
   useEffect(() => {
     enabledAnchorsRef.current = enabledAnchors;
   }, [enabledAnchors]);
+
+  useEffect(() => {
+    showLinesRef.current = {
+      vwap: showVwap,
+      hvwap: showHvwap,
+      lvwap: showLvwap,
+      bb: showBbUpper,
+    };
+  }, [showVwap, showHvwap, showLvwap, showBbUpper]);
 
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -379,6 +394,9 @@ export function AvwapChart() {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
+        if (selectedLineIdRef.current === id) {
+          setSelectedLineId(null);
+        }
       } else {
         next.add(id);
       }
@@ -391,6 +409,12 @@ export function AvwapChart() {
       setEnabledAnchors(new Set(chartData.anchors.map((a) => a.id)));
     } else {
       setEnabledAnchors(new Set());
+      if (
+        selectedLineIdRef.current &&
+        (selectedLineIdRef.current.startsWith("anc_") || selectedLineIdRef.current.startsWith("anchor_"))
+      ) {
+        setSelectedLineId(null);
+      }
     }
   };
 
@@ -777,12 +801,11 @@ export function AvwapChart() {
                 let closestLineId: string | null = null;
                 let minDistance = 16; // 16px tolerance
 
-                const candidates: { id: string; val: number | null | undefined }[] = [
-                  { id: "vwap", val: pt.vwap },
-                  { id: "hvwap", val: pt.hvwap },
-                  { id: "lvwap", val: pt.lvwap },
-                  { id: "bb", val: pt.bb_upper },
-                ];
+                const candidates: { id: string; val: number | null | undefined }[] = [];
+                if (showLinesRef.current.vwap) candidates.push({ id: "vwap", val: pt.vwap });
+                if (showLinesRef.current.hvwap) candidates.push({ id: "hvwap", val: pt.hvwap });
+                if (showLinesRef.current.lvwap) candidates.push({ id: "lvwap", val: pt.lvwap });
+                if (showLinesRef.current.bb) candidates.push({ id: "bb", val: pt.bb_upper });
 
                 if (pt.ma) {
                   Object.entries(pt.ma).forEach(([maName, val]) => {
@@ -1540,8 +1563,10 @@ export function AvwapChart() {
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <button
             onClick={() => {
-              if (!showVwap) setShowVwap(true);
-              setSelectedLineId((prev) => (prev === "vwap" ? null : "vwap"));
+              setShowVwap((prev) => {
+                if (prev && selectedLineId === "vwap") setSelectedLineId(null);
+                return !prev;
+              });
             }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
               selectedLineId === "vwap"
@@ -1550,14 +1575,16 @@ export function AvwapChart() {
                 ? "bg-slate-200 text-gray-900 border-white shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
-            title="클릭하여 VWAP 선 강조 / 해제"
+            title="클릭하여 VWAP 표시 ON/OFF"
           >
             VWAP
           </button>
           <button
             onClick={() => {
-              if (!showHvwap) setShowHvwap(true);
-              setSelectedLineId((prev) => (prev === "hvwap" ? null : "hvwap"));
+              setShowHvwap((prev) => {
+                if (prev && selectedLineId === "hvwap") setSelectedLineId(null);
+                return !prev;
+              });
             }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
               selectedLineId === "hvwap"
@@ -1566,14 +1593,16 @@ export function AvwapChart() {
                 ? "bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
-            title="클릭하여 HVWAP 선 강조 / 해제"
+            title="클릭하여 HVWAP 표시 ON/OFF"
           >
             HVWAP(최고)
           </button>
           <button
             onClick={() => {
-              if (!showLvwap) setShowLvwap(true);
-              setSelectedLineId((prev) => (prev === "lvwap" ? null : "lvwap"));
+              setShowLvwap((prev) => {
+                if (prev && selectedLineId === "lvwap") setSelectedLineId(null);
+                return !prev;
+              });
             }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
               selectedLineId === "lvwap"
@@ -1582,14 +1611,16 @@ export function AvwapChart() {
                 ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
-            title="클릭하여 LVWAP 선 강조 / 해제"
+            title="클릭하여 LVWAP 표시 ON/OFF"
           >
             LVWAP(최저)
           </button>
           <button
             onClick={() => {
-              if (!showBbUpper) setShowBbUpper(true);
-              setSelectedLineId((prev) => (prev === "bb" ? null : "bb"));
+              setShowBbUpper((prev) => {
+                if (prev && selectedLineId === "bb") setSelectedLineId(null);
+                return !prev;
+              });
             }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
               selectedLineId === "bb"
@@ -1598,7 +1629,7 @@ export function AvwapChart() {
                 ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
-            title="클릭하여 BB상단 선 강조 / 해제"
+            title="클릭하여 BB상단 표시 ON/OFF"
           >
             BB상단
           </button>
@@ -1643,14 +1674,9 @@ export function AvwapChart() {
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!isEnabled) {
-                      toggleAnchor(anc.id);
-                    }
-                    setSelectedLineId((prev) => (prev === anc.id ? null : anc.id));
-                  }}
+                  onClick={() => toggleAnchor(anc.id)}
                   className="flex items-center gap-1.5 text-left focus:outline-none"
-                  title="클릭하여 차트에서 이 앵커 선만 강조 / 해제"
+                  title={isEnabled ? "클릭하여 차트 표시 끄기 (OFF)" : "클릭하여 차트 표시 켜기 (ON)"}
                 >
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"

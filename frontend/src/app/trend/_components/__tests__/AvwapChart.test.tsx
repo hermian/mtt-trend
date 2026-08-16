@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import AvwapChart from "../AvwapChart";
@@ -16,12 +16,16 @@ const renderWithClient = (ui: React.ReactElement) => {
   );
 };
 
+let lastSubscribeClickCallback: ((param: any) => void) | null = null;
+
 // Mock lightweight-charts
 vi.mock("lightweight-charts", () => ({
   createChart: vi.fn(() => ({
     addSeries: vi.fn(() => ({
       setData: vi.fn(),
       createPriceLine: vi.fn(),
+      priceToCoordinate: vi.fn(() => 100),
+      applyOptions: vi.fn(),
     })),
     remove: vi.fn(),
     timeScale: vi.fn(() => ({
@@ -31,9 +35,12 @@ vi.mock("lightweight-charts", () => ({
     })),
     priceScale: vi.fn(() => ({
       applyOptions: vi.fn(),
+      width: vi.fn(() => 95),
     })),
     subscribeCrosshairMove: vi.fn(),
-    subscribeClick: vi.fn(),
+    subscribeClick: vi.fn((cb) => {
+      lastSubscribeClickCallback = cb;
+    }),
     unsubscribeClick: vi.fn(),
   })),
   ColorType: { Solid: "solid" },
@@ -354,7 +361,7 @@ describe("AvwapChart Component", () => {
     expect(screen.queryByText(/앵커로 설정할 캔들을 클릭하세요/)).not.toBeInTheDocument();
   });
 
-  it("toggles line highlight when clicking anchor badges and base lines", () => {
+  it("toggles anchor badges on/off when clicked", () => {
     vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,
       isLoading: false,
@@ -367,11 +374,49 @@ describe("AvwapChart Component", () => {
 
     renderWithClient(<AvwapChart />);
 
-    // Click VWAP button to highlight VWAP line
+    const anchorBtn = screen.getByText("AVWAP (2021-06-28)").closest("button")!;
+    expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 끄기 (OFF)");
+
+    // Click anchor badge -> turn OFF
+    fireEvent.click(anchorBtn);
+    expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 켜기 (ON)");
+
+    // Click anchor badge again -> turn ON
+    fireEvent.click(anchorBtn);
+    expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 끄기 (OFF)");
+  });
+
+  it("toggles base indicator lines on/off and highlights line on chart click", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // Click VWAP button to toggle VWAP line (OFF -> ON)
     const vwapBtn = screen.getByText("VWAP");
+    expect(vwapBtn).toHaveAttribute("title", "클릭하여 VWAP 표시 ON/OFF");
+    fireEvent.click(vwapBtn);
     fireEvent.click(vwapBtn);
 
-    // Banner appears
+    // Simulate clicking line inside chart canvas
+    expect(lastSubscribeClickCallback).toBeDefined();
+    if (lastSubscribeClickCallback) {
+      act(() => {
+        lastSubscribeClickCallback!({
+          time: "2024-01-02",
+          point: { x: 50, y: 100 },
+        });
+      });
+    }
+
+    // Banner appears indicating line is highlighted
     expect(screen.getByText(/선 강조 중/)).toBeInTheDocument();
 
     // Click release button

@@ -149,10 +149,19 @@ export function AvwapChart() {
     const scrollArea = containerRef.current;
     let onCustomWheel: (e: WheelEvent) => void;
 
+    const handleMouseLeave = () => {
+      if (verticalGuideRef.current) {
+        verticalGuideRef.current.style.display = "none";
+      }
+      setHoveredData(null);
+    };
+    scrollArea.addEventListener("mouseleave", handleMouseLeave);
+
     const cleanup = () => {
       if (onCustomWheel) {
         scrollArea.removeEventListener("wheel", onCustomWheel);
       }
+      scrollArea.removeEventListener("mouseleave", handleMouseLeave);
       chartsRef.current.forEach((c) => c.remove());
       chartsRef.current.clear();
       seriesRef.current.clear();
@@ -523,10 +532,11 @@ export function AvwapChart() {
 
         // Crosshair move & Vertical sync line
         chart.subscribeCrosshairMove((param) => {
-          if (!param.point || !param.time) {
+          if (!param.point || !param.time || param.point.x < 0) {
             if (verticalGuideRef.current) {
               verticalGuideRef.current.style.display = "none";
             }
+            setHoveredData(null);
             return;
           }
 
@@ -563,6 +573,8 @@ export function AvwapChart() {
               lvwap: matchedPoint.lvwap,
               ma: matchedPoint.ma,
             });
+          } else {
+            setHoveredData(null);
           }
         });
       });

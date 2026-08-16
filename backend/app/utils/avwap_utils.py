@@ -287,7 +287,9 @@ def load_avwap_chart_data(
         if "Amount" not in df_raw.columns or df_raw["Amount"].isnull().all():
             df_raw["Amount"] = df_raw["Close"] * df_raw["Volume"]
         else:
-            df_raw["Amount"] = pd.to_numeric(df_raw["Amount"], errors="coerce").fillna(df_raw["Close"] * df_raw["Volume"])
+            raw_amt = pd.to_numeric(df_raw["Amount"], errors="coerce").replace(0, np.nan)
+            df_raw["Amount"] = raw_amt.fillna(df_raw["Close"] * df_raw["Volume"])
+
 
         # 1. Resample to target interval
 
@@ -744,7 +746,9 @@ def _compute_asset_avwap_chart(
     if "Amount" not in raw_df.columns:
         raw_df["Amount"] = raw_df["Close"] * raw_df["Volume"]
     else:
-        raw_df["Amount"] = pd.to_numeric(raw_df["Amount"], errors="coerce").fillna(0.0)
+        raw_amt = pd.to_numeric(raw_df["Amount"], errors="coerce").replace(0, np.nan)
+        raw_df["Amount"] = raw_amt.fillna(raw_df["Close"] * raw_df["Volume"])
+
 
     # 1. Resample
     if interval_key == "1D":

@@ -1,8 +1,18 @@
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app
+from app.utils.avwap_utils import invalidate_avwap_cache
 
 client = TestClient(app)
+
+
+@pytest.fixture(autouse=True)
+def isolate_user_anchors(monkeypatch, tmp_path):
+    test_db = tmp_path / "test_user_anchors.db"
+    monkeypatch.setenv("MTT_USER_ANCHORS_DB_PATH", str(test_db))
+    invalidate_avwap_cache()
+    yield
+    invalidate_avwap_cache()
 
 
 def test_avwap_kospi_1d():
@@ -194,6 +204,14 @@ def test_avwap_us_indices():
             assert "vix_fix" in last_pt
             assert "amount" in last_pt
             assert "amount_sma50" in last_pt
+            assert last_pt["amount"] is not None and last_pt["amount"] > 0
+            assert last_pt["amount_sma50"] is not None and last_pt["amount_sma50"] > 0
+            # Verify no 0 amount points in the 2024-08-12 ~ 2026-08-04 range
+            if interval == "1D" and market in ("sp500", "nasdaq100"):
+                sub_pts = [p for p in data["points"] if "2024-08-12" <= p["date"] <= "2026-08-04"]
+                assert len(sub_pts) > 0
+                assert all(p["amount"] is not None and p["amount"] > 0 for p in sub_pts)
+
 
 
 def test_custom_avwap_anchor_crud(monkeypatch, tmp_path):

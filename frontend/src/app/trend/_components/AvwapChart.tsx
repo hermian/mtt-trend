@@ -52,6 +52,24 @@ export const MARKET_BUTTONS: { id: AvwapMarket; label: string }[] = [
   { id: "dow", label: "DOW" },
 ];
 
+function toDimColor(hexOrRgb: string, alpha: number = 0.5): string {
+  if (!hexOrRgb) return `rgba(148, 163, 184, ${alpha})`;
+  if (hexOrRgb.startsWith("#")) {
+    let hex = hexOrRgb.slice(1);
+    if (hex.length === 3) {
+      hex = hex.split("").map((c) => c + c).join("");
+    }
+    const r = parseInt(hex.slice(0, 2), 16) || 148;
+    const g = parseInt(hex.slice(2, 4), 16) || 163;
+    const b = parseInt(hex.slice(4, 6), 16) || 184;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  if (hexOrRgb.startsWith("rgb")) {
+    return hexOrRgb.replace("rgb(", "rgba(").replace(")", `, ${alpha})`);
+  }
+  return `rgba(148, 163, 184, ${alpha})`;
+}
+
 export function AvwapChart() {
   const [market, setMarket] = useState<AvwapMarket>("kospi");
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
@@ -82,6 +100,16 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
+  const enabledAnchorsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    enabledAnchorsRef.current = enabledAnchors;
+  }, [enabledAnchors]);
+
+  // Click-to-Highlight Line Selection
+  const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
+  const selectedLineIdRef = useRef<string | null>(null);
+  const mainLinesMapRef = useRef<Map<string, { id: string; name: string; series: ISeriesApi<any>; color: string; defaultWidth: number }>>(new Map());
 
   // Click-to-Anchor Picker Mode
   const [isPickerMode, setIsPickerMode] = useState(false);
@@ -94,13 +122,15 @@ export function AvwapChart() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && isPickerMode) {
-        setIsPickerMode(false);
+      if (e.key === "Escape") {
+        if (isPickerMode) setIsPickerMode(false);
+        if (selectedLineId) setSelectedLineId(null);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPickerMode]);
+  }, [isPickerMode, selectedLineId]);
+
 
 
   // Close search dropdown on click outside
@@ -145,6 +175,46 @@ export function AvwapChart() {
       });
     }
   }, [chartData?.anchors]);
+
+  // Synchronize line styles when selectedLineId changes (highlighting selected line, dimming others)
+  useEffect(() => {
+    selectedLineIdRef.current = selectedLineId;
+    const linesMap = mainLinesMapRef.current;
+    if (!linesMap || linesMap.size === 0) return;
+
+    const hasSelection = selectedLineId !== null;
+
+    linesMap.forEach((info, id) => {
+      if (!info.series || typeof info.series.applyOptions !== "function") return;
+      const isSelected = id === selectedLineId;
+
+      try {
+        if (!hasSelection) {
+          info.series.applyOptions({
+            lineWidth: info.defaultWidth as any,
+            color: info.color,
+          });
+        } else if (isSelected) {
+          info.series.applyOptions({
+            lineWidth: 4,
+            color: info.color,
+          });
+        } else {
+          info.series.applyOptions({
+            lineWidth: 1,
+            color: toDimColor(info.color, 0.5),
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to apply highlight to line series:", err);
+      }
+    });
+  }, [selectedLineId]);
+
+  // Reset highlight on target or interval change
+  useEffect(() => {
+    setSelectedLineId(null);
+  }, [market, symbol, interval]);
 
   const [hoveredData, setHoveredData] = useState<{
     time: string;
@@ -541,18 +611,28 @@ export function AvwapChart() {
           });
           activeSeries.push(candleSeries);
 
+          mainLinesMapRef.current.clear();
+
           // Moving Averages
           const samplePt = chartData.points[chartData.points.length - 1];
           if (samplePt?.ma) {
             Object.keys(samplePt.ma).forEach((maName) => {
               const color = MA_COLORS[maName] || "#94a3b8";
+              const width = maName === "EMA_10" || maName === "SMA_10" || maName === "SMA_3" ? 2 : 1;
               const s = chart.addSeries(LineSeries, {
                 color,
-                lineWidth: maName === "EMA_10" || maName === "SMA_10" || maName === "SMA_3" ? 2 : 1,
+                lineWidth: width,
                 priceLineVisible: false,
                 lastValueVisible: false,
               });
               activeSeries.push(s);
+              mainLinesMapRef.current.set(maName, {
+                id: maName,
+                name: maName,
+                series: s,
+                color,
+                defaultWidth: width,
+              });
             });
           }
 
@@ -565,6 +645,13 @@ export function AvwapChart() {
             lastValueVisible: false,
           });
           activeSeries.push(bbSeries);
+          mainLinesMapRef.current.set("bb", {
+            id: "bb",
+            name: "BB상단",
+            series: bbSeries,
+            color: "#06b6d4",
+            defaultWidth: 1,
+          });
 
           // Base VWAP, HVWAP, LVWAP
           const vwapSeries = chart.addSeries(LineSeries, {
@@ -575,6 +662,13 @@ export function AvwapChart() {
             lastValueVisible: false,
           });
           activeSeries.push(vwapSeries);
+          mainLinesMapRef.current.set("vwap", {
+            id: "vwap",
+            name: "VWAP",
+            series: vwapSeries,
+            color: "#ffffff",
+            defaultWidth: 2,
+          });
 
           const hvwapSeries = chart.addSeries(LineSeries, {
             color: "#f43f5e",
@@ -584,6 +678,13 @@ export function AvwapChart() {
             lastValueVisible: false,
           });
           activeSeries.push(hvwapSeries);
+          mainLinesMapRef.current.set("hvwap", {
+            id: "hvwap",
+            name: "HVWAP(최고)",
+            series: hvwapSeries,
+            color: "#f43f5e",
+            defaultWidth: 2,
+          });
 
           const lvwapSeries = chart.addSeries(LineSeries, {
             color: "#eab308",
@@ -593,6 +694,13 @@ export function AvwapChart() {
             lastValueVisible: false,
           });
           activeSeries.push(lvwapSeries);
+          mainLinesMapRef.current.set("lvwap", {
+            id: "lvwap",
+            name: "LVWAP(최저)",
+            series: lvwapSeries,
+            color: "#eab308",
+            defaultWidth: 2,
+          });
 
           // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
@@ -605,10 +713,17 @@ export function AvwapChart() {
                 lastValueVisible: false,
               });
               anchorSeriesMapRef.current.set(anc.id, aSeries);
+              mainLinesMapRef.current.set(anc.id, {
+                id: anc.id,
+                name: anc.name || `AVWAP (${anc.anchor_date})`,
+                series: aSeries,
+                color: anc.color,
+                defaultWidth: 2,
+              });
             });
           }
 
-          // Click-to-Anchor coordinate subscription on main price chart
+          // Click-to-Anchor & Line Selection subscription on main price chart
           chart.subscribeClick((param) => {
             if (!param.time) return;
             const clickedDate =
@@ -628,8 +743,60 @@ export function AvwapChart() {
               setShowQuickAnchorPopover(true);
               setIsPickerMode(false);
               isPickerModeRef.current = false;
+              return;
             }
+
+            // Line Click Selection: Find closest line near clicked Y coordinate
+            if (param.point && candleSeries && typeof (candleSeries as any).priceToCoordinate === "function") {
+              const pt = chartData.points.find((p) => p.date === clickedDate);
+              if (pt) {
+                let closestLineId: string | null = null;
+                let minDistance = 16; // 16px tolerance
+
+                const candidates: { id: string; val: number | null | undefined }[] = [
+                  { id: "vwap", val: pt.vwap },
+                  { id: "hvwap", val: pt.hvwap },
+                  { id: "lvwap", val: pt.lvwap },
+                  { id: "bb", val: pt.bb_upper },
+                ];
+
+                if (pt.ma) {
+                  Object.entries(pt.ma).forEach(([maName, val]) => {
+                    candidates.push({ id: maName, val });
+                  });
+                }
+
+                chartData.anchors?.forEach((anc) => {
+                  if (enabledAnchorsRef.current.has(anc.id)) {
+                    const matchVal = anc.values.find((v) => v.date === clickedDate)?.value;
+                    candidates.push({ id: anc.id, val: matchVal });
+                  }
+                });
+
+                for (const c of candidates) {
+                  if (c.val != null && Number.isFinite(c.val)) {
+                    const yCoord = (candleSeries as any).priceToCoordinate(c.val);
+                    if (yCoord != null) {
+                      const dist = Math.abs(yCoord - param.point.y);
+                      if (dist < minDistance) {
+                        minDistance = dist;
+                        closestLineId = c.id;
+                      }
+                    }
+                  }
+                }
+
+                if (closestLineId) {
+                  setSelectedLineId((prev) => (prev === closestLineId ? null : closestLineId));
+                  return;
+                }
+              }
+            }
+
+            // Clicked outside any line -> clear highlight
+            setSelectedLineId(null);
           });
+
         }
 
 
@@ -1256,42 +1423,66 @@ export function AvwapChart() {
         {/* Right: Quick Anchor & Indicator Toggles */}
         <div className="flex items-center gap-2 flex-wrap text-xs">
           <button
-            onClick={() => setShowVwap(!showVwap)}
+            onClick={() => {
+              if (!showVwap) setShowVwap(true);
+              setSelectedLineId((prev) => (prev === "vwap" ? null : "vwap"));
+            }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
-              showVwap
+              selectedLineId === "vwap"
+                ? "ring-2 ring-white border-white bg-slate-100 text-gray-950 font-bold shadow-md"
+                : showVwap
                 ? "bg-slate-200 text-gray-900 border-white shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
+            title="클릭하여 VWAP 선 강조 / 해제"
           >
             VWAP
           </button>
           <button
-            onClick={() => setShowHvwap(!showHvwap)}
+            onClick={() => {
+              if (!showHvwap) setShowHvwap(true);
+              setSelectedLineId((prev) => (prev === "hvwap" ? null : "hvwap"));
+            }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
-              showHvwap
+              selectedLineId === "hvwap"
+                ? "ring-2 ring-rose-400 border-rose-400 bg-rose-500/40 text-rose-200 font-bold shadow-md"
+                : showHvwap
                 ? "bg-rose-500/20 text-rose-400 border-rose-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
+            title="클릭하여 HVWAP 선 강조 / 해제"
           >
             HVWAP(최고)
           </button>
           <button
-            onClick={() => setShowLvwap(!showLvwap)}
+            onClick={() => {
+              if (!showLvwap) setShowLvwap(true);
+              setSelectedLineId((prev) => (prev === "lvwap" ? null : "lvwap"));
+            }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
-              showLvwap
+              selectedLineId === "lvwap"
+                ? "ring-2 ring-yellow-400 border-yellow-400 bg-yellow-500/40 text-yellow-200 font-bold shadow-md"
+                : showLvwap
                 ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
+            title="클릭하여 LVWAP 선 강조 / 해제"
           >
             LVWAP(최저)
           </button>
           <button
-            onClick={() => setShowBbUpper(!showBbUpper)}
+            onClick={() => {
+              if (!showBbUpper) setShowBbUpper(true);
+              setSelectedLineId((prev) => (prev === "bb" ? null : "bb"));
+            }}
             className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
-              showBbUpper
+              selectedLineId === "bb"
+                ? "ring-2 ring-cyan-400 border-cyan-400 bg-cyan-500/40 text-cyan-200 font-bold shadow-md"
+                : showBbUpper
                 ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-sm"
                 : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
             }`}
+            title="클릭하여 BB상단 선 강조 / 해제"
           >
             BB상단
           </button>
@@ -1320,21 +1511,30 @@ export function AvwapChart() {
           {chartData?.anchors && chartData.anchors.map((anc) => {
             const isEnabled = enabledAnchors.has(anc.id);
             const isCustom = anc.id.startsWith("anc_") || !anc.id.startsWith("anchor_");
+            const isSelected = selectedLineId === anc.id;
             return (
               <div
                 key={anc.id}
                 className={`group flex-shrink-0 rounded-full border transition-all flex items-center gap-1 px-2 py-0.5 ${
-                  isEnabled
+                  isSelected
+                    ? "ring-2 ring-indigo-400 border-indigo-400 font-bold shadow-md bg-indigo-950/70 text-indigo-200"
+                    : isEnabled
                     ? isCustom
-                      ? "bg-emerald-950/40 text-emerald-300 border-emerald-700/80 font-medium shadow-sm"
-                      : "bg-gray-800 text-white border-gray-600 font-medium"
+                      ? "bg-emerald-950/40 text-emerald-300 border-emerald-700/80 font-medium shadow-sm hover:border-emerald-500"
+                      : "bg-gray-800 text-white border-gray-600 font-medium hover:border-gray-400"
                     : "bg-gray-900/60 text-gray-500 border-gray-800 hover:text-gray-400"
                 }`}
               >
                 <button
                   type="button"
-                  onClick={() => toggleAnchor(anc.id)}
+                  onClick={() => {
+                    if (!isEnabled) {
+                      toggleAnchor(anc.id);
+                    }
+                    setSelectedLineId((prev) => (prev === anc.id ? null : anc.id));
+                  }}
                   className="flex items-center gap-1.5 text-left focus:outline-none"
+                  title="클릭하여 차트에서 이 앵커 선만 강조 / 해제"
                 >
                   <span
                     className="w-2 h-2 rounded-full flex-shrink-0"
@@ -1552,6 +1752,21 @@ export function AvwapChart() {
               <span className="text-gray-500">|</span>
               <span className="text-gray-400">AVWAP & MAs</span>
             </div>
+
+            {/* Highlighted Line Guide Badge */}
+            {selectedLineId && !isPickerMode && (
+              <div className="absolute top-2 right-4 z-20 flex items-center gap-2 bg-indigo-950/90 text-indigo-200 border border-indigo-500/80 px-3 py-1 rounded-lg text-xs font-bold shadow-xl backdrop-blur-md">
+                <span>✨ {mainLinesMapRef.current.get(selectedLineId)?.name || selectedLineId} 선 강조 중</span>
+                <button
+                  type="button"
+                  onClick={() => setSelectedLineId(null)}
+                  className="ml-1 text-indigo-300 hover:text-white px-1.5 py-0.5 rounded bg-indigo-900/70 text-[10px] border border-indigo-700 hover:bg-indigo-800 transition-colors"
+                  title="강조 해제 (ESC 또는 빈 공간 클릭)"
+                >
+                  ✕ 해제
+                </button>
+              </div>
+            )}
 
             {/* Picker Mode Guide Badge */}
             {isPickerMode && (

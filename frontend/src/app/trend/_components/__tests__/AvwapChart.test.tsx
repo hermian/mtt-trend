@@ -349,5 +349,30 @@ describe("AvwapChart Component", () => {
     fireEvent.click(cancelBtn);
     expect(screen.queryByText(/앵커로 설정할 캔들을 클릭하세요/)).not.toBeInTheDocument();
   });
-});
 
+  it("toggles line highlight when clicking anchor badges and base lines", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // Click VWAP button to highlight VWAP line
+    const vwapBtn = screen.getByText("VWAP");
+    fireEvent.click(vwapBtn);
+
+    // Banner appears
+    expect(screen.getByText(/선 강조 중/)).toBeInTheDocument();
+
+    // Click release button
+    const releaseBtn = screen.getByText("✕ 해제");
+    fireEvent.click(releaseBtn);
+    expect(screen.queryByText(/선 강조 중/)).not.toBeInTheDocument();
+  });
+});

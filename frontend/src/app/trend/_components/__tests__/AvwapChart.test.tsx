@@ -55,6 +55,7 @@ describe("AvwapChart Component", () => {
         vix_fix: 5.2,
         rsi: 58.4,
         mdd: -3.5,
+        h52_chg: -4.2,
         vwap: 2605.0,
         hvwap: 2615.0,
         lvwap: 2595.0,
@@ -95,6 +96,8 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("HVWAP(최고)")).toBeInTheDocument();
     expect(screen.getByText("LVWAP(최저)")).toBeInTheDocument();
     expect(screen.getByText(/2021-06-28/)).toBeInTheDocument();
+    expect(screen.getByText("52HChg:")).toBeInTheDocument();
+    expect(screen.getByText("-4.2%")).toBeInTheDocument();
     expect(screen.getByText("MDD (%)")).toBeInTheDocument();
     expect(screen.getByText("-3.5%")).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();

@@ -91,6 +91,7 @@ export function AvwapChart() {
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
     rsi?: number | null;
     mdd?: number | null;
+    h52Chg?: number | null;
     vixFix?: number | null;
     amount?: number | null;
     amountSma50?: number | null;
@@ -553,6 +554,7 @@ export function AvwapChart() {
               },
               rsi: matchedPoint.rsi,
               mdd: matchedPoint.mdd,
+              h52Chg: matchedPoint.h52_chg,
               vixFix: matchedPoint.vix_fix,
               amount: matchedPoint.amount,
               amountSma50: matchedPoint.amount_sma50,
@@ -836,6 +838,7 @@ export function AvwapChart() {
     },
     rsi: latestPoint.rsi,
     mdd: latestPoint.mdd,
+    h52Chg: latestPoint.h52_chg,
     vixFix: latestPoint.vix_fix,
     amount: latestPoint.amount,
     amountSma50: latestPoint.amount_sma50,
@@ -1137,6 +1140,22 @@ export function AvwapChart() {
                   }`}
                 >
                   {activeDisplay.mdd.toFixed(1)}%
+                </span>
+              </span>
+            )}
+            {activeDisplay.h52Chg !== null && activeDisplay.h52Chg !== undefined && (
+              <span>
+                52HChg:{" "}
+                <span
+                  className={`font-bold ${
+                    activeDisplay.h52Chg === 0
+                      ? "text-emerald-400"
+                      : activeDisplay.h52Chg <= -20
+                      ? "text-rose-400"
+                      : "text-sky-400"
+                  }`}
+                >
+                  {activeDisplay.h52Chg >= 0 ? `+${activeDisplay.h52Chg.toFixed(1)}%` : `${activeDisplay.h52Chg.toFixed(1)}%`}
                 </span>
               </span>
             )}

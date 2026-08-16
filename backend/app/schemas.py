@@ -384,6 +384,7 @@ class AvwapPoint(BaseModel):
     vix_fix: Optional[float] = None
     rsi: Optional[float] = None
     mdd: Optional[float] = None
+    h52_chg: Optional[float] = None
     
     vwap: Optional[float] = None
     hvwap: Optional[float] = None

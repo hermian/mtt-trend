@@ -741,6 +741,7 @@ export interface AvwapPoint {
   vix_fix: number | null;
   rsi: number | null;
   mdd: number | null;
+  h52_chg: number | null;
   vwap: number | null;
   hvwap: number | null;
   lvwap: number | null;

@@ -99,6 +99,13 @@ def _calculate_drawdown(series: pd.Series) -> pd.Series:
     return dd.fillna(0.0)
 
 
+def _calculate_52w_high_change(df: pd.DataFrame) -> pd.Series:
+    """52주(365일) 최고가 대비 하락률(%): (Close - 52W_High) / 52W_High * 100."""
+    h52 = df["High"].rolling("365D", min_periods=1).max()
+    chg = (df["Close"] - h52) / h52.replace(0, np.nan) * 100.0
+    return chg.fillna(0.0)
+
+
 def _calculate_vwap_series(df: pd.DataFrame, start_idx: Optional[int] = None) -> pd.Series:
     """Calculate VWAP: typical_price = (H + L + C + O) / 4."""
     if start_idx is not None and start_idx < len(df):
@@ -227,9 +234,10 @@ def load_avwap_chart_data(
         close_max22 = df["Close"].rolling(window=vix_period, min_periods=1).max()
         vix_fix_series = (close_max22 - df["Low"]) / close_max22.replace(0, np.nan) * 100.0
 
-        # 6. RSI (14) & Drawdown (MDD, %)
+        # 6. RSI (14) & Drawdown (MDD, %) & 52W High Change (%)
         rsi_series = _calculate_rsi(df["Close"], period=min(14, max(2, len(df) - 1)))
         mdd_series = _calculate_drawdown(df["Close"])
+        h52_chg_series = _calculate_52w_high_change(df)
 
         # 7. VWAP (Base lookback), HVWAP (Peak), LVWAP (Trough)
         vwap_lb = cfg["vwap_lookback"]
@@ -302,6 +310,7 @@ def load_avwap_chart_data(
             vix = vix_fix_series.iloc[idx]
             rsi_val = rsi_series.iloc[idx]
             mdd_val = mdd_series.iloc[idx]
+            h52_val = h52_chg_series.iloc[idx]
             
             vwap_val = vwap_series.iloc[idx]
             hvwap_val = hvwap_series.iloc[idx]
@@ -323,6 +332,7 @@ def load_avwap_chart_data(
                 vix_fix=round(float(vix), 2) if pd.notna(vix) and np.isfinite(vix) else None,
                 rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
                 mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
+                h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
                 vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
                 hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
                 lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,
@@ -562,12 +572,13 @@ def load_stock_avwap_chart_data(
             bb_std = df["Close"].rolling(window=bb_len).std()
             bb_upper_series = bb_mid + (bb_std * 2.0)
 
-        # 5. VIX Fix & RSI & Drawdown (MDD, %)
+        # 5. VIX Fix & RSI & Drawdown (MDD, %) & 52W High Change (%)
         vix_period = min(22, len(df))
         close_max22 = df["Close"].rolling(window=vix_period, min_periods=1).max()
         vix_fix_series = (close_max22 - df["Low"]) / close_max22.replace(0, np.nan) * 100.0
         rsi_series = _calculate_rsi(df["Close"], period=min(14, max(2, len(df) - 1)))
         mdd_series = _calculate_drawdown(df["Close"])
+        h52_chg_series = _calculate_52w_high_change(df)
 
         # 6. Base VWAP, HVWAP, LVWAP
         vwap_lb = cfg["vwap_lookback"]
@@ -661,6 +672,7 @@ def load_stock_avwap_chart_data(
             vix = vix_fix_series.iloc[idx]
             rsi_val = rsi_series.iloc[idx]
             mdd_val = mdd_series.iloc[idx]
+            h52_val = h52_chg_series.iloc[idx]
 
             vwap_val = vwap_series.iloc[idx]
             hvwap_val = hvwap_series.iloc[idx]
@@ -682,6 +694,7 @@ def load_stock_avwap_chart_data(
                 vix_fix=round(float(vix), 2) if pd.notna(vix) and np.isfinite(vix) else None,
                 rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
                 mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
+                h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
                 vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
                 hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
                 lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,

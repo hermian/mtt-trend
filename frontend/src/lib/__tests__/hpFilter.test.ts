@@ -5,7 +5,20 @@ import {
   hpFilterSeries,
   HP_LAMBDA_WEEKLY,
   HP_LAMBDA_DAILY,
+  HP_LAMBDA_MONTHLY,
+  HP_LAMBDA_YEARLY,
+  getHpLambdaForInterval,
 } from "../hpFilter";
+
+describe("getHpLambdaForInterval", () => {
+  it("주기별 적합한 lambda 계수를 반환한다", () => {
+    expect(getHpLambdaForInterval("1D")).toBe(HP_LAMBDA_DAILY);
+    expect(getHpLambdaForInterval("1W")).toBe(HP_LAMBDA_WEEKLY);
+    expect(getHpLambdaForInterval("1M")).toBe(HP_LAMBDA_MONTHLY);
+    expect(getHpLambdaForInterval("1Y")).toBe(HP_LAMBDA_YEARLY);
+    expect(getHpLambdaForInterval(undefined)).toBe(HP_LAMBDA_DAILY);
+  });
+});
 
 describe("hpFilter", () => {
   it("빈 배열은 빈 결과를 반환한다", () => {

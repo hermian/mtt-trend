@@ -12,6 +12,29 @@ export const HP_LAMBDA_DAILY = 1_000_000;
 /** FinJump 주간 관행값 */
 export const HP_LAMBDA_WEEKLY = 1_600;
 
+/** 월봉 평활화 계수 (Ravn-Uhlig 월간 표준) */
+export const HP_LAMBDA_MONTHLY = 14_400;
+
+/** 연봉 평활화 계수 (Hodrick-Prescott 연간 표준) */
+export const HP_LAMBDA_YEARLY = 100;
+
+/**
+ * 차트 주기(interval)에 적합한 HP 평활화 계수(lambda) 반환
+ */
+export function getHpLambdaForInterval(interval?: string): number {
+  switch (interval) {
+    case "1W":
+      return HP_LAMBDA_WEEKLY;
+    case "1M":
+      return HP_LAMBDA_MONTHLY;
+    case "1Y":
+      return HP_LAMBDA_YEARLY;
+    case "1D":
+    default:
+      return HP_LAMBDA_DAILY;
+  }
+}
+
 export interface HpResult {
   trend: number[];
   cycle: number[];

@@ -565,3 +565,15 @@ Tested: Backend API pytest test_min_rs_filter (14 tests) and Frontend Vitest Con
 Related: #30
 ```
 
+---
+
+## 8. Chart Development Rules (lightweight-charts)
+
+### [HARD] Never Use `title` in `createPriceLine`
+- `lightweight-charts`에서 `createPriceLine({ title: "..." })`의 `title` 속성은 차트 캔버스 좌측(Pane Left)에 텍스트를 오버레이하여 캔들/봉/라인을 가리는 문제가 발생합니다.
+- **규칙**:
+  - `createPriceLine` 및 `applyOptions` 호출 시 반드시 `title: ""` (빈 문자열) 또는 `title` 속성을 생략할 것.
+  - 마우스 호버 시 수치는 `axisLabelVisible: true`, `color: <지표색상>`, `lineVisible: false`로 **오른쪽 Y축(Price Scale) 눈금자 배지**에만 표시할 것.
+  - 지표명 및 상세 수치는 상단 HUD 헤더 바 또는 툴팁에 표시할 것.
+
+

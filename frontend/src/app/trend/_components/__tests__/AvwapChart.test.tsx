@@ -17,13 +17,17 @@ const renderWithClient = (ui: React.ReactElement) => {
 };
 
 let lastSubscribeClickCallback: ((param: any) => void) | null = null;
+let lastSubscribeCrosshairMoveCallback: ((param: any) => void) | null = null;
 
 // Mock lightweight-charts
 vi.mock("lightweight-charts", () => ({
   createChart: vi.fn(() => ({
     addSeries: vi.fn(() => ({
       setData: vi.fn(),
-      createPriceLine: vi.fn(),
+      createPriceLine: vi.fn((opts) => ({
+        applyOptions: vi.fn(),
+        options: vi.fn(() => opts),
+      })),
       priceToCoordinate: vi.fn(() => 100),
       applyOptions: vi.fn(),
     })),
@@ -37,7 +41,9 @@ vi.mock("lightweight-charts", () => ({
       applyOptions: vi.fn(),
       width: vi.fn(() => 95),
     })),
-    subscribeCrosshairMove: vi.fn(),
+    subscribeCrosshairMove: vi.fn((cb) => {
+      lastSubscribeCrosshairMoveCallback = cb;
+    }),
     subscribeClick: vi.fn((cb) => {
       lastSubscribeClickCallback = cb;
     }),
@@ -613,5 +619,45 @@ describe("AvwapChart Component", () => {
     fireEvent.click(hpBtn);
     expect(screen.getByText("HP 이탈도")).toBeInTheDocument();
     expect(screen.getByText(/HP추세:/)).toBeInTheDocument();
+  });
+
+  it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    expect(lastSubscribeCrosshairMoveCallback).toBeDefined();
+
+    if (lastSubscribeCrosshairMoveCallback) {
+      act(() => {
+        lastSubscribeCrosshairMoveCallback!({
+          time: "2024-01-02",
+          point: { x: 100, y: 100 },
+        });
+      });
+    }
+
+    // HUD values are displayed
+    expect(screen.getByText("2024-01-02")).toBeInTheDocument();
+    expect(screen.getByText("2,610")).toBeInTheDocument();
+    expect(screen.getByText("15.4조")).toBeInTheDocument();
+
+    // Mouse leave / crosshair reset
+    if (lastSubscribeCrosshairMoveCallback) {
+      act(() => {
+        lastSubscribeCrosshairMoveCallback!({
+          time: null,
+          point: null,
+        });
+      });
+    }
   });
 });

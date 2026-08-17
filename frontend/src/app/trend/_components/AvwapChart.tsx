@@ -6,6 +6,7 @@ import {
   createChart,
   IChartApi,
   ISeriesApi,
+  IPriceLine,
   ColorType,
   CandlestickSeries,
   LineSeries,
@@ -97,6 +98,7 @@ export function AvwapChart() {
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<any>[]>>(new Map());
   const anchorSeriesMapRef = useRef<Map<string, ISeriesApi<any>>>(new Map());
+  const crosshairPriceLinesRef = useRef<Map<string, IPriceLine>>(new Map());
   const isSyncingRef = useRef(false);
   const [isMobile, setIsMobile] = useState<boolean>(false);
 
@@ -482,6 +484,7 @@ export function AvwapChart() {
         verticalGuideRef.current.style.display = "none";
       }
       setHoveredData(null);
+      clearCrosshairPriceLines();
     };
     scrollArea.addEventListener("mouseleave", handleMouseLeave);
 
@@ -494,8 +497,240 @@ export function AvwapChart() {
       chartsRef.current.clear();
       seriesRef.current.clear();
       anchorSeriesMapRef.current.clear();
+      crosshairPriceLinesRef.current.clear();
     };
     cleanup();
+
+    const clearCrosshairPriceLines = () => {
+      crosshairPriceLinesRef.current.forEach((pl) => {
+        try {
+          pl.applyOptions({ axisLabelVisible: false });
+        } catch {}
+      });
+    };
+
+    const updateCrosshairPriceLines = (pt: AvwapPoint, prevPt?: AvwapPoint) => {
+      const plMap = crosshairPriceLinesRef.current;
+      if (!plMap || plMap.size === 0) return;
+
+      // 1. MDD / Drawdown
+      const curDd =
+        ddPeriod === "52w"
+          ? (pt.dd_52w ?? pt.h52_chg ?? pt.mdd)
+          : ddPeriod === "3y"
+          ? (pt.dd_3y ?? pt.mdd)
+          : pt.mdd;
+      const mddPl = plMap.get("mdd");
+      if (mddPl) {
+        if (curDd != null && Number.isFinite(curDd)) {
+          mddPl.applyOptions({
+            price: curDd,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          mddPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // 2. Main Price (Candle Close)
+      const closePl = plMap.get("close");
+      if (closePl) {
+        if (pt.close != null && Number.isFinite(pt.close)) {
+          const isUp = pt.open != null ? pt.close >= pt.open : true;
+          closePl.applyOptions({
+            price: pt.close,
+            color: isUp ? "#ef4444" : "#3b82f6",
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          closePl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // MAs
+      if (pt.ma) {
+        Object.entries(pt.ma).forEach(([maName, val]) => {
+          const maPl = plMap.get(`ma_${maName}`);
+          if (maPl) {
+            if (val != null && Number.isFinite(val)) {
+              maPl.applyOptions({
+                price: val,
+                axisLabelVisible: true,
+                title: "",
+              });
+            } else {
+              maPl.applyOptions({ axisLabelVisible: false });
+            }
+          }
+        });
+      }
+
+      // BB Upper
+      const bbPl = plMap.get("bb");
+      if (bbPl) {
+        if (showLinesRef.current.bb && pt.bb_upper != null && Number.isFinite(pt.bb_upper)) {
+          bbPl.applyOptions({
+            price: pt.bb_upper,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          bbPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // Base VWAP
+      const vwapPl = plMap.get("vwap");
+      if (vwapPl) {
+        if (showLinesRef.current.vwap && pt.vwap != null && Number.isFinite(pt.vwap)) {
+          vwapPl.applyOptions({
+            price: pt.vwap,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          vwapPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // HVWAP
+      const hvwapPl = plMap.get("hvwap");
+      if (hvwapPl) {
+        if (showLinesRef.current.hvwap && pt.hvwap != null && Number.isFinite(pt.hvwap)) {
+          hvwapPl.applyOptions({
+            price: pt.hvwap,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          hvwapPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // LVWAP
+      const lvwapPl = plMap.get("lvwap");
+      if (lvwapPl) {
+        if (showLinesRef.current.lvwap && pt.lvwap != null && Number.isFinite(pt.lvwap)) {
+          lvwapPl.applyOptions({
+            price: pt.lvwap,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          lvwapPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // HP Trend
+      const hpTrendPl = plMap.get("hp_trend");
+      const hpInfo = hpMap.get(toChartTime(pt.date) || pt.date);
+      if (hpTrendPl) {
+        if (showLinesRef.current.hp && hpInfo?.trend != null && Number.isFinite(hpInfo.trend)) {
+          hpTrendPl.applyOptions({
+            price: hpInfo.trend,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          hpTrendPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // Anchors
+      chartData?.anchors?.forEach((anc) => {
+        const ancPl = plMap.get(`anc_${anc.id}`);
+        if (ancPl) {
+          if (enabledAnchorsRef.current.has(anc.id)) {
+            const matchVal = anc.values.find((v) => v.date === pt.date)?.value;
+            if (matchVal != null && Number.isFinite(matchVal)) {
+              ancPl.applyOptions({
+                price: matchVal,
+                axisLabelVisible: true,
+                title: "",
+              });
+            } else {
+              ancPl.applyOptions({ axisLabelVisible: false });
+            }
+          } else {
+            ancPl.applyOptions({ axisLabelVisible: false });
+          }
+        }
+      });
+
+      // HP Dev Panel
+      const hpDevPl = plMap.get("hp_dev");
+      if (hpDevPl) {
+        if (showLinesRef.current.hp && hpInfo?.deviation != null && Number.isFinite(hpInfo.deviation)) {
+          hpDevPl.applyOptions({
+            price: hpInfo.deviation,
+            color: hpInfo.deviation >= 100 ? "#f472b6" : "#3b82f6",
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          hpDevPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // 3. Volume & Vol MA
+      const isUpBar = prevPt ? pt.close >= prevPt.close : (pt.open != null ? pt.close >= pt.open : true);
+      const volPl = plMap.get("vol");
+      if (volPl) {
+        if (pt.volume != null && Number.isFinite(pt.volume)) {
+          volPl.applyOptions({
+            price: pt.volume,
+            color: isUpBar ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.9)",
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          volPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      const volMaPl = plMap.get("vol_ma");
+      if (volMaPl) {
+        if (pt.vol_ma != null && Number.isFinite(pt.vol_ma)) {
+          volMaPl.applyOptions({
+            price: pt.vol_ma,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          volMaPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // 4. Amount & SMA50
+      const amtPl = plMap.get("amt");
+      if (amtPl) {
+        if (pt.amount != null && Number.isFinite(pt.amount)) {
+          amtPl.applyOptions({
+            price: pt.amount,
+            color: isUpBar ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.9)",
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          amtPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      const amtSmaPl = plMap.get("amt_sma");
+      if (amtSmaPl) {
+        if (pt.amount_sma50 != null && Number.isFinite(pt.amount_sma50)) {
+          amtSmaPl.applyOptions({
+            price: pt.amount_sma50,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          amtSmaPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+    };
 
     try {
       const syncRightPriceScaleWidths = () => {
@@ -694,6 +929,19 @@ export function AvwapChart() {
             lineStyle: LineStyle.Dashed,
             axisLabelVisible: false,
           });
+
+          // Dynamic hover price line on MDD
+          const mddHoverLine = mddSeries.createPriceLine({
+            price: 0,
+            color: "#38bdf8",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("mdd", mddHoverLine);
+
           activeSeries.push(mddSeries);
         }
 
@@ -709,6 +957,17 @@ export function AvwapChart() {
             wickDownColor: "#3b82f6",
           });
           activeSeries.push(candleSeries);
+
+          const closeHoverLine = candleSeries.createPriceLine({
+            price: 0,
+            color: "#ef4444",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("close", closeHoverLine);
 
           mainLinesMapRef.current.clear();
 
@@ -732,6 +991,17 @@ export function AvwapChart() {
                 color,
                 defaultWidth: width,
               });
+
+              const maHoverLine = s.createPriceLine({
+                price: 0,
+                color,
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                lineVisible: false,
+                axisLabelVisible: false,
+                title: "",
+              });
+              crosshairPriceLinesRef.current.set(`ma_${maName}`, maHoverLine);
             });
           }
 
@@ -751,6 +1021,16 @@ export function AvwapChart() {
             color: "#06b6d4",
             defaultWidth: 1,
           });
+          const bbHoverLine = bbSeries.createPriceLine({
+            price: 0,
+            color: "#06b6d4",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("bb", bbHoverLine);
 
           // Base VWAP, HVWAP, LVWAP
           const vwapSeries = chart.addSeries(LineSeries, {
@@ -768,6 +1048,17 @@ export function AvwapChart() {
             color: "#ffffff",
             defaultWidth: 2,
           });
+          const vwapHoverLine = vwapSeries.createPriceLine({
+            price: 0,
+            color: "#ffffff",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+            axisLabelTextColor: "#000000",
+          });
+          crosshairPriceLinesRef.current.set("vwap", vwapHoverLine);
 
           const hvwapSeries = chart.addSeries(LineSeries, {
             color: "#f43f5e",
@@ -784,6 +1075,16 @@ export function AvwapChart() {
             color: "#f43f5e",
             defaultWidth: 2,
           });
+          const hvwapHoverLine = hvwapSeries.createPriceLine({
+            price: 0,
+            color: "#f43f5e",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("hvwap", hvwapHoverLine);
 
           const lvwapSeries = chart.addSeries(LineSeries, {
             color: "#eab308",
@@ -800,6 +1101,17 @@ export function AvwapChart() {
             color: "#eab308",
             defaultWidth: 2,
           });
+          const lvwapHoverLine = lvwapSeries.createPriceLine({
+            price: 0,
+            color: "#eab308",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+            axisLabelTextColor: "#000000",
+          });
+          crosshairPriceLinesRef.current.set("lvwap", lvwapHoverLine);
 
           // HP Long-term Trend (호드릭-프레스콧 장기추세 분홍 점선)
           const hpTrendSeries = chart.addSeries(LineSeries, {
@@ -817,6 +1129,16 @@ export function AvwapChart() {
             color: "#f472b6",
             defaultWidth: 2,
           });
+          const hpTrendHoverLine = hpTrendSeries.createPriceLine({
+            price: 0,
+            color: "#f472b6",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("hp_trend", hpTrendHoverLine);
 
           // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
@@ -836,6 +1158,17 @@ export function AvwapChart() {
                 color: anc.color,
                 defaultWidth: 2,
               });
+
+              const ancHoverLine = aSeries.createPriceLine({
+                price: 0,
+                color: anc.color,
+                lineWidth: 1,
+                lineStyle: LineStyle.Dotted,
+                lineVisible: false,
+                axisLabelVisible: false,
+                title: "",
+              });
+              crosshairPriceLinesRef.current.set(`anc_${anc.id}`, ancHoverLine);
             });
           }
 
@@ -944,6 +1277,18 @@ export function AvwapChart() {
             lineStyle: LineStyle.Solid,
             axisLabelVisible: true,
           });
+
+          const hpDevHoverLine = hpDevSeries.createPriceLine({
+            price: 100,
+            color: "#f472b6",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("hp_dev", hpDevHoverLine);
+
           activeSeries.push(hpDevSeries);
         }
 
@@ -956,13 +1301,36 @@ export function AvwapChart() {
           });
           activeSeries.push(volSeries);
 
+          const volHoverLine = volSeries.createPriceLine({
+            price: 0,
+            color: "rgba(239, 68, 68, 0.9)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("vol", volHoverLine);
+
           const volMaSeries = chart.addSeries(LineSeries, {
             color: "#60a5fa",
             lineWidth: 1,
+            priceFormat: { type: "volume" },
             priceLineVisible: false,
             lastValueVisible: false,
           });
           activeSeries.push(volMaSeries);
+
+          const volMaHoverLine = volMaSeries.createPriceLine({
+            price: 0,
+            color: "#60a5fa",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("vol_ma", volMaHoverLine);
 
           const vixSeries = chart.addSeries(LineSeries, {
             color: "#10b981",
@@ -981,29 +1349,63 @@ export function AvwapChart() {
 
         // 4. Panel: Trading Amount (거래대금) & Amount SMA50
         else if (panel.id === "amount") {
-          const amtSeries = chart.addSeries(HistogramSeries, {
-            priceFormat: {
-              type: "custom",
-              formatter: (price: number) => {
-                if (isEokUnit) {
-                  return price >= 10000 ? `${(price / 10000).toFixed(1)}조` : `${Math.round(price).toLocaleString()}억`;
-                }
-                return `${price.toFixed(1)}조`;
-              },
-              minMove: isEokUnit ? 1 : 0.1,
+          const amtFormat = {
+            type: "custom" as const,
+            formatter: (price: number) => {
+              if (isEokUnit || chartData?.amount_unit === "억원") {
+                return price >= 10000 ? `${(price / 10000).toFixed(1)}조` : `${Math.round(price).toLocaleString()}억`;
+              }
+              if (chartData?.amount_unit === "백만$") {
+                return price >= 1000 ? `${(price / 1000).toFixed(1)}B$` : `${Math.round(price).toLocaleString()}M$`;
+              }
+              if (chartData?.amount_unit === "억$") {
+                return price >= 10000 ? `${(price / 10000).toFixed(1)}조$` : `${Math.round(price).toLocaleString()}억$`;
+              }
+              if (chartData?.amount_unit === "조$") {
+                return `${price.toFixed(1)}조$`;
+              }
+              return `${price.toFixed(1)}조`;
             },
+            minMove: isEokUnit ? 1 : 0.1,
+          };
+
+          const amtSeries = chart.addSeries(HistogramSeries, {
+            priceFormat: amtFormat,
             priceLineVisible: false,
             lastValueVisible: false,
           });
           activeSeries.push(amtSeries);
 
+          const amtHoverLine = amtSeries.createPriceLine({
+            price: 0,
+            color: "#f59e0b",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("amt", amtHoverLine);
+
           const amtSmaSeries = chart.addSeries(LineSeries, {
             color: "#f59e0b",
             lineWidth: 2,
+            priceFormat: amtFormat,
             priceLineVisible: false,
             lastValueVisible: true,
           });
           activeSeries.push(amtSmaSeries);
+
+          const amtSmaHoverLine = amtSmaSeries.createPriceLine({
+            price: 0,
+            color: "#f59e0b",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("amt_sma", amtSmaHoverLine);
         }
 
         seriesRef.current.set(panel.id, activeSeries);
@@ -1037,6 +1439,7 @@ export function AvwapChart() {
               verticalGuideRef.current.style.display = "none";
             }
             setHoveredData(null);
+            clearCrosshairPriceLines();
             return;
           }
 
@@ -1050,9 +1453,12 @@ export function AvwapChart() {
 
           // Format hovered time
           const tStr = typeof param.time === "string" ? param.time : "";
-          const matchedPoint = chartData.points.find((p) => p.date === tStr);
+          const ptIdx = chartData.points.findIndex((p) => p.date === tStr);
+          const matchedPoint = ptIdx >= 0 ? chartData.points[ptIdx] : undefined;
+          const prevPoint = ptIdx > 0 ? chartData.points[ptIdx - 1] : undefined;
           const hpInfo = matchedPoint ? hpMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
+            updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
               time: matchedPoint.date,
               ohlc: {
@@ -1080,6 +1486,7 @@ export function AvwapChart() {
             });
           } else {
             setHoveredData(null);
+            clearCrosshairPriceLines();
           }
         });
       });
@@ -2184,7 +2591,7 @@ export function AvwapChart() {
           {/* Panel 3: Volume & VIX Fix */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              거래량 (막대) & VIX Fix (초록 점선, 좌측 축)
+              거래량 (막대) & VIX Fix (초록 점선)
             </div>
             <div data-chart-id="volume" className="w-full" />
           </div>

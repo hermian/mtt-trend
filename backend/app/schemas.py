@@ -475,3 +475,27 @@ class Top30Response(BaseModel):
 class Top30DatesResponse(BaseModel):
     dates: List[str]
 
+
+class Top30MatrixItem(BaseModel):
+    code: str
+    name: str
+    market: str
+    marcap: Optional[float] = None  # 천억원 단위
+    rank: int
+    previous_rank: Optional[int] = None
+    rank_delta: Optional[int] = None  # previous_rank - rank (양수 = 상승)
+    new_entrant: bool = False
+    sector: Optional[str] = None
+
+
+class Top30DateRankings(BaseModel):
+    date: str
+    rankings: List[Top30MatrixItem]
+
+
+class Top30MatrixResponse(BaseModel):
+    market: str
+    timeframe: str = "daily"
+    dates: List[Top30DateRankings]
+
+

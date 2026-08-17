@@ -161,3 +161,18 @@ def test_dates_endpoint_top30_env(client, top30_env):
     res = client.get("/api/trend/top30/dates")
     assert res.status_code == 200
     assert res.json()["dates"] == _TRADING_DATES
+
+
+def test_matrix_endpoint(client, top30_env):
+    res = client.get(f"/api/trend/top30/matrix?start_date={FIRST_DATE}&end_date={REF_DATE}&market=kospi")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["market"] == "kospi"
+    assert len(body["dates"]) == len(_TRADING_DATES)
+    # Check latest date rankings
+    latest_obj = body["dates"][-1]
+    assert latest_obj["date"] == REF_DATE
+    assert len(latest_obj["rankings"]) == 30
+    assert latest_obj["rankings"][0]["code"] == "i0"
+    assert latest_obj["rankings"][0]["rank"] == 1
+    assert latest_obj["rankings"][0]["previous_rank"] == 1

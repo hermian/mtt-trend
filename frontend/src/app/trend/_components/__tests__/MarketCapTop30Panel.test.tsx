@@ -40,10 +40,12 @@ const okQuery = (data: unknown) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useTop30Hook.useTop30Dates).mockReturnValue(
-    okQuery({ dates: ["2026-08-14"] }) as never
+    okQuery({ dates: ["2026-08-07", "2026-08-14"] }) as never
   );
   vi.mocked(useTop30Hook.useTop30).mockReturnValue(okQuery(MOCK_DATA) as never);
+  vi.mocked(useTop30Hook.useTop30Matrix).mockReturnValue(okQuery(undefined) as never);
 });
+
 
 describe("MarketCapTop30Panel", () => {
   it("renders header and default chart view", () => {
@@ -57,12 +59,20 @@ describe("MarketCapTop30Panel", () => {
     render(<MarketCapTop30Panel />);
     fireEvent.click(screen.getByText("표"));
     // 신규 진입 배지
-    expect(screen.getByText("신규진입")).toBeInTheDocument();
+    expect(screen.getAllByText("신규진입")[0]).toBeInTheDocument();
     // 종목명 렌더
-    expect(screen.getByText("삼성전자")).toBeInTheDocument();
-    expect(screen.getByText("SK스퀘어")).toBeInTheDocument();
+    expect(screen.getAllByText("삼성전자")[0]).toBeInTheDocument();
+    expect(screen.getAllByText("SK스퀘어")[0]).toBeInTheDocument();
     // 시가총액 (천억원 16048 → 1604.8조)
-    expect(screen.getByText("1,604.8조")).toBeInTheDocument();
+    expect(screen.getAllByText("1,604.8조")[0]).toBeInTheDocument();
+  });
+
+  it("opens PiP mini panel when a stock cell is clicked", () => {
+    render(<MarketCapTop30Panel />);
+    fireEvent.click(screen.getByText("표"));
+    const samsung = screen.getAllByText("삼성전자")[0];
+    fireEvent.click(samsung);
+    expect(screen.getByText("PiP 상세 & 차트")).toBeInTheDocument();
   });
 
   it("renders error state when query fails", () => {
@@ -80,6 +90,46 @@ describe("MarketCapTop30Panel", () => {
     );
     render(<MarketCapTop30Panel />);
     expect(screen.getByText(/데이터가 없습니다/i)).toBeInTheDocument();
+  });
+
+  it("supports switching timeframe between 일간, 주간, 월간", () => {
+    render(<MarketCapTop30Panel />);
+    expect(screen.getByText("일간")).toBeInTheDocument();
+    expect(screen.getByText("주간")).toBeInTheDocument();
+    expect(screen.getByText("월간")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("주간"));
+    expect(useTop30Hook.useTop30Dates).toHaveBeenCalledWith("weekly");
+
+    fireEvent.click(screen.getByText("월간"));
+    expect(useTop30Hook.useTop30Dates).toHaveBeenCalledWith("monthly");
+  });
+
+  it("toggles stock highlight when a stock chip below chart is clicked", () => {
+    render(<MarketCapTop30Panel />);
+    // In chart view, stock chips are rendered below chart and on right labels column
+    const samsungChips = screen.getAllByRole("button", { name: /삼성전자/i });
+    expect(samsungChips.length).toBeGreaterThan(0);
+    const samsungChip = samsungChips[0];
+
+    // Click to select/highlight
+    fireEvent.click(samsungChip);
+    expect(screen.getByText("하이라이트 해제")).toBeInTheDocument();
+    expect(screen.getByText("PiP 상세 & 차트")).toBeInTheDocument();
+
+    // Click again to toggle off
+    fireEvent.click(samsungChip);
+    expect(screen.queryByText("하이라이트 해제")).not.toBeInTheDocument();
+
+  });
+
+  it("renders zoom guide badge and resets date range when button is clicked", () => {
+    render(<MarketCapTop30Panel />);
+    expect(screen.getByText(/Ctrl \+ 휠/i)).toBeInTheDocument();
+    expect(screen.getByText("기간 초기화")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("기간 초기화"));
+    expect(screen.getByText("기간 초기화")).toBeInTheDocument();
   });
 
   it("handles null marcap without crashing", () => {

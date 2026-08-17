@@ -9,21 +9,71 @@ from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.schemas import Top30DatesResponse, Top30Response, Top30Stock
+from app.schemas import (
+    Top30DatesResponse,
+    Top30MatrixItem,
+    Top30MatrixResponse,
+    Top30Response,
+    Top30Stock,
+    Top30DateRankings,
+)
 from app.utils.stock_heatmap_utils import get_rs_dir
-from app.utils.top30_utils import available_dates, compute_top30
+from app.utils.top30_utils import available_dates, available_periods, compute_top30, compute_top30_matrix
 
 router = APIRouter(prefix="/trend", tags=["top30"])
 
+
 _ALLOWED_MARKETS = ("all", "kospi", "kosdaq")
 _ALLOWED_COMPARE_DAYS = (1, 5, 20, 60)
+_ALLOWED_TIMEFRAMES = ("daily", "weekly", "monthly")
 
 
 @router.get("/top30/dates", response_model=Top30DatesResponse)
-async def list_top30_dates():
-    """조회 가능한 거래일(파티션) 목록."""
-    dates = available_dates(get_rs_dir())
+async def list_top30_dates(
+    timeframe: str = Query("daily", description="기간 단위: daily|weekly|monthly"),
+):
+    """조회 가능한 거래일/주차/월(파티션) 목록."""
+    if timeframe not in _ALLOWED_TIMEFRAMES:
+        raise HTTPException(422, detail=f"timeframe must be one of {list(_ALLOWED_TIMEFRAMES)}")
+    dates = available_periods(get_rs_dir(), timeframe)
     return Top30DatesResponse(dates=dates)
+
+
+@router.get("/top30/matrix", response_model=Top30MatrixResponse)
+async def get_top30_matrix(
+    start_date: Optional[str] = Query(None, description="시작일/시작주/시작월"),
+    end_date: Optional[str] = Query(None, description="종료일/종료주/종료월"),
+    market: str = Query("all", description="시장 필터: all|kospi|kosdaq"),
+    timeframe: str = Query("daily", description="기간 단위: daily|weekly|monthly"),
+    limit: int = Query(30, description="랭킹 표시 개수 (기본 30)"),
+):
+    if market not in _ALLOWED_MARKETS:
+        raise HTTPException(422, detail=f"market must be one of {list(_ALLOWED_MARKETS)}")
+    if timeframe not in _ALLOWED_TIMEFRAMES:
+        raise HTTPException(422, detail=f"timeframe must be one of {list(_ALLOWED_TIMEFRAMES)}")
+
+    rs_dir = get_rs_dir()
+    periods = available_periods(rs_dir, timeframe)
+    if not periods:
+        raise HTTPException(503, detail="시가총액 데이터(RS 파티션)가 없습니다")
+
+    valid_start = start_date if (start_date and start_date in periods) else None
+    valid_end = end_date if (end_date and end_date in periods) else None
+
+    result = compute_top30_matrix(rs_dir, valid_start, valid_end, market, timeframe, limit)
+
+    return Top30MatrixResponse(
+        market=market,
+        timeframe=timeframe,
+        dates=[
+            Top30DateRankings(
+                date=d["date"],
+                rankings=[Top30MatrixItem(**r) for r in d["rankings"]],
+            )
+            for d in result["dates"]
+        ],
+    )
+
 
 
 @router.get("/top30", response_model=Top30Response)

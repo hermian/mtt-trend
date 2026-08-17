@@ -409,6 +409,29 @@ export interface Top30DatesResponse {
   dates: string[];
 }
 
+export interface Top30MatrixItem {
+  code: string;
+  name: string;
+  market: string;
+  marcap: number | null; // 천억원
+  rank: number;
+  previous_rank: number | null;
+  rank_delta: number | null;
+  new_entrant: boolean;
+  sector: string | null;
+}
+
+export interface Top30DateRankings {
+  date: string;
+  rankings: Top30MatrixItem[];
+}
+
+export interface Top30MatrixResponse {
+  market: string;
+  timeframe: string;
+  dates: Top30DateRankings[];
+}
+
 // API functions for each endpoint
 export const api = {
   // GET /api/charts/data?symbol=&indicators= → ChartDataResponse
@@ -445,11 +468,33 @@ export const api = {
     });
     return data;
   },
-  // GET /api/trend/top30/dates → Top30DatesResponse
-  getTop30Dates: async (): Promise<Top30DatesResponse> => {
-    const { data } = await apiClient.get<Top30DatesResponse>("/api/trend/top30/dates");
+  // GET /api/trend/top30/matrix → Top30MatrixResponse
+  getTop30Matrix: async (
+    startDate?: string | null,
+    endDate?: string | null,
+    market: string = "all",
+    timeframe: string = "daily",
+    limit: number = 30
+  ): Promise<Top30MatrixResponse> => {
+    const { data } = await apiClient.get<Top30MatrixResponse>("/api/trend/top30/matrix", {
+      params: {
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+        market,
+        timeframe,
+        limit,
+      },
+    });
     return data;
   },
+  // GET /api/trend/top30/dates → Top30DatesResponse
+  getTop30Dates: async (timeframe: string = "daily"): Promise<Top30DatesResponse> => {
+    const { data } = await apiClient.get<Top30DatesResponse>("/api/trend/top30/dates", {
+      params: { timeframe },
+    });
+    return data;
+  },
+
   // GET /api/charts/stockbee-mm → StockbeeMmResponse
   getStockbeeMm: async (params?: {
     year?: number;

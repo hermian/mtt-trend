@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.database import create_tables, SessionLocal
 from app.models import ThemeDaily
-from app.routers import themes, stocks, sync, charts, etf, heatmap
+from app.routers import themes, stocks, sync, charts, etf, heatmap, top30
 from app.file_watcher import create_file_watcher, set_watchdog_active
 
 
@@ -179,6 +179,7 @@ app.include_router(sync.router, prefix="/api")
 app.include_router(charts.router, prefix="/api")
 app.include_router(etf.router, prefix="/api")
 app.include_router(heatmap.router, prefix="/api")
+app.include_router(top30.router, prefix="/api")
 
 
 # ---------------------------------------------------------------------------

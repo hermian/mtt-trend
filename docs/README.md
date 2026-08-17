@@ -42,6 +42,13 @@
 - **상태**: 🚧 **구현 완료 (로컬)** — 커밋/리뷰 대기
 - **이슈**: [#9](https://github.com/hermian/mtt-trend/issues/9)
 
+### 5. 시가총액 TOP 30 추적 (Market Cap Top30)
+기준일 시가총액 상위 30 랭킹과, 사용자 선택 비교 기간 대비 신규 진입/순위 변동을 추적하는 대시보드 탭입니다. 시장 필터(전체/KOSPI/KOSDAQ) + 차트(기본)/표 토글을 지원하며, 기존 `~/.cache/db/rs` 일별 파티션의 Marcap(천억원)을 활용합니다.
+- **기획서**: [Market Cap Top30 Plan](./01-plan/features/marketcap-top30.plan.md)
+- **설계서**: [Market Cap Top30 Design](./02-design/features/marketcap-top30.design.md)
+- **상태**: 🚧 **구현 완료 (로컬)** — 커밋/리뷰 대기
+- **이슈**: [#39](https://github.com/hermian/mtt-trend/issues/39)
+
 
 ---
 

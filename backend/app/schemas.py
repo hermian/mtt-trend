@@ -448,3 +448,30 @@ class CustomAnchorResponse(BaseModel):
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
+
+# --- 시총 TOP 30 (Market Cap Ranking) ---
+class Top30Stock(BaseModel):
+    code: str
+    name: str
+    market: str
+    marcap: Optional[float] = None  # 천억원 단위
+    rank: int
+    previous_rank: Optional[int] = None
+    rank_delta: Optional[int] = None  # previous_rank - rank (양수 = 상승)
+    new_entrant: bool = False
+    series: List[Optional[int]] = []  # window 날짜별 TOP30 랭킹 (없으면 null)
+
+
+class Top30Response(BaseModel):
+    date: str
+    market: str
+    compare_days: int
+    compare_date: Optional[str] = None
+    compare_available: bool = True
+    window_dates: List[str] = []
+    stocks: List[Top30Stock]
+
+
+class Top30DatesResponse(BaseModel):
+    dates: List[str]
+

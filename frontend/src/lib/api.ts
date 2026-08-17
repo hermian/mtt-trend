@@ -381,6 +381,34 @@ export interface StockbeeMmResponse {
 
 export type DataSource = "52w_high" | "mtt";
 
+// @MX:NOTE: 시총 TOP 30 (backend app/routers/top30.py) 응답 인터페이스
+
+export interface Top30Stock {
+  code: string;
+  name: string;
+  market: string;
+  marcap: number | null; // 천억원
+  rank: number;
+  previous_rank: number | null;
+  rank_delta: number | null; // 이전순위 - 현재순위 (양수 = 상승)
+  new_entrant: boolean;
+  series: (number | null)[];
+}
+
+export interface Top30Response {
+  date: string;
+  market: string;
+  compare_days: number;
+  compare_date: string | null;
+  compare_available: boolean;
+  window_dates: string[];
+  stocks: Top30Stock[];
+}
+
+export interface Top30DatesResponse {
+  dates: string[];
+}
+
 // API functions for each endpoint
 export const api = {
   // GET /api/charts/data?symbol=&indicators= → ChartDataResponse
@@ -404,6 +432,22 @@ export const api = {
     const { data } = await apiClient.get<ChartDataResponse>("/api/charts/above-ma", {
       params: { market, start_date: startDate, end_date: endDate },
     });
+    return data;
+  },
+  // GET /api/trend/top30 → Top30Response
+  getTop30: async (
+    date?: string | null,
+    market: string = "all",
+    compareDays: number = 5
+  ): Promise<Top30Response> => {
+    const { data } = await apiClient.get<Top30Response>("/api/trend/top30", {
+      params: { date: date || undefined, market, compare_days: compareDays },
+    });
+    return data;
+  },
+  // GET /api/trend/top30/dates → Top30DatesResponse
+  getTop30Dates: async (): Promise<Top30DatesResponse> => {
+    const { data } = await apiClient.get<Top30DatesResponse>("/api/trend/top30/dates");
     return data;
   },
   // GET /api/charts/stockbee-mm → StockbeeMmResponse

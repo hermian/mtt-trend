@@ -117,6 +117,8 @@ export function Sidebar() {
     pathname.startsWith("/trend") && searchParams.get("tab") === "wics_index";
   const isStockbeeMmActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "stockbee_mm";
+  const isTop30Active =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "top30";
   const isWeatherActive =
     pathname.startsWith("/trend") && (searchParams.get("tab") === "kospi_weather" || searchParams.get("tab") === "weather_20panel");
   const isAvwapActive =
@@ -453,6 +455,35 @@ export function Sidebar() {
             <path d="M9 3v18" />
           </svg>
           {!collapsed && <span className="truncate">Stockbee MM</span>}
+        </Link>
+
+        {/* 시총 TOP 30 추적 */}
+        <Link
+          href="/trend?tab=top30"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isTop30Active
+              ? "bg-blue-600 text-white shadow-lg"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "시총 TOP 30" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 3v18h18" />
+            <path d="M13 7l4-4 1 1-4 4z" />
+            <path d="M13 7l4 4-1 1-4-4z" />
+            <path d="M7 17l4-6 2 3 4-5 2 2" />
+          </svg>
+          {!collapsed && <span className="truncate">시총 TOP 30</span>}
         </Link>
 
         {/* Sync Button */}

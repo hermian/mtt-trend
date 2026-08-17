@@ -25,6 +25,7 @@ import {
   removeLocalCustomAnchor,
   setLocalCustomAnchors,
 } from "./_lib/avwapCalc";
+import { hpFilterSeries, getHpLambdaForInterval } from "@/lib/hpFilter";
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -110,11 +111,12 @@ export function AvwapChart() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Toggle state for base vwap, hvwap, lvwap, bb_upper, and individual anchor dates
+  // Toggle state for base vwap, hvwap, lvwap, bb_upper, hp, and individual anchor dates
   const [showVwap, setShowVwap] = useState(true);
   const [showHvwap, setShowHvwap] = useState(true);
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
+  const [showHp, setShowHp] = useState(true);
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
   const enabledAnchorsRef = useRef<Set<string>>(new Set());
   const showLinesRef = useRef({
@@ -122,6 +124,7 @@ export function AvwapChart() {
     hvwap: showHvwap,
     lvwap: showLvwap,
     bb: showBbUpper,
+    hp: showHp,
   });
 
   useEffect(() => {
@@ -134,8 +137,9 @@ export function AvwapChart() {
       hvwap: showHvwap,
       lvwap: showLvwap,
       bb: showBbUpper,
+      hp: showHp,
     };
-  }, [showVwap, showHvwap, showLvwap, showBbUpper]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp]);
 
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -247,6 +251,33 @@ export function AvwapChart() {
     setSelectedLineId(null);
   }, [market, symbol, interval]);
 
+  // HP Filter calculation for the current chart points & interval
+  const hpResult = useMemo(() => {
+    if (!chartData?.points || chartData.points.length < 4) return null;
+    const rawPts: { time: string; value: number }[] = [];
+    const seen = new Set<string>();
+    for (const p of chartData.points) {
+      const time = toChartTime(p.date);
+      if (!time || seen.has(time) || p.close == null || !Number.isFinite(p.close)) continue;
+      seen.add(time);
+      rawPts.push({ time, value: p.close });
+    }
+    rawPts.sort((a, b) => (a.time < b.time ? -1 : 1));
+    const lambda = getHpLambdaForInterval(interval);
+    return hpFilterSeries(rawPts, lambda);
+  }, [chartData?.points, interval]);
+
+  const hpMap = useMemo(() => {
+    const map = new Map<string, { trend: number; deviation: number }>();
+    if (!hpResult) return map;
+    for (let i = 0; i < hpResult.trend.length; i++) {
+      const t = hpResult.trend[i];
+      const d = hpResult.deviation[i];
+      map.set(t.time, { trend: t.value, deviation: d.value });
+    }
+    return map;
+  }, [hpResult]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -262,6 +293,8 @@ export function AvwapChart() {
     hvwap?: number | null;
     lvwap?: number | null;
     ma?: Record<string, number | null>;
+    hpTrend?: number | null;
+    hpDev?: number | null;
   } | null>(null);
 
   // Select stock from search
@@ -541,6 +574,7 @@ export function AvwapChart() {
       const panels = [
         { id: "mdd", name: "MDD (%)", height: 90 },
         { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: isMobile ? 360 : 550 },
+        ...(showHp ? [{ id: "hp_dev", name: "HP 이탈도 (%)", height: 90 }] : []),
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
         { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
       ];
@@ -575,7 +609,9 @@ export function AvwapChart() {
                 ? { top: 0.05, bottom: 0 } 
                 : panel.id === "main"
                   ? { top: 0.02, bottom: 0.02 }
-                  : { top: 0.05, bottom: 0.05 },
+                  : panel.id === "hp_dev"
+                    ? { top: 0.08, bottom: 0.08 }
+                    : { top: 0.05, bottom: 0.05 },
             autoScale: true,
             minimumWidth: 95,
             mode: panel.id === "main"
@@ -765,6 +801,23 @@ export function AvwapChart() {
             defaultWidth: 2,
           });
 
+          // HP Long-term Trend (호드릭-프레스콧 장기추세 분홍 점선)
+          const hpTrendSeries = chart.addSeries(LineSeries, {
+            color: "#f472b6",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          activeSeries.push(hpTrendSeries);
+          mainLinesMapRef.current.set("hp_trend", {
+            id: "hp_trend",
+            name: "HP추세",
+            series: hpTrendSeries,
+            color: "#f472b6",
+            defaultWidth: 2,
+          });
+
           // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
             chartData.anchors.forEach((anc) => {
@@ -821,6 +874,10 @@ export function AvwapChart() {
                 if (showLinesRef.current.hvwap) candidates.push({ id: "hvwap", val: pt.hvwap });
                 if (showLinesRef.current.lvwap) candidates.push({ id: "lvwap", val: pt.lvwap });
                 if (showLinesRef.current.bb) candidates.push({ id: "bb", val: pt.bb_upper });
+                if (showLinesRef.current.hp) {
+                  const hpVal = hpMap.get(toChartTime(pt.date) || pt.date)?.trend;
+                  if (hpVal != null) candidates.push({ id: "hp_trend", val: hpVal });
+                }
 
                 if (pt.ma) {
                   Object.entries(pt.ma).forEach(([maName, val]) => {
@@ -861,6 +918,34 @@ export function AvwapChart() {
 
         }
 
+        // Panel: HP Deviation (HP 이탈도: (Close / HP추세) × 100)
+        else if (panel.id === "hp_dev") {
+          const hpDevSeries = chart.addSeries(BaselineSeries, {
+            baseValue: { type: "price", price: 100 },
+            topLineColor: "#f472b6",
+            bottomLineColor: "#f472b6",
+            topFillColor1: "rgba(244, 114, 182, 0.30)",
+            topFillColor2: "rgba(244, 114, 182, 0.05)",
+            bottomFillColor1: "rgba(59, 130, 246, 0.05)",
+            bottomFillColor2: "rgba(59, 130, 246, 0.30)",
+            lineWidth: 2,
+            priceFormat: {
+              type: "custom",
+              formatter: (price: number) => `${price.toFixed(1)}`,
+              minMove: 0.1,
+            },
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          hpDevSeries.createPriceLine({
+            price: 100,
+            color: "rgba(148, 163, 184, 0.6)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Solid,
+            axisLabelVisible: true,
+          });
+          activeSeries.push(hpDevSeries);
+        }
 
         // 3. Panel: Volume & VIX Fix
         else if (panel.id === "volume") {
@@ -966,6 +1051,7 @@ export function AvwapChart() {
           // Format hovered time
           const tStr = typeof param.time === "string" ? param.time : "";
           const matchedPoint = chartData.points.find((p) => p.date === tStr);
+          const hpInfo = matchedPoint ? hpMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
             setHoveredData({
               time: matchedPoint.date,
@@ -989,6 +1075,8 @@ export function AvwapChart() {
               hvwap: matchedPoint.hvwap,
               lvwap: matchedPoint.lvwap,
               ma: matchedPoint.ma,
+              hpTrend: hpInfo?.trend,
+              hpDev: hpInfo?.deviation,
             });
           } else {
             setHoveredData(null);
@@ -1024,7 +1112,7 @@ export function AvwapChart() {
           mddSeriesList[0].setData(linePoints(getDrawdown));
         }
 
-        // 2. Main (Candlesticks, MAs, BB Upper, VWAPs, Anchors)
+        // 2. Main (Candlesticks, MAs, BB Upper, VWAPs, HP Trend, Anchors)
         const mainSeriesList = seriesRef.current.get("main") || [];
         if (mainSeriesList.length > 0) {
           // Candlestick
@@ -1089,6 +1177,16 @@ export function AvwapChart() {
             seriesIdx++;
           }
 
+          // HP Long-term Trend
+          if (mainSeriesList[seriesIdx]) {
+            if (showHp && hpResult?.trend) {
+              mainSeriesList[seriesIdx].setData(hpResult.trend);
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
+          }
+
           // Anchors
           chartData.anchors?.forEach((anc) => {
             const aS = anchorSeriesMapRef.current.get(anc.id);
@@ -1108,6 +1206,14 @@ export function AvwapChart() {
               }
             }
           });
+        }
+
+        // HP Deviation Panel (이탈도)
+        if (showHp) {
+          const hpDevSeriesList = seriesRef.current.get("hp_dev") || [];
+          if (hpDevSeriesList[0] && hpResult?.deviation) {
+            hpDevSeriesList[0].setData(hpResult.deviation);
+          }
         }
 
         // 3. Volume & VIX Fix
@@ -1179,7 +1285,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showHp, hpResult]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -1205,6 +1311,7 @@ export function AvwapChart() {
       const vwapIdx = bbIdx + 1;
       const hvwapIdx = bbIdx + 2;
       const lvwapIdx = bbIdx + 3;
+      const hpIdx = bbIdx + 4;
 
       if (mainSeriesList[bbIdx]) {
         mainSeriesList[bbIdx].setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
@@ -1217,6 +1324,13 @@ export function AvwapChart() {
       }
       if (mainSeriesList[lvwapIdx]) {
         mainSeriesList[lvwapIdx].setData(showLvwap ? linePoints((p) => p.lvwap) : []);
+      }
+      if (mainSeriesList[hpIdx]) {
+        if (showHp && hpResult?.trend) {
+          mainSeriesList[hpIdx].setData(hpResult.trend);
+        } else {
+          mainSeriesList[hpIdx].setData([]);
+        }
       }
 
       chartData.anchors?.forEach((anc) => {
@@ -1238,7 +1352,7 @@ export function AvwapChart() {
         }
       });
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, enabledAnchors, chartData]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, enabledAnchors, chartData, hpResult]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -1288,6 +1402,8 @@ export function AvwapChart() {
     return chartData.points[chartData.points.length - 1];
   }, [chartData]);
 
+  const latestHpInfo = latestPoint ? hpMap.get(toChartTime(latestPoint.date) || latestPoint.date) : null;
+
   const activeDisplay = hoveredData || (latestPoint ? {
     time: latestPoint.date,
     ohlc: {
@@ -1310,6 +1426,8 @@ export function AvwapChart() {
     hvwap: latestPoint.hvwap,
     lvwap: latestPoint.lvwap,
     ma: latestPoint.ma,
+    hpTrend: latestHpInfo?.trend,
+    hpDev: latestHpInfo?.deviation,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -1685,18 +1803,39 @@ export function AvwapChart() {
           >
             BB상단
           </button>
+          <button
+            onClick={() => {
+              setShowHp((prev) => {
+                if (prev && selectedLineId === "hp_trend") setSelectedLineId(null);
+                return !prev;
+              });
+            }}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              selectedLineId === "hp_trend"
+                ? "ring-2 ring-pink-400 border-pink-400 bg-pink-500/40 text-pink-200 font-bold shadow-md"
+                : showHp
+                ? "bg-pink-500/20 text-pink-400 border-pink-500/40 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title="클릭하여 HP(호드릭-프레스콧) 장기추세 및 이탈도 표시 ON/OFF"
+          >
+            HP필터
+          </button>
           <div className="h-4 w-px bg-gray-700 mx-1" />
           <button
-            onClick={() => toggleAllAnchors(true)}
-            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-[11px]"
+            onClick={() => toggleAllAnchors(enabledAnchors.size === 0)}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              enabledAnchors.size > 0
+                ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/40 shadow-sm hover:bg-indigo-500/30"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title={
+              enabledAnchors.size > 0
+                ? "클릭하여 모든 앵커 끄기 (전체 OFF)"
+                : "클릭하여 모든 앵커 켜기 (전체 ON)"
+            }
           >
-            앵커 전체ON
-          </button>
-          <button
-            onClick={() => toggleAllAnchors(false)}
-            className="px-2 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded border border-gray-700 text-[11px]"
-          >
-            앵커 전체OFF
+            {enabledAnchors.size > 0 ? "앵커 전체 ON" : "앵커 전체 OFF"}
           </button>
         </div>
       </div>
@@ -1895,6 +2034,23 @@ export function AvwapChart() {
             {activeDisplay.vwap !== null && activeDisplay.vwap !== undefined && (
               <span>VWAP: <span className="text-slate-200">{activeDisplay.vwap.toLocaleString()}</span></span>
             )}
+            {showHp && activeDisplay.hpTrend !== null && activeDisplay.hpTrend !== undefined && (
+              <span>
+                HP추세: <span className="text-pink-400 font-bold">{activeDisplay.hpTrend.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
+              </span>
+            )}
+            {showHp && activeDisplay.hpDev !== null && activeDisplay.hpDev !== undefined && (
+              <span>
+                HP이탈:{" "}
+                <span
+                  className={`font-bold ${
+                    activeDisplay.hpDev >= 100 ? "text-pink-400" : "text-sky-400"
+                  }`}
+                >
+                  {activeDisplay.hpDev.toFixed(1)}
+                </span>
+              </span>
+            )}
           </>
         )}
       </div>
@@ -2013,6 +2169,17 @@ export function AvwapChart() {
 
             <div data-chart-id="main" className={`w-full ${isPickerMode ? "cursor-crosshair" : ""}`} />
           </div>
+
+          {/* Panel HP: HP Deviation (이탈도) */}
+          {showHp && (
+            <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span className="text-pink-400 font-bold">HP 이탈도</span>
+                <span className="text-gray-400 font-mono text-[10px] hidden sm:inline">(100 = 추세 일치, &gt;100 상회, &lt;100 하회)</span>
+              </div>
+              <div data-chart-id="hp_dev" className="w-full" />
+            </div>
+          )}
 
           {/* Panel 3: Volume & VIX Fix */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">

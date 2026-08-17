@@ -123,6 +123,9 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("VWAP")).toBeInTheDocument();
     expect(screen.getByText("HVWAP(최고)")).toBeInTheDocument();
     expect(screen.getByText("LVWAP(최저)")).toBeInTheDocument();
+    expect(screen.getByText("BB상단")).toBeInTheDocument();
+    expect(screen.getByText("HP필터")).toBeInTheDocument();
+    expect(screen.getByText("HP 이탈도")).toBeInTheDocument();
     expect(screen.getByText(/낙폭\(52주\):/)).toBeInTheDocument();
     expect(screen.getByText("-4.2%")).toBeInTheDocument();
     expect(screen.getByText("52주 (기본)")).toBeInTheDocument();
@@ -213,12 +216,13 @@ describe("AvwapChart Component", () => {
     // Toggle on
     fireEvent.click(anchorBtn);
 
-    // Toggle All Off / On
-    const toggleOffBtn = screen.getByText("앵커 전체OFF");
-    fireEvent.click(toggleOffBtn);
+    // Toggle All Off / On using single toggle button
+    const toggleAnchorBtn = screen.getByText("앵커 전체 ON");
+    fireEvent.click(toggleAnchorBtn);
+    expect(screen.getByText("앵커 전체 OFF")).toBeInTheDocument();
 
-    const toggleOnBtn = screen.getByText("앵커 전체ON");
-    fireEvent.click(toggleOnBtn);
+    fireEvent.click(screen.getByText("앵커 전체 OFF"));
+    expect(screen.getByText("앵커 전체 ON")).toBeInTheDocument();
   });
 
   it("renders log scale by default and allows toggling to linear scale", () => {
@@ -567,5 +571,47 @@ describe("AvwapChart Component", () => {
     const hudEl = container.querySelector(".font-mono.flex.flex-wrap");
     expect(hudEl).toHaveClass("gap-y-0.5");
     expect(hudEl).toHaveClass("sm:gap-y-1");
+  });
+
+  it("toggles HP filter on and off and updates HUD and deviation panel", () => {
+    const multiPointData = {
+      ...mockChartData,
+      points: [
+        { ...mockChartData.points[0], date: "2024-01-02", close: 2500.0 },
+        { ...mockChartData.points[0], date: "2024-01-03", close: 2520.0 },
+        { ...mockChartData.points[0], date: "2024-01-04", close: 2550.0 },
+        { ...mockChartData.points[0], date: "2024-01-05", close: 2600.0 },
+      ],
+    };
+
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: multiPointData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // HP is enabled by default
+    const hpBtn = screen.getByText("HP필터");
+    expect(hpBtn).toBeInTheDocument();
+    expect(screen.getByText("HP 이탈도")).toBeInTheDocument();
+    expect(screen.getByText(/HP추세:/)).toBeInTheDocument();
+    expect(screen.getByText(/HP이탈:/)).toBeInTheDocument();
+
+    // Toggle HP off
+    fireEvent.click(hpBtn);
+    expect(screen.queryByText("HP 이탈도")).not.toBeInTheDocument();
+    expect(screen.queryByText(/HP추세:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/HP이탈:/)).not.toBeInTheDocument();
+
+    // Toggle HP back on
+    fireEvent.click(hpBtn);
+    expect(screen.getByText("HP 이탈도")).toBeInTheDocument();
+    expect(screen.getByText(/HP추세:/)).toBeInTheDocument();
   });
 });

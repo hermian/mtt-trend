@@ -96,3 +96,40 @@ describe("ControlBar MMT Filter", () => {
     expect(handleChange).toHaveBeenCalledWith({ mmt: null });
   });
 });
+
+describe("ControlBar Default Actions", () => {
+  it("triggers onSaveDefault when '기본값 저장' button is clicked", () => {
+    const handleChange = vi.fn();
+    const handleSave = vi.fn();
+    render(
+      <ControlBar
+        value={defaultControls}
+        onChange={handleChange}
+        onSaveDefault={handleSave}
+      />
+    );
+
+    const saveBtn = screen.getByText("기본값 저장");
+    expect(saveBtn).toBeDefined();
+    fireEvent.click(saveBtn);
+    expect(handleSave).toHaveBeenCalledTimes(1);
+  });
+
+  it("triggers onResetDefault when '초기화' button is clicked", () => {
+    const handleChange = vi.fn();
+    const handleReset = vi.fn();
+    render(
+      <ControlBar
+        value={defaultControls}
+        onChange={handleChange}
+        onResetDefault={handleReset}
+      />
+    );
+
+    const resetBtn = screen.getByText("초기화");
+    expect(resetBtn).toBeDefined();
+    fireEvent.click(resetBtn);
+    expect(handleReset).toHaveBeenCalledTimes(1);
+  });
+});
+

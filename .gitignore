@@ -216,3 +216,5 @@ backend/data/*.html
 .gemini
 backend/data/charts/*.csv
 .gjc/
+artifacts/
+frontend/artifacts/

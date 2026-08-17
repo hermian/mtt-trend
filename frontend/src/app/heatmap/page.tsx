@@ -1,12 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useToast } from "@/contexts/ToastContext";
 import { useStockHeatmap } from "@/hooks/useStockHeatmap";
 import { ControlBar, type HeatmapControls } from "./_components/ControlBar";
 import { Legend } from "./_components/Legend";
 import { GroupTreemap, StockTreemap } from "./_components/TreemapChart";
 import { buildColorScale } from "./_lib/colors";
 import { StockListModal } from "./_components/StockListModal";
+import {
+  DEFAULT_HEATMAP_CONTROLS,
+  loadSavedHeatmapControls,
+  saveHeatmapControls,
+  clearSavedHeatmapControls,
+} from "./_lib/storage";
+
+export { DEFAULT_HEATMAP_CONTROLS };
 
 const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
   sector: "섹터",
@@ -19,26 +28,35 @@ const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
 /** 시장 단일 그룹은 개요 드릴다운 없이 종목 트리맵을 바로 표시 */
 const MARKET_GROUPINGS = new Set<HeatmapControls["grouping"]>(["kospi", "kosdaq"]);
 
-export const DEFAULT_HEATMAP_CONTROLS: HeatmapControls = {
-  grouping: "industry",
-  period: "1D",
-  startDate: null,
-  endDate: null,
-  marcapMin: 3000,
-  marcapMax: null,
-  minRet: 4,
-  minRs: null,
-  mmt: [1, 2, 3],
-  limit: 0,
-};
-
 export default function StockHeatmapPage() {
+  const toast = useToast();
   const [controls, setControls] = useState<HeatmapControls>(DEFAULT_HEATMAP_CONTROLS);
+
+  useEffect(() => {
+    const saved = loadSavedHeatmapControls(DEFAULT_HEATMAP_CONTROLS);
+    setControls(saved);
+  }, []);
 
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialGroup, setModalInitialGroup] = useState<string | null>(null);
   const isMarketGrouping = MARKET_GROUPINGS.has(controls.grouping);
+
+  const handleSaveDefault = () => {
+    const ok = saveHeatmapControls(controls);
+    if (ok) {
+      toast.success("현재 필터가 기본값으로 저장되었습니다.");
+    } else {
+      toast.error("기본값 저장에 실패했습니다.");
+    }
+  };
+
+  const handleResetDefault = () => {
+    clearSavedHeatmapControls();
+    setControls(DEFAULT_HEATMAP_CONTROLS);
+    setDrilledGroup(null);
+    toast.success("기본 설정으로 초기화되었습니다.");
+  };
 
   const { data, isFetching, isError, error } = useStockHeatmap({
     grouping: controls.grouping,
@@ -149,7 +167,12 @@ export default function StockHeatmapPage() {
       </div>
 
       <div className="space-y-3">
-        <ControlBar value={controls} onChange={handleControlChange} />
+        <ControlBar
+          value={controls}
+          onChange={handleControlChange}
+          onSaveDefault={handleSaveDefault}
+          onResetDefault={handleResetDefault}
+        />
         <Legend scale={scale} />
 
         {/* Breadcrumb for drill-down (섹터/업종/테마만) */}

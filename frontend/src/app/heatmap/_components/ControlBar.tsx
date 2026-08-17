@@ -20,6 +20,8 @@ export interface HeatmapControls {
 interface ControlBarProps {
   value: HeatmapControls;
   onChange: (patch: Partial<HeatmapControls>) => void;
+  onSaveDefault?: () => void;
+  onResetDefault?: () => void;
 }
 
 const GROUPINGS: Array<{ id: HeatmapGrouping; label: string }> = [
@@ -129,7 +131,12 @@ function btnClass(active: boolean): string {
   );
 }
 
-export function ControlBar({ value, onChange }: ControlBarProps) {
+export function ControlBar({
+  value,
+  onChange,
+  onSaveDefault,
+  onResetDefault,
+}: ControlBarProps) {
   const [minInput, setMinInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
   const [retInput, setRetInput] = useState("");
@@ -467,6 +474,32 @@ export function ControlBar({ value, onChange }: ControlBarProps) {
           </button>
         ))}
       </div>
+
+      {/* 기본값 설정 액션 버튼 */}
+      {(onSaveDefault || onResetDefault) && (
+        <div className="ml-auto flex items-center gap-1.5 border-t border-gray-800 pt-2 sm:border-t-0 sm:pt-0">
+          {onSaveDefault && (
+            <button
+              type="button"
+              onClick={onSaveDefault}
+              className="inline-flex items-center gap-1 rounded-md border border-emerald-600/60 bg-emerald-950/70 px-2.5 py-1.5 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-900 hover:text-white active:bg-emerald-800"
+              title="현재 설정된 필터 조건을 다음 접속 시 기본값으로 저장합니다"
+            >
+              <span>💾</span> 기본값 저장
+            </button>
+          )}
+          {onResetDefault && (
+            <button
+              type="button"
+              onClick={onResetDefault}
+              className="inline-flex items-center gap-1 rounded-md border border-gray-700 bg-gray-800/80 px-2.5 py-1.5 text-xs font-medium text-gray-400 transition-colors hover:bg-gray-700 hover:text-gray-200"
+              title="기본 필터 설정으로 초기화합니다"
+            >
+              <span>🔄</span> 초기화
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

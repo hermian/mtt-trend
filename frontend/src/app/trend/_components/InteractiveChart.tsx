@@ -17,6 +17,7 @@ import {
 } from "lightweight-charts";
 import { useChartData } from "@/hooks/useChartData";
 import { toChartTime } from "./_lib/chartTime";
+import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
 
 export interface IndicatorConfig {
   id: string;
@@ -36,6 +37,7 @@ interface HoveredData {
   time: string;
   ohlc?: { open: number; high: number; low: number; close: number; volume: number };
   indicators: Record<string, number>;
+  hpTrend?: number | null;
 }
 
 const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, height = 800 }) => {
@@ -47,6 +49,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   const isSyncingRef = useRef<boolean>(false);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
+  const [showHp, setShowHp] = useState<boolean>(true);
 
 
   const indicatorNames = useMemo(() => {
@@ -64,6 +67,29 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
   const { data: chartData, isLoading, error } = useChartData(symbol, indicatorNames);
 
   useEffect(() => { if (chartData) chartDataRef.current = chartData; }, [chartData]);
+
+  const sortedData = useMemo(() => {
+    if (!chartData?.data || chartData.data.length === 0) return [];
+    return [...chartData.data]
+      .map((p) => ({ ...p, time: toChartTime(p.time) ?? String(p.time).slice(0, 10) }))
+      .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.time))
+      .sort((a, b) => (a.time > b.time ? 1 : -1));
+  }, [chartData]);
+
+  const hpResult = useMemo(() => {
+    if (sortedData.length < 4) return null;
+    const points = sortedData.map((p) => ({ time: p.time, value: p.close ?? 0 }));
+    return hpFilterSeries(points, HP_LAMBDA_DAILY);
+  }, [sortedData]);
+
+  const hpMap = useMemo(() => {
+    if (!hpResult?.trend) return new Map<string, number>();
+    const map = new Map<string, number>();
+    hpResult.trend.forEach((item) => {
+      map.set(item.time, item.value);
+    });
+    return map;
+  }, [hpResult]);
 
   const scrollToLatest = () => {
     if (chartDataRef.current?.data && chartsRef.current.size > 0) {
@@ -206,6 +232,12 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           chart.priceScale("overlay").applyOptions({ scaleMargins: { top: 0.65, bottom: 0 } });
           activeSeries.push(chart.addSeries(LineSeries, { color: "#10b981", lineWidth: 2, crosshairMarkerVisible: false }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f43f5e", lineWidth: 2, crosshairMarkerVisible: false }));
+          activeSeries.push(chart.addSeries(LineSeries, {
+            color: "#f472b6",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            crosshairMarkerVisible: false,
+          }));
         } else if (config.id === "above_sma_group") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#22c55e", lineWidth: 2 }));
@@ -271,12 +303,18 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           if (!param.time || !param.point || param.point.x < 0) {
             setHoveredData(null);
           } else {
-            const currentPoint = chartDataRef.current?.data?.find((p: any) => p.time === param.time);
+            const timeStr = typeof param.time === "string" ? param.time : "";
+            const currentPoint = chartDataRef.current?.data?.find((p: any) => {
+              const ptTime = toChartTime(p.time) ?? String(p.time).slice(0, 10);
+              return ptTime === timeStr || p.time === timeStr;
+            });
+            const hpVal = hpMap.get(timeStr);
             if (currentPoint) { 
               setHoveredData({ 
                 time: currentPoint.time, 
                 ohlc: { open: currentPoint.open, high: currentPoint.high, low: currentPoint.low, close: currentPoint.close, volume: currentPoint.volume || 0 }, 
-                indicators: currentPoint.indicators || {} 
+                indicators: currentPoint.indicators || {},
+                hpTrend: hpVal ?? null,
               }); 
             }
           }
@@ -322,6 +360,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         }));
         activeSeries[2].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.price_sma50 || p.close || 0 })));
         activeSeries[3].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.price_sma200 || p.close || 0 })));
+        if (activeSeries[4]) {
+          activeSeries[4].setData(showHp && hpResult?.trend ? hpResult.trend : []);
+        }
       } else if (config.id === "above_sma_group") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma10 || 0 })));
         activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma20 || 0 })));
@@ -353,6 +394,14 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     setTimeout(() => { scrollToLatest(); }, 500);
   }, [chartData, configs, status]);
 
+  // Update dynamic visibility of HP long-term trendline without rebuilding charts
+  useEffect(() => {
+    const mainSeriesList = seriesRef.current.get("main");
+    if (mainSeriesList && mainSeriesList[4]) {
+      mainSeriesList[4].setData(showHp && hpResult?.trend ? hpResult.trend : []);
+    }
+  }, [showHp, hpResult]);
+
   const renderTooltip = (config: IndicatorConfig) => {
     if (!hoveredData) return null;
     return (
@@ -361,6 +410,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           <>
             <span className={hoveredData.ohlc && hoveredData.ohlc.close >= hoveredData.ohlc.open ? "text-red-400" : "text-blue-400"}>C: {hoveredData.ohlc?.close}</span>
             <span className="text-slate-100 font-bold ml-1">V: {(hoveredData.ohlc?.volume || 0).toLocaleString()}</span>
+            {showHp && hoveredData.hpTrend !== undefined && hoveredData.hpTrend !== null && (
+              <span className="text-[#f472b6] font-bold ml-1">HP: {hoveredData.hpTrend.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+            )}
           </>
         ) : config.id === "above_sma_group" ? (
           <><span className="text-red-500 font-bold">10:{hoveredData.indicators["above_sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["above_sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["above_sma50"]?.toFixed(1)}</span></>
@@ -390,6 +442,17 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           <span className="text-[10px] text-slate-400 font-mono hidden md:inline-block border border-slate-700/60 rounded px-1.5 py-0.5 bg-slate-800/40">
             휠: 패널 세로 이동 | Ctrl+휠: 줌 | Shift+휠: 가로 이동
           </span>
+          <button
+            onClick={() => setShowHp(prev => !prev)}
+            className={`text-[8px] px-1.5 py-0.5 rounded border transition-all font-bold tracking-tighter uppercase ${
+              showHp
+                ? "bg-pink-600/30 text-pink-300 border-pink-500/50 hover:bg-pink-600/40 shadow-sm"
+                : "bg-slate-800 hover:bg-slate-700 text-slate-400 border-slate-700 hover:text-slate-200"
+            }`}
+            title="HP(호드릭-프레스콧) 장기추세선 ON/OFF"
+          >
+            {showHp ? "HP ON" : "HP OFF"}
+          </button>
           <button onClick={scrollToLatest} className="text-[8px] bg-slate-800 hover:bg-blue-600 text-slate-300 hover:text-white px-1.5 py-0.5 rounded border border-slate-700 transition-all font-bold tracking-tighter uppercase">Sync Latest</button>
         </div>
         {hoveredData && (
@@ -404,6 +467,9 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             <div className="flex gap-2">
               <span className="text-[#10b981] font-bold">SMA50:<span className="text-slate-100 ml-0.5">{hoveredData.indicators["price_sma50"]?.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></span>
               <span className="text-[#f43f5e] font-bold">SMA200:<span className="text-slate-100 ml-0.5">{hoveredData.indicators["price_sma200"]?.toLocaleString(undefined, {maximumFractionDigits: 0})}</span></span>
+              {showHp && hoveredData.hpTrend !== undefined && hoveredData.hpTrend !== null && (
+                <span className="text-[#f472b6] font-bold">HP:<span className="text-slate-100 ml-0.5">{hoveredData.hpTrend.toLocaleString(undefined, {maximumFractionDigits: 1})}</span></span>
+              )}
             </div>
           </div>
         )}

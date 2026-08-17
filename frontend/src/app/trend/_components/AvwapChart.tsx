@@ -75,6 +75,7 @@ export function AvwapChart() {
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
   const [symbol, setSymbol] = useState<string | null>(null);
   const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
+  const [ddPeriod, setDdPeriod] = useState<"52w" | "3y" | "all">("52w");
 
   // Stock Search state
   const [searchCountry, setSearchCountry] = useState<"kr" | "us">("kr");
@@ -251,6 +252,8 @@ export function AvwapChart() {
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
     rsi?: number | null;
     mdd?: number | null;
+    dd52w?: number | null;
+    dd3y?: number | null;
     h52Chg?: number | null;
     vixFix?: number | null;
     amount?: number | null;
@@ -976,6 +979,8 @@ export function AvwapChart() {
               },
               rsi: matchedPoint.rsi,
               mdd: matchedPoint.mdd,
+              dd52w: matchedPoint.dd_52w ?? matchedPoint.h52_chg,
+              dd3y: matchedPoint.dd_3y,
               h52Chg: matchedPoint.h52_chg,
               vixFix: matchedPoint.vix_fix,
               amount: matchedPoint.amount,
@@ -1008,10 +1013,15 @@ export function AvwapChart() {
       // Populate data into series
       const pts = chartData.points;
       if (pts.length > 0) {
-        // 1. MDD
+        // 1. MDD / Drawdown
         const mddSeriesList = seriesRef.current.get("mdd") || [];
         if (mddSeriesList[0]) {
-          mddSeriesList[0].setData(linePoints((p) => p.mdd));
+          const getDrawdown = (p: AvwapPoint) => {
+            if (ddPeriod === "52w") return p.dd_52w ?? p.h52_chg ?? p.mdd;
+            if (ddPeriod === "3y") return p.dd_3y ?? p.mdd;
+            return p.mdd;
+          };
+          mddSeriesList[0].setData(linePoints(getDrawdown));
         }
 
         // 2. Main (Candlesticks, MAs, BB Upper, VWAPs, Anchors)
@@ -1230,6 +1240,34 @@ export function AvwapChart() {
     }
   }, [showVwap, showHvwap, showLvwap, showBbUpper, enabledAnchors, chartData]);
 
+  // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
+  useEffect(() => {
+    if (!chartData) return;
+    const mddSeriesList = seriesRef.current.get("mdd") || [];
+    if (!mddSeriesList[0]) return;
+
+    const linePoints = (pick: (p: AvwapPoint) => unknown) => {
+      const out: { time: string; value: number }[] = [];
+      const seen = new Set<string>();
+      for (const p of chartData.points) {
+        const time = toChartTime(p.date);
+        const value = toFiniteNumber(pick(p));
+        if (!time || value == null || seen.has(time)) continue;
+        seen.add(time);
+        out.push({ time, value });
+      }
+      return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+    };
+
+    const getDrawdown = (p: AvwapPoint) => {
+      if (ddPeriod === "52w") return p.dd_52w ?? p.h52_chg ?? p.mdd;
+      if (ddPeriod === "3y") return p.dd_3y ?? p.mdd;
+      return p.mdd;
+    };
+
+    mddSeriesList[0].setData(linePoints(getDrawdown));
+  }, [ddPeriod, chartData]);
+
   // Update Y-axis price scale mode (log vs linear) dynamically
   useEffect(() => {
     const mainChart = chartsRef.current.get("main");
@@ -1262,6 +1300,8 @@ export function AvwapChart() {
     },
     rsi: latestPoint.rsi,
     mdd: latestPoint.mdd,
+    dd52w: latestPoint.dd_52w ?? latestPoint.h52_chg,
+    dd3y: latestPoint.dd_3y,
     h52Chg: latestPoint.h52_chg,
     vixFix: latestPoint.vix_fix,
     amount: latestPoint.amount,
@@ -1819,38 +1859,36 @@ export function AvwapChart() {
             {activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
               <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
             )}
-            {activeDisplay.mdd !== null && activeDisplay.mdd !== undefined && (
-              <span>
-                MDD:{" "}
-                <span
-                  className={`font-bold ${
-                    activeDisplay.mdd === 0
-                      ? "text-emerald-400"
-                      : activeDisplay.mdd <= -20
-                      ? "text-rose-400"
-                      : "text-sky-400"
-                  }`}
-                >
-                  {activeDisplay.mdd.toFixed(1)}%
+            {/* Drawdown Header Badge */}
+            {(() => {
+              const curDd = ddPeriod === "52w"
+                ? (activeDisplay.dd52w ?? activeDisplay.h52Chg ?? activeDisplay.mdd)
+                : ddPeriod === "3y"
+                ? (activeDisplay.dd3y ?? activeDisplay.mdd)
+                : activeDisplay.mdd;
+              if (curDd === null || curDd === undefined) return null;
+              return (
+                <span>
+                  낙폭({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"}):{" "}
+                  <span
+                    className={`font-bold ${
+                      curDd === 0
+                        ? "text-emerald-400"
+                        : curDd <= -20
+                        ? "text-rose-400"
+                        : "text-sky-400"
+                    }`}
+                  >
+                    {curDd.toFixed(1)}%
+                  </span>
+                  {ddPeriod !== "all" && activeDisplay.mdd !== null && activeDisplay.mdd !== undefined && (
+                    <span className="text-gray-400 font-normal text-[11px] ml-1">
+                      (전체: {activeDisplay.mdd.toFixed(1)}%)
+                    </span>
+                  )}
                 </span>
-              </span>
-            )}
-            {activeDisplay.h52Chg !== null && activeDisplay.h52Chg !== undefined && (
-              <span>
-                52HChg:{" "}
-                <span
-                  className={`font-bold ${
-                    activeDisplay.h52Chg === 0
-                      ? "text-emerald-400"
-                      : activeDisplay.h52Chg <= -20
-                      ? "text-rose-400"
-                      : "text-sky-400"
-                  }`}
-                >
-                  {activeDisplay.h52Chg >= 0 ? `+${activeDisplay.h52Chg.toFixed(1)}%` : `${activeDisplay.h52Chg.toFixed(1)}%`}
-                </span>
-              </span>
-            )}
+              );
+            })()}
             {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
               <span>VIX Fix: <span className="text-emerald-400 font-bold">{activeDisplay.vixFix.toFixed(1)}%</span></span>
             )}
@@ -1887,10 +1925,47 @@ export function AvwapChart() {
             style={{ borderLeft: "1px dashed rgba(148, 163, 184, 0.7)" }}
           />
 
-          {/* Panel 1: MDD */}
+          {/* Panel 1: Drawdown / MDD */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
-            <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              MDD (%)
+            <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 bg-gray-900/80 px-2 py-0.5 rounded border border-gray-800 backdrop-blur-sm shadow-sm">
+              <span className="text-[11px] font-bold text-gray-300">
+                낙폭 ({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"})
+              </span>
+              <div className="flex items-center gap-0.5 ml-1 bg-gray-950 p-0.5 rounded border border-gray-800">
+                <button
+                  type="button"
+                  onClick={() => setDdPeriod("52w")}
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    ddPeriod === "52w"
+                      ? "bg-sky-600 text-white font-bold shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  52주 (기본)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDdPeriod("3y")}
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    ddPeriod === "3y"
+                      ? "bg-sky-600 text-white font-bold shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  3년
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDdPeriod("all")}
+                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                    ddPeriod === "all"
+                      ? "bg-sky-600 text-white font-bold shadow-sm"
+                      : "text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  전기간
+                </button>
+              </div>
             </div>
             <div data-chart-id="mdd" className="w-full" />
           </div>

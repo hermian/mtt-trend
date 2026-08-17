@@ -123,11 +123,12 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("VWAP")).toBeInTheDocument();
     expect(screen.getByText("HVWAP(최고)")).toBeInTheDocument();
     expect(screen.getByText("LVWAP(최저)")).toBeInTheDocument();
-    expect(screen.getByText(/2021-06-28/)).toBeInTheDocument();
-    expect(screen.getByText("52HChg:")).toBeInTheDocument();
+    expect(screen.getByText(/낙폭\(52주\):/)).toBeInTheDocument();
     expect(screen.getByText("-4.2%")).toBeInTheDocument();
-    expect(screen.getByText("MDD (%)")).toBeInTheDocument();
-    expect(screen.getByText("-3.5%")).toBeInTheDocument();
+    expect(screen.getByText("52주 (기본)")).toBeInTheDocument();
+    expect(screen.getByText("3년")).toBeInTheDocument();
+    expect(screen.getByText("전기간")).toBeInTheDocument();
+    expect(screen.getByText(/전체: -3.5%/)).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();
     expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
     expect(screen.getByText("KR")).toBeInTheDocument();

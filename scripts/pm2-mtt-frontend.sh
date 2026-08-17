@@ -12,4 +12,15 @@ if [ -s "${NVM_DIR}/nvm.sh" ]; then
 fi
 
 cd "${ROOT}/frontend"
+
+# Ensure standalone static assets exist
+mkdir -p .next/standalone/.next/static
+if [ -d ".next/static" ]; then
+  cp -rf .next/static/* .next/standalone/.next/static/ 2>/dev/null || true
+fi
+if [ -d "public" ]; then
+  cp -rf public .next/standalone/ 2>/dev/null || true
+fi
+
 exec node .next/standalone/server.js
+

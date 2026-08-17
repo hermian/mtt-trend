@@ -915,6 +915,8 @@ export interface AvwapPoint {
   rsi: number | null;
   mdd: number | null;
   h52_chg: number | null;
+  dd_52w?: number | null;
+  dd_3y?: number | null;
   vwap: number | null;
   hvwap: number | null;
   lvwap: number | null;

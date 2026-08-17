@@ -252,6 +252,14 @@ def _calculate_52w_high_change(df: pd.DataFrame) -> pd.Series:
     return chg.fillna(0.0)
 
 
+def _calculate_3y_high_change(df: pd.DataFrame) -> pd.Series:
+    """3년(1095일) 최고가 대비 하락률(%): (Close - 3Y_High) / 3Y_High * 100."""
+    h3y = df["High"].rolling("1095D", min_periods=1).max()
+    chg = (df["Close"] - h3y) / h3y.replace(0, np.nan) * 100.0
+    return chg.fillna(0.0)
+
+
+
 def _calculate_vwap_series(df: pd.DataFrame, start_idx: Optional[int] = None) -> pd.Series:
     """Calculate VWAP: typical_price = (H + L + C + O) / 4."""
     if start_idx is not None and start_idx < len(df):
@@ -411,6 +419,8 @@ def load_avwap_chart_data(
         rsi_series = _calculate_rsi(df["Close"], period=min(14, max(2, len(df) - 1)))
         mdd_series = _calculate_drawdown(df["Close"])
         h52_chg_series = _calculate_52w_high_change(df)
+        dd_3y_series = _calculate_3y_high_change(df)
+
 
         # 6. Base VWAP, HVWAP, LVWAP
         vwap_lb = cfg["vwap_lookback"]
@@ -562,6 +572,7 @@ def load_avwap_chart_data(
             rsi_val = rsi_series.iloc[idx]
             mdd_val = mdd_series.iloc[idx]
             h52_val = h52_chg_series.iloc[idx]
+            dd_3y_val = dd_3y_series.iloc[idx]
             
             vwap_val = vwap_series.iloc[idx]
             hvwap_val = hvwap_series.iloc[idx]
@@ -584,6 +595,8 @@ def load_avwap_chart_data(
                 rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
                 mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
                 h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
+                dd_52w=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
+                dd_3y=round(float(dd_3y_val), 2) if pd.notna(dd_3y_val) and np.isfinite(dd_3y_val) else None,
                 vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
                 hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
                 lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,
@@ -1084,6 +1097,8 @@ def _compute_asset_avwap_chart(
     rsi_series = _calculate_rsi(df["Close"], period=min(14, max(2, len(df) - 1)))
     mdd_series = _calculate_drawdown(df["Close"])
     h52_chg_series = _calculate_52w_high_change(df)
+    dd_3y_series = _calculate_3y_high_change(df)
+
 
     # 6. Base VWAP, HVWAP, LVWAP
     vwap_lb = cfg["vwap_lookback"]
@@ -1219,6 +1234,7 @@ def _compute_asset_avwap_chart(
         rsi_val = rsi_series.iloc[idx]
         mdd_val = mdd_series.iloc[idx]
         h52_val = h52_chg_series.iloc[idx]
+        dd_3y_val = dd_3y_series.iloc[idx]
 
         vwap_val = vwap_series.iloc[idx]
         hvwap_val = hvwap_series.iloc[idx]
@@ -1241,6 +1257,8 @@ def _compute_asset_avwap_chart(
             rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
             mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
             h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
+            dd_52w=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
+            dd_3y=round(float(dd_3y_val), 2) if pd.notna(dd_3y_val) and np.isfinite(dd_3y_val) else None,
             vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
             hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
             lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,

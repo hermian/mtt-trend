@@ -501,3 +501,76 @@ class Top30MatrixResponse(BaseModel):
     dates: List[Top30DateRankings]
 
 
+# --- 종목/ETF 수익률 비교 (Return Comparison) ---
+class ReturnComparisonItem(BaseModel):
+    code: str
+    name: Optional[str] = None
+    market: Optional[str] = None  # KOSPI, KOSDAQ, ETF, US, US_ETF, etc.
+    type: Optional[str] = None    # stock, etf, us_stock, us_etf
+
+
+class ReturnComparisonRequest(BaseModel):
+    items: List[ReturnComparisonItem]
+    start_date: Optional[str] = None  # YYYY-MM-DD
+    end_date: Optional[str] = None    # YYYY-MM-DD
+
+
+class ReturnDataPoint(BaseModel):
+    date: str
+    close: float
+    return_pct: float  # 누적 수익률 (%)
+
+
+class ReturnSeries(BaseModel):
+    code: str
+    name: str
+    market: str
+    type: str
+    currency: str  # KRW or USD
+    color: Optional[str] = None
+    data: List[ReturnDataPoint] = []
+
+
+class ReturnStatistics(BaseModel):
+    code: str
+    name: str
+    start_price: Optional[float] = None
+    end_price: Optional[float] = None
+    currency: str = "KRW"
+    return_1w: Optional[float] = None
+    return_1m: Optional[float] = None
+    return_3m: Optional[float] = None
+    return_6m: Optional[float] = None
+    return_1y: Optional[float] = None
+    return_ytd: Optional[float] = None
+    period_return: Optional[float] = None
+    max_return: Optional[float] = None
+    min_return: Optional[float] = None
+    mean_return: Optional[float] = None
+    volatility: Optional[float] = None
+
+
+class CorrelationMatrix(BaseModel):
+    labels: List[str]
+    matrix: List[List[Optional[float]]]
+
+
+class RollingCorrelationPoint(BaseModel):
+    date: str
+    corr: float
+
+
+class RollingCorrelationPair(BaseModel):
+    pair: str
+    data: List[RollingCorrelationPoint] = []
+
+
+class ReturnComparisonResponse(BaseModel):
+    start_date: str
+    end_date: str
+    series: List[ReturnSeries] = []
+    statistics: List[ReturnStatistics] = []
+    correlations: Dict[str, Optional[CorrelationMatrix]] = {}
+    rolling_correlations: Dict[str, List[RollingCorrelationPair]] = {}
+
+

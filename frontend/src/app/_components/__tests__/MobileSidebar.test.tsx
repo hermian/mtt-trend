@@ -111,6 +111,14 @@ describe("MobileSidebar", () => {
     expect(closeButton).toBeInTheDocument();
   });
 
+  it("renders 수익률 navigation link pointing to /trend?tab=returns", () => {
+    const onClose = vi.fn();
+    const { container } = render(<MobileSidebar isOpen={true} onClose={onClose} />);
+    const returnsLink = container.querySelector('a[href="/trend?tab=returns"]');
+    expect(returnsLink).toBeInTheDocument();
+    expect(returnsLink?.textContent).toContain("수익률");
+  });
+
   it("TASK-004: 닫기 버튼 클릭 시 onClose가 호출되어야 한다", () => {
     const onClose = vi.fn();
     render(<MobileSidebar isOpen={true} onClose={onClose} />);

@@ -860,6 +860,17 @@ export const api = {
     );
     return data;
   },
+
+  // POST /api/charts/returns/compare
+  compareReturns: async (
+    req: ReturnComparisonRequest
+  ): Promise<ReturnComparisonResponse> => {
+    const { data } = await apiClient.post<ReturnComparisonResponse>(
+      "/api/charts/returns/compare",
+      req
+    );
+    return data;
+  },
 };
 
 
@@ -944,6 +955,79 @@ export interface AvwapChartResponse {
   points: AvwapPoint[];
   anchors: AvwapAnchorSeries[];
   preset_dates: string[];
+}
+
+// Return Comparison (수익률 비교) Types
+export interface ReturnComparisonItem {
+  code: string;
+  name?: string | null;
+  market?: string | null;
+  type?: string | null;
+}
+
+export interface ReturnComparisonRequest {
+  items: ReturnComparisonItem[];
+  start_date?: string | null;
+  end_date?: string | null;
+}
+
+export interface ReturnDataPoint {
+  date: string;
+  close: number;
+  return_pct: number;
+}
+
+export interface ReturnSeries {
+  code: string;
+  name: string;
+  market: string;
+  type: string;
+  currency: string;
+  color?: string | null;
+  data: ReturnDataPoint[];
+}
+
+export interface ReturnStatistics {
+  code: string;
+  name: string;
+  start_price?: number | null;
+  end_price?: number | null;
+  currency: string;
+  return_1w?: number | null;
+  return_1m?: number | null;
+  return_3m?: number | null;
+  return_6m?: number | null;
+  return_1y?: number | null;
+  return_ytd?: number | null;
+  period_return?: number | null;
+  max_return?: number | null;
+  min_return?: number | null;
+  mean_return?: number | null;
+  volatility?: number | null;
+}
+
+export interface CorrelationMatrix {
+  labels: string[];
+  matrix: (number | null)[][];
+}
+
+export interface RollingCorrelationPoint {
+  date: string;
+  corr: number;
+}
+
+export interface RollingCorrelationPair {
+  pair: string;
+  data: RollingCorrelationPoint[];
+}
+
+export interface ReturnComparisonResponse {
+  start_date: string;
+  end_date: string;
+  series: ReturnSeries[];
+  statistics: ReturnStatistics[];
+  correlations: Record<string, CorrelationMatrix | null>;
+  rolling_correlations: Record<string, RollingCorrelationPair[]>;
 }
 
 export { API_CONFIG };

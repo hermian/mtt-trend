@@ -43,4 +43,11 @@ describe("Sidebar", () => {
     const aside = container.querySelector("aside");
     expect(aside?.className).toContain("bg-gray-800");
   });
+
+  it("renders 수익률 navigation link pointing to /trend?tab=returns", () => {
+    const { container } = render(<Sidebar />);
+    const returnsLink = container.querySelector('a[href="/trend?tab=returns"]');
+    expect(returnsLink).toBeInTheDocument();
+    expect(returnsLink?.textContent).toContain("수익률");
+  });
 });

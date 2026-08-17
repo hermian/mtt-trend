@@ -123,6 +123,8 @@ export function Sidebar() {
     pathname.startsWith("/trend") && (searchParams.get("tab") === "kospi_weather" || searchParams.get("tab") === "weather_20panel");
   const isAvwapActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "avwap";
+  const isReturnsActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "returns";
   return (
     <aside
       className={clsx(
@@ -265,6 +267,33 @@ export function Sidebar() {
             <path d="M6 20v-4" />
           </svg>
           {!collapsed && <span className="truncate">AVWAP 차트</span>}
+        </Link>
+
+        {/* 수익률 비교 Button-styled Link */}
+        <Link
+          href="/trend?tab=returns"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isReturnsActive
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "수익률" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
+            <polyline points="17 6 23 6 23 12" />
+          </svg>
+          {!collapsed && <span className="truncate">수익률</span>}
         </Link>
 
         {/* Above MA & 수급 Button-styled Link */}

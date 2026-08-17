@@ -31,7 +31,10 @@ from app.schemas import (
     CustomAnchorCreate,
     CustomAnchorUpdate,
     CustomAnchorResponse,
+    ReturnComparisonRequest,
+    ReturnComparisonResponse,
 )
+from app.utils.returns_utils import compute_return_comparison
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
     default_lookback_start,
@@ -1218,6 +1221,22 @@ async def reset_custom_avwap_anchors(
     """
     success = reset_all_anchors(target)
     return {"status": "ok", "target": target}
+
+
+@router.post("/returns/compare", response_model=ReturnComparisonResponse)
+async def compare_returns_endpoint(
+    request: ReturnComparisonRequest,
+):
+    """
+    선택된 다중 종목/ETF의 누적 수익률(%), 기술 통계, 기간별 상관계수 매트릭스 및 롤링 상관계수를 계산하여 반환합니다.
+    """
+    try:
+        return compute_return_comparison(request)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"수익률 비교 데이터 연산 중 오류가 발생했습니다: {str(e)}",
+        )
 
 
 

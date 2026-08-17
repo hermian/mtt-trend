@@ -32,6 +32,7 @@ import { ForeignFlowChart } from "./_components/ForeignFlowChart";
 import { StockbeeMmPanel } from "./_components/StockbeeMmPanel";
 import { MarketCapTop30Panel } from "./_components/MarketCapTop30Panel";
 import { AvwapChart } from "./_components/AvwapChart";
+import { ReturnComparisonPanel } from "./_components/ReturnComparisonPanel";
 import type { DataSource } from "@/lib/api";
 
 const SOURCE_LABELS: Record<DataSource, string> = {
@@ -78,6 +79,8 @@ function TrendPageContent() {
       ? "kospi_weather"
       : rawTab === "avwap"
       ? "avwap"
+      : rawTab === "returns"
+      ? "returns"
       : rawTab === "above_ma"
       ? "above_ma"
       : rawTab === "macro"
@@ -143,8 +146,8 @@ function TrendPageContent() {
     <div className="flex flex-col min-h-screen bg-gray-950 text-white">
       {/* --- Main Content Area --- */}
       <main className="flex-1 flex flex-col overflow-hidden">
-        {/* Header Bar - 차트 및 Above MA 탭일 때는 숨김 처리하여 공간 확보 */}
-        {activeTab !== "chart" && activeTab !== "avwap" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && activeTab !== "stockbee_mm" && activeTab !== "top30" && (
+        {/* Header Bar - 차트 및 독립 탭일 때는 숨김 처리하여 공간 확보 */}
+        {activeTab !== "chart" && activeTab !== "avwap" && activeTab !== "returns" && activeTab !== "above_ma" && activeTab !== "macro" && activeTab !== "wics_ranking" && activeTab !== "wics_index" && activeTab !== "market_flow" && activeTab !== "foreign_flow" && activeTab !== "stockbee_mm" && activeTab !== "top30" && (
           <header className="h-16 bg-gray-900/50 border-b border-gray-800 flex items-center justify-between px-6 backdrop-blur-md sticky top-0 z-30">
             <div className="flex items-center gap-4">
               <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-widest flex items-center gap-3">
@@ -611,6 +614,10 @@ function TrendPageContent() {
 
               {activeTab === "top30" && (
                 <MarketCapTop30Panel />
+              )}
+
+              {activeTab === "returns" && (
+                <ReturnComparisonPanel />
               )}
             </>
           )}

@@ -119,6 +119,14 @@ describe("MobileSidebar", () => {
     expect(returnsLink?.textContent).toContain("수익률");
   });
 
+  it("renders 시총 TOP 30 navigation link pointing to /trend?tab=top30", () => {
+    const onClose = vi.fn();
+    const { container } = render(<MobileSidebar isOpen={true} onClose={onClose} />);
+    const top30Link = container.querySelector('a[href="/trend?tab=top30"]');
+    expect(top30Link).toBeInTheDocument();
+    expect(top30Link?.textContent).toContain("시총 TOP 30");
+  });
+
   it("TASK-004: 닫기 버튼 클릭 시 onClose가 호출되어야 한다", () => {
     const onClose = vi.fn();
     render(<MobileSidebar isOpen={true} onClose={onClose} />);

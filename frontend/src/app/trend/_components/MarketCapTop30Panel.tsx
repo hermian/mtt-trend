@@ -369,26 +369,32 @@ export function MarketCapTop30Panel() {
   };
 
   // Toggle stock highlight & PiP
-  const handleToggleStock = (stock: { code: string; name: string; marcap?: number | null; market?: string; rank?: number; item?: Top30MatrixItem }) => {
+  const handleToggleStock = (stock: {
+    code: string;
+    name?: string;
+    marcap?: number | null;
+    market?: string;
+    rank?: number;
+    item?: Top30MatrixItem;
+  }) => {
     if (activeCode === stock.code) {
-      // Toggle off
       setSelectedCell(null);
     } else {
-      // Toggle on
+      const stockInfo = allStocks.find((s) => s.code === stock.code);
       const foundItem: Top30MatrixItem = stock.item || {
         code: stock.code,
-        name: stock.name,
-        market: stock.market || "KOSPI",
-        marcap: stock.marcap ?? null,
-        rank: stock.rank ?? 1,
-        previous_rank: null,
-        rank_delta: null,
-        new_entrant: false,
-        sector: null,
+        name: stock.name || stockInfo?.name || stock.code,
+        market: stock.market || stockInfo?.market || "KOSPI",
+        marcap: stock.marcap ?? stockInfo?.marcap ?? null,
+        rank: stock.rank ?? stockInfo?.rank ?? 1,
+        previous_rank: stockInfo?.previous_rank ?? null,
+        rank_delta: stockInfo?.rank_delta ?? null,
+        new_entrant: stockInfo?.new_entrant ?? false,
+        sector: stockInfo?.sector ?? null,
       };
       setSelectedCell({
         code: stock.code,
-        name: stock.name,
+        name: stock.name || stockInfo?.name || stock.code,
         date: visibleDates.length > 0 ? visibleDates[visibleDates.length - 1].date : endDate,
         item: foundItem,
       });
@@ -396,14 +402,15 @@ export function MarketCapTop30Panel() {
   };
 
   // Handle table cell click (toggle)
-  const handleCellClick = (item: Top30MatrixItem, date: string) => {
-    if (activeCode === item.code) {
+  const handleCellClick = (item: Top30MatrixItem, date?: string) => {
+    const targetDate = date || (visibleDates.length > 0 ? visibleDates[visibleDates.length - 1].date : endDate);
+    if (activeCode === item.code && selectedCell?.date === targetDate) {
       setSelectedCell(null);
     } else {
       setSelectedCell({
         code: item.code,
         name: item.name,
-        date,
+        date: targetDate,
         item,
       });
     }
@@ -551,7 +558,6 @@ export function MarketCapTop30Panel() {
     return Array.from(map.values()).sort((a, b) => a.rank - b.rank);
   }, [visibleDates]);
 
-
   // PiP Mini Chart Data
   const pipChartData = useMemo(() => {
     if (!selectedCell || !visibleDates.length) return [];
@@ -577,75 +583,35 @@ export function MarketCapTop30Panel() {
 
   const latestDate = visibleDates.length > 0 ? visibleDates[visibleDates.length - 1].date : endDate;
 
-  // Custom 2-column Tooltip showing all 30 ranks without clipping
+  // Compact Single-Stock Tooltip on hover/touch (No giant 30-rank popup)
   const CustomChartTooltip = ({ active, payload, label }: any) => {
     if (!active || !payload || !payload.length) return null;
 
     const fullDate = payload[0]?.payload?.fullDate || label;
-    const items = payload
-      .filter((p: any) => p.value != null)
-      .map((p: any) => {
-        const stock = allStocks.find((s) => s.code === p.dataKey);
-        return {
-          rank: p.value as number,
-          code: p.dataKey as string,
-          name: stock?.name ?? p.dataKey,
-          marcap: stock?.marcap,
-          market: stock?.market,
-          color: p.stroke,
-        };
-      })
-      .sort((a: any, b: any) => a.rank - b.rank);
+    const targetCode = hoveredCode || activeCode;
 
-    return (
-      <div className="bg-gray-900/95 backdrop-blur-md border border-gray-700 rounded-xl p-3 shadow-2xl z-50 text-xs w-[380px] max-w-[90vw] ring-1 ring-white/10">
-        <div className="flex items-center justify-between border-b border-gray-800 pb-2 mb-2">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-white font-mono text-sm">{fullDate}</span>
-            <span className="text-[10px] text-blue-400 font-semibold bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/40">
-              TOP 30
+    if (targetCode) {
+      const targetPayload = payload.find((p: any) => p.dataKey === targetCode && p.value != null);
+      const stock = allStocks.find((s) => s.code === targetCode);
+      if (!stock || !targetPayload) return null;
+
+      return (
+        <div className="bg-gray-900/95 backdrop-blur-md border border-yellow-500/60 rounded-xl px-3 py-2 shadow-2xl z-50 text-xs ring-1 ring-yellow-400/40 flex flex-col gap-1 pointer-events-none animate-fade-in min-w-[140px]">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-800 pb-1">
+            <span className="font-bold text-white font-mono text-[11px]">{fullDate}</span>
+            <span className="text-[10px] text-yellow-400 font-extrabold bg-yellow-950/80 px-1.5 py-0.5 rounded border border-yellow-600/50">
+              #{targetPayload.value}위
             </span>
           </div>
-          <span className="text-[10px] text-gray-400">총 {items.length}개 종목 (1위~30위)</span>
+          <div className="flex items-center justify-between gap-3 text-gray-200 mt-0.5">
+            <span className="font-extrabold text-sm text-yellow-300 truncate max-w-[120px]">{stock.name}</span>
+            <span className="font-mono text-xs text-gray-300 font-bold">{formatMarcap(stock.marcap)}</span>
+          </div>
         </div>
-        <div className="grid grid-cols-2 gap-x-3 gap-y-1 max-h-[460px] overflow-y-auto custom-scrollbar pr-1">
-          {items.map((item: any) => {
-            const isTop10 = item.rank <= 10;
-            const isHighlighted = activeCode === item.code || hoveredCode === item.code;
-            return (
-              <div
-                key={item.code}
-                onMouseEnter={() => setHoveredCode(item.code)}
-                onMouseLeave={() => setHoveredCode(null)}
-                className={clsx(
-                  "flex items-center justify-between py-0.5 px-1.5 rounded transition-colors",
-                  isHighlighted
-                    ? "bg-yellow-950/80 ring-1 ring-yellow-400 text-yellow-200 font-bold"
-                    : isTop10
-                    ? "bg-white/5 text-white"
-                    : "text-gray-300"
-                )}
-              >
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <span
-                    className="w-4 text-right font-mono font-bold text-[10px]"
-                    style={{ color: item.color }}
-                  >
-                    {item.rank}
-                  </span>
-                  <span className="truncate max-w-[90px] font-medium text-[11px]">
-                    {item.name}
-                  </span>
-                </div>
-                <span className="font-mono text-[9px] text-gray-400 shrink-0">
-                  {formatMarcap(item.marcap)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
+      );
+    }
+
+    return null;
   };
 
   return (
@@ -895,12 +861,12 @@ export function MarketCapTop30Panel() {
             표시할 시가총액 데이터가 없습니다. DB 동기화(DB Sync)를 확인해 주세요.
           </div>
         ) : view === "chart" ? (
-          /* Stepped Line Chart View */
+          /* Line Chart View */
           <div ref={chartContainerRef} className="flex-1 p-4 flex flex-col min-h-[800px] select-none">
             <div className="flex flex-wrap items-center justify-between mb-3 gap-2">
               <div className="flex items-center gap-2">
                 <h4 className="text-sm font-bold text-gray-300 flex items-center gap-2">
-                  <span>시총 TOP 30 계단식 순위 추적 차트 ({currentTfMeta.label})</span>
+                  <span>시총 TOP 30 순위 추적 차트 ({currentTfMeta.label})</span>
                   <span className="text-xs font-normal text-gray-500 font-mono">
                     ({startDate} ~ {endDate})
                   </span>
@@ -944,7 +910,7 @@ export function MarketCapTop30Panel() {
                         style: { fill: "#6b7280", fontSize: 11 },
                       }}
                     />
-                    <Tooltip content={<CustomChartTooltip />} />
+                    <Tooltip cursor={false} content={<CustomChartTooltip />} />
                     {allStocks.map((s) => {
                       const latestRank = latestStockRankMap.get(s.code);
                       const isTop10 = latestRank != null && latestRank <= 10;
@@ -996,20 +962,35 @@ export function MarketCapTop30Panel() {
                       return (
                         <Line
                           key={s.code}
-                          type="stepAfter"
+                          type="linear"
                           dataKey={s.code}
                           name={s.name}
                           stroke={strokeColor}
                           strokeWidth={strokeWidth}
                           strokeOpacity={strokeOpacity}
+                          cursor="pointer"
+                          onMouseEnter={() => setHoveredCode(s.code)}
+                          onMouseLeave={() => setHoveredCode(null)}
+                          onClick={() => handleToggleStock(s)}
                           dot={
                             isFocused
-                              ? { r: 4, fill: "#facc15", stroke: "#000", strokeWidth: 1 }
+                              ? { r: 5, fill: "#facc15", stroke: "#000", strokeWidth: 1.5, cursor: "pointer", onClick: () => handleToggleStock(s) }
                               : isTop10 || isMover
-                              ? { r: 2.5, fill: strokeColor }
+                              ? { r: 2, fill: strokeColor }
                               : false
                           }
-                          activeDot={{ r: 6, fill: "#facc15", stroke: "#fff", strokeWidth: 2 }}
+                          activeDot={
+                            isFocused
+                              ? {
+                                  r: 7,
+                                  fill: "#facc15",
+                                  stroke: "#fff",
+                                  strokeWidth: 2,
+                                  cursor: "pointer",
+                                  onClick: () => handleToggleStock(s),
+                                }
+                              : false
+                          }
                           connectNulls={false}
                           isAnimationActive={false}
                         />
@@ -1252,7 +1233,6 @@ export function MarketCapTop30Panel() {
                           ? stockColorMap.get(item.code)
                           : "bg-gray-900/30 border border-gray-800/50 text-gray-300 hover:border-gray-700";
                         const isMatch = activeCode === item.code;
-                        const isExactCell = selectedCell?.code === item.code && selectedCell?.date === dateObj.date;
                         const hasActiveSelection = activeCode !== null;
                         const isRising3D = risingStocks3D.has(item.code);
                         const isRising2D = risingStocks2D.has(item.code);
@@ -1262,14 +1242,13 @@ export function MarketCapTop30Panel() {
                             key={item.code}
                             onClick={() => {
                               if (hasDraggedRef.current) return;
-                              handleCellClick(item, dateObj.date);
+                              handleCellClick(item);
                             }}
                             className={clsx(
                               "h-[38px] px-2 py-0.5 flex flex-col justify-center border-b border-gray-800/30 cursor-pointer select-none transition-all duration-200",
                               colorClass,
                               isMatch &&
                                 "ring-2 ring-yellow-400 border-yellow-400 scale-[1.02] shadow-lg shadow-yellow-400/20 z-10 opacity-100",
-                              isExactCell && "ring-2 ring-white border-white scale-[1.04] z-20 shadow-white/30",
                               isRising3D &&
                                 !hasActiveSelection &&
                                 "ring-2 ring-emerald-500 border-emerald-500 scale-[1.01] shadow-md shadow-emerald-500/10 z-10",
@@ -1365,10 +1344,10 @@ export function MarketCapTop30Panel() {
             • <strong className="text-gray-200">색상 지정 규칙:</strong> 맨 마지막 기간(종료일/기준일)의 상위 10개 종목은 각각 고유한 10가지 색상을 가집니다. 과거 기간의 동일 종목에도 같은 색상이 적용되어 순위 변동 추이를 시각적으로 직관적이게 추적할 수 있습니다.
           </p>
           <p>
-            • <strong className="text-gray-200">하이라이트 & PiP 미니 패널:</strong> 차트 하단의 종목 칩이나 표의 셀을 클릭하면 선택한 종목이 노란색으로 하이라이트되며(클릭 시 토글), 화면 우측 하단 PiP 패널에 해당 시점의 상세 시가총액과 <strong>계단식 순위 차트</strong>가 표시됩니다.
+            • <strong className="text-gray-200">하이라이트 & PiP 미니 패널:</strong> 차트의 라인, 하단의 종목 칩 또는 표의 셀을 터치/클릭하면 해당 종목이 노란색으로 하이라이트되며, 화면 우측 하단 PiP 패널에 상세 정보와 순위 라인 차트가 표시됩니다.
           </p>
           <p>
-            • <strong className="text-gray-200">계단식 차트(Step-After):</strong> 차트 뷰는 순위의 불연속적 이동 특성을 가장 정확히 나타내기 위해 계단식(Step) 꺾은선으로 순위(1~30위)를 시각화합니다.
+            • <strong className="text-gray-200">순위 라인 차트:</strong> 기간별 순위 변동 추이를 직관적으로 파악할 수 있도록 꺾은선 라인으로 순위(1~30위)를 시각화합니다.
           </p>
         </div>
       </div>
@@ -1458,10 +1437,10 @@ export function MarketCapTop30Panel() {
                 </div>
               </div>
 
-              {/* Right Column: Mini Stepped Rank Chart */}
+              {/* Right Column: Mini Rank Line Chart */}
               <div className="flex-1 min-w-0 bg-black/25 p-2 rounded-lg border border-gray-800/60 flex flex-col justify-between">
                 <div className="flex items-center justify-between text-[10px] text-gray-400 mb-1">
-                  <span className="font-bold">순위 변동 추이 (계단식)</span>
+                  <span className="font-bold">순위 변동 추이</span>
                   <span className="font-mono text-[9px] text-gray-500">1위~30위</span>
                 </div>
                 <div className="h-[120px] w-full">
@@ -1486,7 +1465,7 @@ export function MarketCapTop30Panel() {
                         formatter={(value: any) => [`#${value}위`, "순위"]}
                       />
                       <Line
-                        type="stepAfter"
+                        type="linear"
                         dataKey="rank"
                         stroke="#facc15"
                         strokeWidth={2.5}

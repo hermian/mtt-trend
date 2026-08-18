@@ -67,7 +67,7 @@ describe("MarketCapTop30Panel", () => {
     expect(screen.getAllByText("1,604.8조")[0]).toBeInTheDocument();
   });
 
-  it("opens PiP mini panel when a stock cell is clicked", () => {
+  it("opens PiP mini panel when a stock cell is clicked in table view", () => {
     render(<MarketCapTop30Panel />);
     fireEvent.click(screen.getByText("표"));
     const samsung = screen.getAllByText("삼성전자")[0];
@@ -105,7 +105,7 @@ describe("MarketCapTop30Panel", () => {
     expect(useTop30Hook.useTop30Dates).toHaveBeenCalledWith("monthly");
   });
 
-  it("toggles stock highlight when a stock chip below chart is clicked", () => {
+  it("toggles stock highlight and PiP when a stock chip below chart is clicked", () => {
     render(<MarketCapTop30Panel />);
     // In chart view, stock chips are rendered below chart and on right labels column
     const samsungChips = screen.getAllByRole("button", { name: /삼성전자/i });
@@ -120,7 +120,7 @@ describe("MarketCapTop30Panel", () => {
     // Click again to toggle off
     fireEvent.click(samsungChip);
     expect(screen.queryByText("하이라이트 해제")).not.toBeInTheDocument();
-
+    expect(screen.queryByText("PiP 상세 & 차트")).not.toBeInTheDocument();
   });
 
   it("renders zoom guide badge and resets date range when button is clicked", () => {

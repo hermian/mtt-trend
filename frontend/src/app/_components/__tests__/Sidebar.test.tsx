@@ -50,4 +50,11 @@ describe("Sidebar", () => {
     expect(returnsLink).toBeInTheDocument();
     expect(returnsLink?.textContent).toContain("수익률");
   });
+
+  it("renders 시총 TOP 30 navigation link pointing to /trend?tab=top30", () => {
+    const { container } = render(<Sidebar />);
+    const top30Link = container.querySelector('a[href="/trend?tab=top30"]');
+    expect(top30Link).toBeInTheDocument();
+    expect(top30Link?.textContent).toContain("시총 TOP 30");
+  });
 });

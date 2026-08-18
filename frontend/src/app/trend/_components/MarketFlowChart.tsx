@@ -555,21 +555,31 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
       pricesSeries[0].setData(filtered);
 
-      // E-mini Nasdaq 100 series binding (KOSPI/K200 기준가와 1:1 정규화하여 동일 right Y축 공유)
+      // E-mini Nasdaq 100 series binding (KOSPI/K200 일중 진폭에 맞춰 Min-Max 진폭 정규화)
       if (isKospiOrK200) {
-        const firstIdx = selectedIndex === "kospi"
-          ? (formattedData[0]?.firstKospi || filtered[0]?.value)
-          : (formattedData[0]?.firstKospi200 || filtered[0]?.value);
-        const firstEmini = formattedData[0]?.firstEmini;
-        const nasdaqData = formattedData
+        const validIndexPoints = filtered.map(d => d.value);
+        const kMin = validIndexPoints.length > 0 ? Math.min(...validIndexPoints) : 0;
+        const kMax = validIndexPoints.length > 0 ? Math.max(...validIndexPoints) : 0;
+        const kRange = kMax - kMin;
+
+        const rawEminiPoints = formattedData
           .filter(d => d.emini_nasdaq_price != null && d.emini_nasdaq_price > 0 && d.time <= limitSec)
-          .map(d => {
-            let val = d.emini_nasdaq_price!;
-            if (firstIdx && firstEmini && firstEmini > 0) {
-              val = firstIdx * (d.emini_nasdaq_price! / firstEmini);
-            }
-            return { time: d.time, value: val };
-          });
+          .map(d => ({ time: d.time, price: d.emini_nasdaq_price! }));
+
+        const ePrices = rawEminiPoints.map(d => d.price);
+        const eMin = ePrices.length > 0 ? Math.min(...ePrices) : 0;
+        const eMax = ePrices.length > 0 ? Math.max(...ePrices) : 0;
+        const eRange = eMax - eMin;
+
+        const nasdaqData = rawEminiPoints.map(d => {
+          let val = d.price;
+          if (kRange > 0 && eRange > 0) {
+            val = kMin + ((d.price - eMin) / eRange) * kRange;
+          } else if (validIndexPoints.length > 0) {
+            val = validIndexPoints[0];
+          }
+          return { time: d.time, value: val };
+        });
 
         if (nasdaqData.length > 0) {
           const lastNasdaqPrice = nasdaqData[nasdaqData.length - 1].value;

@@ -21,6 +21,9 @@ interface HoveredData {
   price?: number;
   /** 전일 종가 대비 변동률 (%) */
   changePct?: number | null;
+  eminiNasdaqPrice?: number;
+  /** E-mini Nasdaq 변동률 (%) */
+  eminiNasdaqChangePct?: number | null;
   foreigner?: number;
   institution?: number;
   program?: number;
@@ -85,6 +88,8 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
   // 지수 단일 선택 상태 (기본값: KOSPI)
   const [selectedIndex, setSelectedIndex] = useState<IndexType>("kospi");
+  // E-mini Nasdaq100 오버레이 표시 여부 (KOSPI/K200 선택 시 기본 true)
+  const [nasdaqVisible, setNasdaqVisible] = useState<boolean>(true);
   // 수급 시리즈 범례 토글 (기본: 전부)
   const [visibleSupply, setVisibleSupply] = useState<Record<SupplySeriesId, boolean>>(DEFAULT_SUPPLY_VISIBLE);
 
@@ -139,9 +144,15 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     }
   };
 
-  // 전일 종가 (지수별)
+  // 전일 종가 (지수별 + E-mini Nasdaq)
   const prevCloses = useMemo(() => {
-    const empty = { kospi: null as number | null, kospi200: null as number | null, kosdaq: null as number | null, kq150: null as number | null };
+    const empty = {
+      kospi: null as number | null,
+      kospi200: null as number | null,
+      kosdaq: null as number | null,
+      kq150: null as number | null,
+      emini_nasdaq: null as number | null,
+    };
     if (!chartData?.data || !prevDate) return empty;
     const prevRows = chartData.data.filter((p) => p.date === prevDate);
     if (prevRows.length === 0) return empty;
@@ -151,6 +162,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       kospi200: last.kospi200_price ?? null,
       kosdaq: last.kosdaq_price ?? null,
       kq150: last.kq150_price ?? null,
+      emini_nasdaq: last.emini_nasdaq_price ?? null,
     };
   }, [chartData, prevDate]);
 
@@ -163,10 +175,14 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     const isKosdaq = idx === "kosdaq" || idx === "kq150";
     const price = getIndexPrice(point, idx) ?? undefined;
     const prevClose = prevClosesRef.current[idx];
+    const eminiPrice = point.emini_nasdaq_price ?? undefined;
+    const prevEmini = prevClosesRef.current.emini_nasdaq ?? point.firstEmini;
     return {
       time: point.displayTime,
       price,
       changePct: calcChangePct(price, prevClose),
+      eminiNasdaqPrice: eminiPrice,
+      eminiNasdaqChangePct: calcChangePct(eminiPrice, prevEmini),
       foreigner: isKosdaq ? point.kosdaq_foreigner_val ?? undefined : point.kospi_foreigner_val ?? undefined,
       institution: isKosdaq ? point.kosdaq_institution_val ?? undefined : point.kospi_institution_val ?? undefined,
       program: isKosdaq ? undefined : point.kospi_program_val ?? undefined,
@@ -191,6 +207,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     const dayFirstData: Record<string, {
       f: number; i: number; ind: number; p: number; ff: number;
       kq_f: number; kq_i: number; kq_ind: number;
+      kospi?: number; kospi200?: number; kosdaq?: number; kq150?: number; emini?: number;
     }> = {};
     sorted.forEach(p => {
       if (!dayFirstData[p.date]) {
@@ -203,7 +220,28 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           kq_f: p.kosdaq_foreigner ?? 0,
           kq_i: p.kosdaq_institution ?? 0,
           kq_ind: p.kosdaq_individual ?? 0,
+          kospi: p.kospi_price ?? undefined,
+          kospi200: p.kospi200_price ?? undefined,
+          kosdaq: p.kosdaq_price ?? undefined,
+          kq150: p.kq150_price ?? undefined,
+          emini: p.emini_nasdaq_price ?? undefined,
         };
+      } else {
+        if (dayFirstData[p.date].kospi == null && p.kospi_price != null && p.kospi_price > 0) {
+          dayFirstData[p.date].kospi = p.kospi_price;
+        }
+        if (dayFirstData[p.date].kospi200 == null && p.kospi200_price != null && p.kospi200_price > 0) {
+          dayFirstData[p.date].kospi200 = p.kospi200_price;
+        }
+        if (dayFirstData[p.date].kosdaq == null && p.kosdaq_price != null && p.kosdaq_price > 0) {
+          dayFirstData[p.date].kosdaq = p.kosdaq_price;
+        }
+        if (dayFirstData[p.date].kq150 == null && p.kq150_price != null && p.kq150_price > 0) {
+          dayFirstData[p.date].kq150 = p.kq150_price;
+        }
+        if (dayFirstData[p.date].emini == null && p.emini_nasdaq_price != null && p.emini_nasdaq_price > 0) {
+          dayFirstData[p.date].emini = p.emini_nasdaq_price;
+        }
       }
     });
 
@@ -214,6 +252,11 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
         ...p,
         time: Math.floor(dt.getTime() / 1000) as any,
         displayTime: `${p.date} ${p.time}`,
+        firstKospi: first?.kospi,
+        firstKospi200: first?.kospi200,
+        firstKosdaq: first?.kosdaq,
+        firstKq150: first?.kq150,
+        firstEmini: first?.emini,
         kospi_foreigner_val: (p.kospi_foreigner ?? 0) - first.f,
         kospi_institution_val: (p.kospi_institution ?? 0) - first.i,
         kospi_individual_val: (p.kospi_individual ?? 0) - first.ind,
@@ -348,6 +391,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
         if (panel.id === "prices") {
           const opt = INDEX_OPTIONS.find(o => o.id === selectedIndex);
+          // 0. Primary Index Series
           const series = chart.addSeries(LineSeries, {
             color: opt?.color || "#cbd5e1",
             lineWidth: 2,
@@ -355,6 +399,18 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             priceFormat: { type: "price", precision: 2, minMove: 0.01 },
           });
           activeSeries.push(series);
+
+          // 1. E-mini Nasdaq 100 Series (동일한 right priceScale 공유하여 Y축 줌/슬라이딩 완벽 동기화)
+          const nasdaqSeries = chart.addSeries(LineSeries, {
+            color: "#c084fc",
+            lineWidth: 2,
+            priceScaleId: "right",
+            priceFormat: { type: "price", precision: 2, minMove: 0.01 },
+            crosshairMarkerVisible: true,
+            lastValueVisible: false,
+            priceLineVisible: false,
+          });
+          activeSeries.push(nasdaqSeries);
         } else if (panel.id === "supply") {
           chart.applyOptions({
             rightPriceScale: {
@@ -475,7 +531,8 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     if (formattedData.length === 0 || status !== "Active") return;
 
     const pricesSeries = seriesRef.current.get("prices");
-    if (pricesSeries && pricesSeries.length >= 1) {
+    if (pricesSeries && pricesSeries.length >= 2) {
+      const isKospiOrK200 = selectedIndex === "kospi" || selectedIndex === "kospi200";
       const limitSec = Math.floor(new Date(`${selectedDate}T15:30:00+09:00`).getTime() / 1000);
       const filtered = formattedData
         .filter(d => {
@@ -497,6 +554,41 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       }
 
       pricesSeries[0].setData(filtered);
+
+      // E-mini Nasdaq 100 series binding (KOSPI/K200 기준가와 1:1 정규화하여 동일 right Y축 공유)
+      if (isKospiOrK200) {
+        const firstIdx = selectedIndex === "kospi"
+          ? (formattedData[0]?.firstKospi || filtered[0]?.value)
+          : (formattedData[0]?.firstKospi200 || filtered[0]?.value);
+        const firstEmini = formattedData[0]?.firstEmini;
+        const nasdaqData = formattedData
+          .filter(d => d.emini_nasdaq_price != null && d.emini_nasdaq_price > 0 && d.time <= limitSec)
+          .map(d => {
+            let val = d.emini_nasdaq_price!;
+            if (firstIdx && firstEmini && firstEmini > 0) {
+              val = firstIdx * (d.emini_nasdaq_price! / firstEmini);
+            }
+            return { time: d.time, value: val };
+          });
+
+        if (nasdaqData.length > 0) {
+          const lastNasdaqPrice = nasdaqData[nasdaqData.length - 1].value;
+          const targetTimes = ["15:35", "15:40", "15:45"];
+
+          targetTimes.forEach(tStr => {
+            const tSec = Math.floor(new Date(`${selectedDate}T${tStr}:00+09:00`).getTime() / 1000);
+            if (formattedData.some(d => d.time === tSec)) {
+              nasdaqData.push({ time: tSec, value: lastNasdaqPrice });
+            }
+          });
+        }
+
+        pricesSeries[1].setData(nasdaqData);
+        pricesSeries[1].applyOptions({ visible: nasdaqVisible });
+      } else {
+        pricesSeries[1].setData([]);
+        pricesSeries[1].applyOptions({ visible: false });
+      }
     }
 
     const supplySeries = seriesRef.current.get("supply");
@@ -605,6 +697,18 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   const selectedOpt = INDEX_OPTIONS.find(o => o.id === selectedIndex);
   const isKosdaqSelection = selectedIndex === "kosdaq" || selectedIndex === "kq150";
 
+  const toggleNasdaqSeries = () => {
+    setNasdaqVisible((prev) => {
+      const next = !prev;
+      const pricesSeries = seriesRef.current.get("prices");
+      if (pricesSeries && pricesSeries.length >= 2) {
+        const isKospiOrK200 = selectedIndex === "kospi" || selectedIndex === "kospi200";
+        pricesSeries[1].applyOptions({ visible: isKospiOrK200 && next });
+      }
+      return next;
+    });
+  };
+
   const toggleSupplySeries = (id: SupplySeriesId) => {
     setVisibleSupply((prev) => {
       const next = { ...prev, [id]: !prev[id] };
@@ -683,7 +787,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
       </div>
 
       {/* Hover Info Board */}
-      <div className={`grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 ${isKosdaqSelection ? "md:grid-cols-5" : "md:grid-cols-7"} text-xs border border-slate-800/40`}>
+      <div className={`grid grid-cols-2 gap-4 rounded-lg bg-slate-900/50 p-3 sm:grid-cols-3 ${isKosdaqSelection ? "md:grid-cols-5" : "md:grid-cols-8"} text-xs border border-slate-800/40`}>
         <div className="flex flex-col">
           <span className="text-slate-400 font-medium">시간</span>
           <span className="font-semibold text-slate-200">{hoveredData?.time || "-"}</span>
@@ -714,6 +818,34 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             )}
           </span>
         </div>
+
+        {!isKosdaqSelection && (
+          <div className="flex flex-col text-purple-400">
+            <span className="font-medium opacity-90">E-mini NQ</span>
+            <span className="font-semibold">
+              {hoveredData?.eminiNasdaqPrice != null ? (
+                <>
+                  {hoveredData.eminiNasdaqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                  {hoveredData.eminiNasdaqChangePct != null && (
+                    <span
+                      className={`ml-1 text-[11px] ${
+                        hoveredData.eminiNasdaqChangePct > 0
+                          ? "text-red-400"
+                          : hoveredData.eminiNasdaqChangePct < 0
+                            ? "text-blue-400"
+                            : "text-slate-400"
+                      }`}
+                    >
+                      ({hoveredData.eminiNasdaqChangePct > 0 ? "+" : ""}{hoveredData.eminiNasdaqChangePct.toFixed(2)}%)
+                    </span>
+                  )}
+                </>
+              ) : (
+                "-"
+              )}
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-col">
           <span className="text-red-400 font-medium">외국인</span>
@@ -758,6 +890,20 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
             <span style={{ color: selectedOpt?.color }}>
               ● {selectedOpt?.name}
             </span>
+            {!isKosdaqSelection && (
+              <button
+                type="button"
+                onClick={toggleNasdaqSeries}
+                title={nasdaqVisible ? "E-mini NQ 숨기기" : "E-mini NQ 표시"}
+                aria-pressed={nasdaqVisible}
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 transition-opacity hover:bg-slate-800/80 ${
+                  nasdaqVisible ? "opacity-100" : "opacity-35 line-through"
+                }`}
+                style={{ color: "#c084fc" }}
+              >
+                ● E-mini NQ
+              </button>
+            )}
           </div>
           <div data-chart-id="prices" className="w-full rounded-lg overflow-hidden border border-slate-900" />
         </div>

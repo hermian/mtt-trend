@@ -645,7 +645,8 @@ async def get_market_flow_chart_data(
                 kosdaq_individual=row["kosdaq_individual"],
                 future_foreigner=row["future_foreigner"],
                 future_institution=row["future_institution"],
-                future_individual=row["future_individual"]
+                future_individual=row["future_individual"],
+                emini_nasdaq_price=row["emini_nasdaq_price"] if "emini_nasdaq_price" in row.keys() else None
             ))
         return MarketFlowResponse(data=result)
     except Exception as e:

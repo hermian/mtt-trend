@@ -129,6 +129,7 @@ class MarketFlowPoint(BaseModel):
     future_foreigner: Optional[float] = None
     future_institution: Optional[float] = None
     future_individual: Optional[float] = None
+    emini_nasdaq_price: Optional[float] = None
 
 class MarketFlowResponse(BaseModel):
     data: List[MarketFlowPoint]

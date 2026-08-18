@@ -201,6 +201,7 @@ export interface MarketFlowPoint {
   future_foreigner?: number;
   future_institution?: number;
   future_individual?: number;
+  emini_nasdaq_price?: number;
 }
 
 export interface MarketFlowResponse {

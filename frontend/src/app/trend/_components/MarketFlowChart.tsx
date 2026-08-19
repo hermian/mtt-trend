@@ -197,7 +197,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
     if (!chartData || !chartData.data || !selectedDate) return [];
 
     const sorted = [...chartData.data]
-      .filter((p) => p.date === selectedDate)
+      .filter((p) => p.date === selectedDate && p.time >= "09:00" && p.time <= "15:45")
       .sort((a, b) => {
         const timeA = `${a.date}T${a.time}:00`;
         const timeB = `${b.date}T${b.time}:00`;
@@ -805,55 +805,49 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
         <div className="flex flex-col" style={{ color: selectedOpt?.color }}>
           <span className="font-medium opacity-90">{selectedOpt?.name}</span>
-          <span className="font-semibold">
-            {hoveredData?.price != null ? (
-              <>
-                {hoveredData.price.toFixed(1)}
-                {hoveredData.changePct != null && (
-                  <span
-                    className={
-                      hoveredData.changePct > 0
-                        ? "text-red-400"
-                        : hoveredData.changePct < 0
-                          ? "text-blue-400"
-                          : "text-slate-400"
-                    }
-                  >
-                    ({hoveredData.changePct.toFixed(1)}%)
-                  </span>
-                )}
-              </>
-            ) : (
-              "-"
-            )}
+          <span className="font-semibold text-slate-100">
+            {hoveredData?.price != null ? hoveredData.price.toFixed(1) : "-"}
           </span>
+          {hoveredData?.changePct != null ? (
+            <span
+              className={`text-[11px] font-bold ${
+                hoveredData.changePct > 0
+                  ? "text-red-400"
+                  : hoveredData.changePct < 0
+                    ? "text-blue-400"
+                    : "text-slate-400"
+              }`}
+            >
+              {hoveredData.changePct > 0 ? "+" : ""}{hoveredData.changePct.toFixed(2)}%
+            </span>
+          ) : (
+            <span className="text-[11px] text-slate-500">-</span>
+          )}
         </div>
 
         {!isKosdaqSelection && (
           <div className="flex flex-col text-purple-400">
             <span className="font-medium opacity-90">E-mini NQ</span>
-            <span className="font-semibold">
-              {hoveredData?.eminiNasdaqPrice != null ? (
-                <>
-                  {hoveredData.eminiNasdaqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                  {hoveredData.eminiNasdaqChangePct != null && (
-                    <span
-                      className={`ml-1 text-[11px] ${
-                        hoveredData.eminiNasdaqChangePct > 0
-                          ? "text-red-400"
-                          : hoveredData.eminiNasdaqChangePct < 0
-                            ? "text-blue-400"
-                            : "text-slate-400"
-                      }`}
-                    >
-                      ({hoveredData.eminiNasdaqChangePct > 0 ? "+" : ""}{hoveredData.eminiNasdaqChangePct.toFixed(2)}%)
-                    </span>
-                  )}
-                </>
-              ) : (
-                "-"
-              )}
+            <span className="font-semibold text-slate-100">
+              {hoveredData?.eminiNasdaqPrice != null
+                ? hoveredData.eminiNasdaqPrice.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+                : "-"}
             </span>
+            {hoveredData?.eminiNasdaqChangePct != null ? (
+              <span
+                className={`text-[11px] font-bold ${
+                  hoveredData.eminiNasdaqChangePct > 0
+                    ? "text-red-400"
+                    : hoveredData.eminiNasdaqChangePct < 0
+                      ? "text-blue-400"
+                      : "text-slate-400"
+                }`}
+              >
+                {hoveredData.eminiNasdaqChangePct > 0 ? "+" : ""}{hoveredData.eminiNasdaqChangePct.toFixed(2)}%
+              </span>
+            ) : (
+              <span className="text-[11px] text-slate-500">-</span>
+            )}
           </div>
         )}
 

@@ -41,12 +41,13 @@ type CellTone =
   | "green"
   | "none";
 
+/** stockbee_mm.png / pandas styler와 동일한 CSS 색상 및 검은색 텍스트 */
 const TONE_CLASS: Record<CellTone, string> = {
-  none: "",
-  pink: "bg-pink-500/40 text-pink-100",
-  lightgreen: "bg-emerald-500/35 text-emerald-100",
-  red: "bg-red-600/55 text-red-50",
-  green: "bg-green-600/55 text-green-50",
+  none: "bg-white text-black",
+  pink: "bg-[#ffc0cb] text-black",
+  lightgreen: "bg-[#90ee90] text-black",
+  red: "bg-[#ff0000] text-black",
+  green: "bg-[#008000] text-black",
 };
 
 /** stockbee_mm_pl.style_mm_dataframe 과 동일 규칙 */
@@ -105,6 +106,7 @@ function fmt2(v: number | null | undefined): string {
   return v.toFixed(2);
 }
 
+/** stockbee_mm.png 컬럼 순서 일치 */
 const COLUMNS: Array<{
   key: keyof StockbeeMmRow | "date";
   label: string;
@@ -113,8 +115,6 @@ const COLUMNS: Array<{
   { key: "date", label: "Date", format: "date" },
   { key: "bo_up", label: "bo_up", format: "int" },
   { key: "bo_dn", label: "bo_dn", format: "int" },
-  { key: "five_d_r", label: "5d_r", format: "2" },
-  { key: "ten_d_r", label: "10d_r", format: "2" },
   { key: "q_up_25p", label: "q_up_25p", format: "int" },
   { key: "q_dn_25p", label: "q_dn_25p", format: "int" },
   { key: "m_up_25p", label: "m_up_25p", format: "int" },
@@ -125,27 +125,31 @@ const COLUMNS: Array<{
   { key: "d34_dn_13p", label: "34d_dn_13p", format: "int" },
   { key: "t2108", label: "T2108", format: "2" },
   { key: "stock_count", label: "주식수", format: "int" },
+  { key: "five_d_r", label: "5d_r", format: "2" },
+  { key: "ten_d_r", label: "10d_r", format: "2" },
   { key: "kospi", label: "KOSPI", format: "2" },
 ];
 
 function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-gray-500 py-12 text-center">
-        데이터가 없습니다. marcap `job-stockbee --backfill` 후 일일 job이 DB를 채워야 합니다.
-      </p>
+      <div className="bg-white rounded-xl border border-gray-300 p-12 text-center">
+        <p className="text-sm text-gray-500">
+          데이터가 없습니다. marcap `job-stockbee --backfill` 후 일일 job이 DB를 채워야 합니다.
+        </p>
+      </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-800">
-      <table className="min-w-full text-xs font-mono">
-        <thead className="bg-gray-900/80 sticky top-0 z-10">
+    <div className="overflow-x-auto rounded-xl border border-gray-300 bg-white shadow-sm">
+      <table className="min-w-full text-xs font-sans border-collapse bg-white">
+        <thead className="bg-white sticky top-0 z-10 border-b border-gray-300 shadow-sm">
           <tr>
             {COLUMNS.map((c) => (
               <th
                 key={c.key}
-                className="px-2 py-2 text-right text-gray-400 font-semibold whitespace-nowrap border-b border-gray-800 first:text-left"
+                className="px-2.5 py-2 text-right text-black font-bold whitespace-nowrap border-b border-gray-300 first:text-left"
               >
                 {c.label}
               </th>
@@ -156,7 +160,7 @@ function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
           {rows.map((row) => {
             const tones = cellTones(row);
             return (
-              <tr key={row.date} className="border-b border-gray-800/80 hover:bg-gray-900/40">
+              <tr key={row.date} className="border-b border-gray-200 hover:brightness-95">
                 {COLUMNS.map((c) => {
                   const raw = row[c.key as keyof StockbeeMmRow];
                   const text =
@@ -171,8 +175,8 @@ function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
                     <td
                       key={c.key}
                       className={clsx(
-                        "px-2 py-1.5 whitespace-nowrap tabular-nums",
-                        c.key === "date" ? "text-left text-gray-300" : "text-right text-gray-200",
+                        "px-2.5 py-1.5 whitespace-nowrap tabular-nums border-r border-gray-200 last:border-r-0",
+                        c.key === "date" ? "text-left font-bold text-black bg-white" : "text-right font-medium text-black",
                         TONE_CLASS[tone]
                       )}
                     >
@@ -192,24 +196,26 @@ function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
 function UsIframe({ year }: { year: number }) {
   const url = getStockbeeMmUsUrl(year);
   return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0">
+    <div className="flex flex-col gap-2 flex-1 min-h-0 h-full pb-6">
       <div className="flex justify-end">
         <a
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-900/30"
+          className="text-xs font-bold text-blue-400 hover:text-blue-300 bg-blue-900/20 px-3 py-1.5 rounded-lg border border-blue-900/30 transition-colors"
         >
           원본 열기 ↗
         </a>
       </div>
-      <iframe
-        key={url}
-        title={`Stockbee MM US ${year}`}
-        src={url}
-        className="w-full flex-1 min-h-[640px] rounded-xl border border-gray-800 bg-white"
-        sandbox="allow-scripts allow-same-origin allow-popups"
-      />
+      <div className="flex-1 min-h-[800px] xl:min-h-[880px] w-full rounded-xl border border-gray-300 bg-white shadow-sm overflow-hidden">
+        <iframe
+          key={url}
+          title={`Stockbee MM US ${year}`}
+          src={url}
+          className="w-full h-full min-h-[800px] xl:min-h-[880px] bg-white border-0"
+          sandbox="allow-scripts allow-same-origin allow-popups"
+        />
+      </div>
     </div>
   );
 }
@@ -337,7 +343,9 @@ export function StockbeeMmPanel() {
           {!loading && !error && <KoreaTable rows={rows} />}
         </div>
       ) : (
-        <UsIframe year={usYear} />
+        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
+          <UsIframe year={usYear} />
+        </div>
       )}
     </div>
   );

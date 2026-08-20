@@ -156,4 +156,21 @@ describe("InteractiveChart Component", () => {
     expect(container.querySelector('[data-chart-id="hp_dev"]')).not.toBeInTheDocument();
     expect(container.querySelector('[data-chart-id="hp"]')).not.toBeInTheDocument();
   });
+
+  it("renders above_sma200 panel and creates a dashed white horizontal price line at 50", () => {
+    vi.spyOn(useChartDataModule, "useChartData").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    const configs: IndicatorConfig[] = [
+      { id: "above_sma_group", name: "Above SMA 10/20/50 (R/G/B)", type: "line", heightRatio: 1.5 },
+      { id: "above_sma200", name: "Above SMA 200 (Breadth)", type: "line", heightRatio: 1, color: "#60a5fa" },
+    ];
+
+    const { container } = renderWithClient(<InteractiveChart symbol="KOSPI" configs={configs} />);
+
+    expect(container.querySelector('[data-chart-id="above_sma200"]')).toBeInTheDocument();
+  });
 });

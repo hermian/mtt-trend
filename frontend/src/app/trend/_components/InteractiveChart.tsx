@@ -242,6 +242,18 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           activeSeries.push(chart.addSeries(LineSeries, { color: "#ef4444", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#22c55e", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2 }));
+        } else if (config.id === "above_sma200") {
+          const s = chart.addSeries(LineSeries, { color: config.color || "#60a5fa", lineWidth: 2 });
+          try {
+            s.createPriceLine({
+              price: 50,
+              color: "#ffffff",
+              lineWidth: 1,
+              lineStyle: LineStyle.Dashed,
+              axisLabelVisible: true,
+            });
+          } catch {}
+          activeSeries.push(s);
         } else if (config.id === "adr_group") {
           activeSeries.push(chart.addSeries(LineSeries, { color: "#a78bfa", lineWidth: 2 }));
           activeSeries.push(chart.addSeries(LineSeries, { color: "#f472b6", lineWidth: 2 }));
@@ -367,6 +379,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma10 || 0 })));
         activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma20 || 0 })));
         activeSeries[2].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma50 || 0 })));
+      } else if (config.id === "above_sma200") {
+        activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.above_sma200 ?? 0 })));
       } else if (config.id === "adr_group") {
         activeSeries[0].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.adr14 || 0 })));
         activeSeries[1].setData(sortedData.map(p => ({ time: p.time, value: p.indicators?.adr20 || 0 })));
@@ -416,6 +430,8 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
           </>
         ) : config.id === "above_sma_group" ? (
           <><span className="text-red-500 font-bold">10:{hoveredData.indicators["above_sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["above_sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["above_sma50"]?.toFixed(1)}</span></>
+        ) : config.id === "above_sma200" ? (
+          <span className="text-blue-400 font-bold">200:{hoveredData.indicators["above_sma200"] != null ? `${hoveredData.indicators["above_sma200"]?.toFixed(1)}%` : "-"}</span>
         ) : config.id === "adr_group" ? (
           <><span className="text-[#a78bfa] font-bold">14:{hoveredData.indicators["adr14"]?.toFixed(1)}</span><span className="text-[#f472b6] font-bold">20:{hoveredData.indicators["adr20"]?.toFixed(1)}</span></>
         ) : config.id === "disparity_sma50" ? (

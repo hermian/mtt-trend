@@ -27,6 +27,12 @@ import {
   setLocalCustomAnchors,
 } from "./_lib/avwapCalc";
 import { hpFilterSeries, getHpLambdaForInterval } from "@/lib/hpFilter";
+import {
+  calculateSupertrend,
+  DEFAULT_SUPERTREND_CONFIG,
+  type SupertrendConfig,
+} from "@/lib/supertrend";
+import { SupertrendSettingsPopover } from "./SupertrendSettingsPopover";
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -114,12 +120,32 @@ export function AvwapChart() {
     return () => window.removeEventListener("resize", checkMobile);
   }, []);
 
-  // Toggle state for base vwap, hvwap, lvwap, bb_upper, hp, and individual anchor dates
+  // Toggle state for base vwap, hvwap, lvwap, bb_upper, hp, supertrend, and individual anchor dates
   const [showVwap, setShowVwap] = useState(true);
   const [showHvwap, setShowHvwap] = useState(true);
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [showHp, setShowHp] = useState(true);
+  const [showSupertrend, setShowSupertrend] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_supertrend_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return false;
+  });
+  const [supertrendConfig, setSupertrendConfig] = useState<SupertrendConfig>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_supertrend_config");
+        if (saved) return { ...DEFAULT_SUPERTREND_CONFIG, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return DEFAULT_SUPERTREND_CONFIG;
+  });
+  const [showSupertrendPopover, setShowSupertrendPopover] = useState(false);
+
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
   const enabledAnchorsRef = useRef<Set<string>>(new Set());
   const showLinesRef = useRef({
@@ -128,6 +154,7 @@ export function AvwapChart() {
     lvwap: showLvwap,
     bb: showBbUpper,
     hp: showHp,
+    supertrend: showSupertrend,
   });
 
   useEffect(() => {
@@ -141,8 +168,9 @@ export function AvwapChart() {
       lvwap: showLvwap,
       bb: showBbUpper,
       hp: showHp,
+      supertrend: showSupertrend,
     };
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend]);
 
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -281,6 +309,50 @@ export function AvwapChart() {
     return map;
   }, [hpResult]);
 
+  // Supertrend calculation for the current chart points & config
+  const supertrendSeries = useMemo(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const res = calculateSupertrend(chartData.points, supertrendConfig);
+
+    const upLineData: { time: string; value?: number }[] = [];
+    const dnLineData: { time: string; value?: number }[] = [];
+
+    res.points.forEach((pt) => {
+      const time = toChartTime(pt.time);
+      if (!time) return;
+      if (pt.trend === 1) {
+        upLineData.push({ time, value: pt.value });
+        dnLineData.push({ time });
+      } else {
+        dnLineData.push({ time, value: pt.value });
+        upLineData.push({ time });
+      }
+    });
+
+    return {
+      raw: res,
+      upLineData,
+      dnLineData,
+    };
+  }, [chartData?.points, supertrendConfig]);
+
+  const supertrendMap = useMemo(() => {
+    const map = new Map<string, { value: number; trend: 1 | -1 }>();
+    if (!supertrendSeries?.raw?.points) return map;
+    for (let i = 0; i < supertrendSeries.raw.points.length; i++) {
+      const pt = supertrendSeries.raw.points[i];
+      const chartTime = toChartTime(pt.time) || pt.time;
+      map.set(chartTime, { value: pt.value, trend: pt.trend });
+    }
+    return map;
+  }, [supertrendSeries]);
+
+  const latestSupertrendInfo = useMemo(() => {
+    if (!supertrendSeries?.raw?.points || supertrendSeries.raw.points.length === 0) return null;
+    const lastPt = supertrendSeries.raw.points[supertrendSeries.raw.points.length - 1];
+    return lastPt ? { value: lastPt.value, trend: lastPt.trend } : null;
+  }, [supertrendSeries]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -298,6 +370,7 @@ export function AvwapChart() {
     ma?: Record<string, number | null>;
     hpTrend?: number | null;
     hpDev?: number | null;
+    supertrend?: { value: number; trend: 1 | -1 } | null;
   } | null>(null);
 
   // Select stock from search
@@ -636,6 +709,22 @@ export function AvwapChart() {
           });
         } else {
           hpTrendPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // Supertrend
+      const stPl = plMap.get("supertrend");
+      const stInfo = supertrendMap.get(toChartTime(pt.date) || pt.date);
+      if (stPl) {
+        if (showLinesRef.current.supertrend && stInfo?.value != null && Number.isFinite(stInfo.value)) {
+          stPl.applyOptions({
+            price: stInfo.value,
+            color: stInfo.trend === 1 ? "#10b981" : "#ef4444",
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          stPl.applyOptions({ axisLabelVisible: false });
         }
       }
 
@@ -1141,6 +1230,50 @@ export function AvwapChart() {
           });
           crosshairPriceLinesRef.current.set("hp_trend", hpTrendHoverLine);
 
+          // Supertrend Up (Green) & Down (Red)
+          const stUpSeries = chart.addSeries(LineSeries, {
+            color: "#10b981",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          activeSeries.push(stUpSeries);
+          mainLinesMapRef.current.set("supertrend_up", {
+            id: "supertrend_up",
+            name: "Supertrend(상승)",
+            series: stUpSeries,
+            color: "#10b981",
+            defaultWidth: 2,
+          });
+
+          const stDnSeries = chart.addSeries(LineSeries, {
+            color: "#ef4444",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          activeSeries.push(stDnSeries);
+          mainLinesMapRef.current.set("supertrend_dn", {
+            id: "supertrend_dn",
+            name: "Supertrend(하락)",
+            series: stDnSeries,
+            color: "#ef4444",
+            defaultWidth: 2,
+          });
+
+          const stHoverLine = candleSeries.createPriceLine({
+            price: 0,
+            color: "#10b981",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("supertrend", stHoverLine);
+
           // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
             chartData.anchors.forEach((anc) => {
@@ -1211,6 +1344,15 @@ export function AvwapChart() {
                 if (showLinesRef.current.hp) {
                   const hpVal = hpMap.get(toChartTime(pt.date) || pt.date)?.trend;
                   if (hpVal != null) candidates.push({ id: "hp_trend", val: hpVal });
+                }
+                if (showLinesRef.current.supertrend && supertrendMap) {
+                  const stInfo = supertrendMap.get(toChartTime(pt.date) || pt.date);
+                  if (stInfo?.value != null) {
+                    candidates.push({
+                      id: stInfo.trend === 1 ? "supertrend_up" : "supertrend_dn",
+                      val: stInfo.value,
+                    });
+                  }
                 }
 
                 if (pt.ma) {
@@ -1458,6 +1600,7 @@ export function AvwapChart() {
           const matchedPoint = ptIdx >= 0 ? chartData.points[ptIdx] : undefined;
           const prevPoint = ptIdx > 0 ? chartData.points[ptIdx - 1] : undefined;
           const hpInfo = matchedPoint ? hpMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
+          const stInfo = matchedPoint ? supertrendMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
             updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
@@ -1484,6 +1627,7 @@ export function AvwapChart() {
               ma: matchedPoint.ma,
               hpTrend: hpInfo?.trend,
               hpDev: hpInfo?.deviation,
+              supertrend: stInfo || null,
             });
           } else {
             setHoveredData(null);
@@ -1595,6 +1739,26 @@ export function AvwapChart() {
             seriesIdx++;
           }
 
+          // Supertrend Up Line
+          if (mainSeriesList[seriesIdx]) {
+            if (showSupertrend && supertrendSeries) {
+              mainSeriesList[seriesIdx].setData(supertrendSeries.upLineData as any);
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
+          }
+
+          // Supertrend Down Line
+          if (mainSeriesList[seriesIdx]) {
+            if (showSupertrend && supertrendSeries) {
+              mainSeriesList[seriesIdx].setData(supertrendSeries.dnLineData as any);
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
+          }
+
           // Anchors
           chartData.anchors?.forEach((anc) => {
             const aS = anchorSeriesMapRef.current.get(anc.id);
@@ -1693,7 +1857,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showHp, hpResult]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showHp, hpResult, showSupertrend, supertrendSeries]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -1720,6 +1884,8 @@ export function AvwapChart() {
       const hvwapIdx = bbIdx + 2;
       const lvwapIdx = bbIdx + 3;
       const hpIdx = bbIdx + 4;
+      const supertrendUpIdx = bbIdx + 5;
+      const supertrendDnIdx = bbIdx + 6;
 
       if (mainSeriesList[bbIdx]) {
         mainSeriesList[bbIdx].setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
@@ -1738,6 +1904,20 @@ export function AvwapChart() {
           mainSeriesList[hpIdx].setData(hpResult.trend);
         } else {
           mainSeriesList[hpIdx].setData([]);
+        }
+      }
+      if (mainSeriesList[supertrendUpIdx]) {
+        if (showSupertrend && supertrendSeries) {
+          mainSeriesList[supertrendUpIdx].setData(supertrendSeries.upLineData as any);
+        } else {
+          mainSeriesList[supertrendUpIdx].setData([]);
+        }
+      }
+      if (mainSeriesList[supertrendDnIdx]) {
+        if (showSupertrend && supertrendSeries) {
+          mainSeriesList[supertrendDnIdx].setData(supertrendSeries.dnLineData as any);
+        } else {
+          mainSeriesList[supertrendDnIdx].setData([]);
         }
       }
 
@@ -1760,7 +1940,7 @@ export function AvwapChart() {
         }
       });
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, enabledAnchors, chartData, hpResult]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, enabledAnchors, chartData, hpResult, supertrendSeries]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -1836,6 +2016,8 @@ export function AvwapChart() {
     ma: latestPoint.ma,
     hpTrend: latestHpInfo?.trend,
     hpDev: latestHpInfo?.deviation,
+    supertrendVal: hoveredData?.supertrend ? hoveredData.supertrend.value : latestSupertrendInfo?.value,
+    supertrendTrend: hoveredData?.supertrend ? hoveredData.supertrend.trend : latestSupertrendInfo?.trend,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -2229,6 +2411,63 @@ export function AvwapChart() {
           >
             HP필터
           </button>
+          {/* Supertrend Toggle & Settings Popover */}
+          <div className="relative inline-flex items-center">
+            <button
+              type="button"
+              onClick={() => {
+                setShowSupertrend((prev) => {
+                  const next = !prev;
+                  if (prev && (selectedLineId === "supertrend_up" || selectedLineId === "supertrend_dn")) {
+                    setSelectedLineId(null);
+                  }
+                  try {
+                    localStorage.setItem("mtt_supertrend_enabled", JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }}
+              className={`px-2.5 py-1 rounded-l-md border font-semibold transition-all ${
+                selectedLineId === "supertrend_up" || selectedLineId === "supertrend_dn"
+                  ? "ring-2 ring-emerald-400 border-emerald-400 bg-emerald-500/40 text-emerald-200 font-bold shadow-md"
+                  : showSupertrend
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 shadow-sm"
+                  : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+              }`}
+              title="클릭하여 Supertrend(슈퍼트렌드) 표시 ON/OFF"
+            >
+              ⚡ Supertrend
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowSupertrendPopover((prev) => !prev)}
+              className={`px-1.5 py-1 rounded-r-md border-y border-r font-semibold transition-all ${
+                showSupertrend
+                  ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30"
+                  : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300 hover:bg-gray-700"
+              }`}
+              title="Supertrend 파라미터 설정 (ATR 기간, 승수, 계산방식 등)"
+            >
+              ⚙
+            </button>
+            <SupertrendSettingsPopover
+              isOpen={showSupertrendPopover}
+              onClose={() => setShowSupertrendPopover(false)}
+              config={supertrendConfig}
+              onChangeConfig={(newCfg) => {
+                setSupertrendConfig(newCfg);
+                try {
+                  localStorage.setItem("mtt_supertrend_config", JSON.stringify(newCfg));
+                } catch {}
+              }}
+              onResetDefaults={() => {
+                setSupertrendConfig(DEFAULT_SUPERTREND_CONFIG);
+                try {
+                  localStorage.removeItem("mtt_supertrend_config");
+                } catch {}
+              }}
+            />
+          </div>
           <div className="h-4 w-px bg-gray-700 mx-1" />
           <button
             onClick={() => toggleAllAnchors(enabledAnchors.size === 0)}
@@ -2473,6 +2712,20 @@ export function AvwapChart() {
                   }`}
                 >
                   {activeDisplay.hpDev.toFixed(1)}
+                </span>
+              </span>
+            )}
+            {showSupertrend && activeDisplay.supertrendVal !== null && activeDisplay.supertrendVal !== undefined && (
+              <span>
+                Supertrend({supertrendConfig.atrPeriod}, {supertrendConfig.multiplier}):{" "}
+                <span
+                  className={`font-bold ${
+                    activeDisplay.supertrendTrend === 1 ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {activeDisplay.supertrendVal.toLocaleString(undefined, {
+                    maximumFractionDigits: activeDisplay.supertrendVal < 10 ? 2 : 1,
+                  })}
                 </span>
               </span>
             )}

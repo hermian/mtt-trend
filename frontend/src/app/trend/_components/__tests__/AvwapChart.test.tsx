@@ -660,4 +660,40 @@ describe("AvwapChart Component", () => {
       });
     }
   });
+
+  it("toggles Supertrend on/off and opens settings popover to change parameters", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const stBtn = screen.getByText(/⚡ Supertrend/);
+    expect(stBtn).toBeInTheDocument();
+
+    // Toggle Supertrend On
+    fireEvent.click(stBtn);
+    expect(screen.getByText(/Supertrend\(10, 3\):/)).toBeInTheDocument();
+
+    // Open Supertrend Settings Popover
+    const gearBtn = screen.getByTitle(/Supertrend 파라미터 설정/);
+    fireEvent.click(gearBtn);
+    expect(screen.getByText("⚡ Supertrend 설정")).toBeInTheDocument();
+    expect(screen.getByText("ATR 기간 (Period)")).toBeInTheDocument();
+
+    // Change ATR period input
+    const periodInput = screen.getByDisplayValue("10");
+    fireEvent.change(periodInput, { target: { value: "14" } });
+    expect(screen.getByText(/Supertrend\(14, 3\):/)).toBeInTheDocument();
+
+    // Toggle Supertrend Off
+    fireEvent.click(stBtn);
+    expect(screen.queryByText(/Supertrend\(14, 3\):/)).not.toBeInTheDocument();
+  });
 });

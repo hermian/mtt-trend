@@ -58,7 +58,9 @@ def test_avwap_kospi_1w():
     assert len(data["points"]) > 0
     last_pt = data["points"][-1]
     assert "SMA_10" in last_pt["ma"]
+    assert "SMA_20" in last_pt["ma"]
     assert "SMA_30" in last_pt["ma"]
+    assert "SMA_40" in last_pt["ma"]
 
 
 def test_avwap_kospi_1m():

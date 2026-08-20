@@ -35,6 +35,7 @@ const MA_COLORS: Record<string, string> = {
   SMA_150: "#3b82f6", // Blue
   SMA_200: "#10b981", // Green
   SMA_10: "#ef4444",
+  SMA_20: "#f97316",
   SMA_30: "#3b82f6",
   SMA_40: "#10b981",
   SMA_6: "#ef4444",
@@ -2438,6 +2439,23 @@ export function AvwapChart() {
             {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
               <span>VIX Fix: <span className="text-emerald-400 font-bold">{activeDisplay.vixFix.toFixed(1)}%</span></span>
             )}
+            {activeDisplay.ma &&
+              Object.entries(activeDisplay.ma).map(([maName, val]) => {
+                if (val === null || val === undefined || !Number.isFinite(val)) return null;
+                const color = MA_COLORS[maName] || "#94a3b8";
+                return (
+                  <span key={maName}>
+                    <span style={{ color }} className="font-semibold">
+                      {maName.replace("_", "")}:
+                    </span>{" "}
+                    <span className="text-gray-200">
+                      {val.toLocaleString(undefined, {
+                        maximumFractionDigits: val < 10 ? 2 : 1,
+                      })}
+                    </span>
+                  </span>
+                );
+              })}
             {activeDisplay.vwap !== null && activeDisplay.vwap !== undefined && (
               <span>VWAP: <span className="text-slate-200">{activeDisplay.vwap.toLocaleString()}</span></span>
             )}

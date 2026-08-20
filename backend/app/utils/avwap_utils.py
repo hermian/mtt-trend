@@ -29,7 +29,7 @@ INTERVAL_CONFIGS: Dict[str, Dict[str, Any]] = {
         "vwap_lookback": 252,
     },
     "1W": {
-        "ta_indicators": [("SMA_10", 10, "sma"), ("SMA_30", 30, "sma"), ("SMA_40", 40, "sma")],
+        "ta_indicators": [("SMA_10", 10, "sma"), ("SMA_20", 20, "sma"), ("SMA_30", 30, "sma"), ("SMA_40", 40, "sma")],
         "vol_ma_length": 10,
         "bb_length": 15,
         "vwap_lookback": 52,

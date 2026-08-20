@@ -19,7 +19,7 @@
 3. **캔들스틱 차트**: 한국 시장 표준 색상 (상승: Red `#ef4444`, 하락: Blue `#3b82f6`)
 4. **이동평균선 (MA Overlays)**:
    - **일봉 (1D)**: EMA 10, EMA 21, SMA 50, SMA 150, SMA 200
-   - **주봉 (1W)**: SMA 10, SMA 30, SMA 40
+   - **주봉 (1W)**: SMA 10, SMA 20, SMA 30, SMA 40
    - **월봉 (1M)**: SMA 6, SMA 12, SMA 24
    - **년봉 (1Y)**: SMA 3, SMA 5, SMA 10
 5. **AVWAP 및 앵커 라인**:

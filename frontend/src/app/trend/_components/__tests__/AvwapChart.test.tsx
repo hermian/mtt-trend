@@ -19,11 +19,17 @@ const renderWithClient = (ui: React.ReactElement) => {
 let lastSubscribeClickCallback: ((param: any) => void) | null = null;
 let lastSubscribeCrosshairMoveCallback: ((param: any) => void) | null = null;
 
+vi.mock("@/hooks/useDebounce", () => ({
+  useDebounce: vi.fn((val) => val),
+}));
+
 // Mock lightweight-charts
 vi.mock("lightweight-charts", () => ({
   createChart: vi.fn(() => ({
     addSeries: vi.fn(() => ({
       setData: vi.fn(),
+      attachPrimitive: vi.fn(),
+      detachPrimitive: vi.fn(),
       createPriceLine: vi.fn((opts) => ({
         applyOptions: vi.fn(),
         options: vi.fn(() => opts),
@@ -48,6 +54,9 @@ vi.mock("lightweight-charts", () => ({
       lastSubscribeClickCallback = cb;
     }),
     unsubscribeClick: vi.fn(),
+  })),
+  createSeriesMarkers: vi.fn(() => ({
+    setMarkers: vi.fn(),
   })),
   ColorType: { Solid: "solid" },
   CandlestickSeries: "CandlestickSeries",
@@ -285,7 +294,7 @@ describe("AvwapChart Component", () => {
     expect(etfOption).toBeInTheDocument();
     fireEvent.click(etfOption);
 
-    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "069500");
+    expect(useAvwapSpy).toHaveBeenCalledWith("etf", "1D", "069500");
     expect(screen.getAllByText("ETF").length).toBeGreaterThan(0);
   });
 
@@ -526,7 +535,7 @@ describe("AvwapChart Component", () => {
     expect(screen.getAllByText("US_ETF").length).toBeGreaterThan(0);
 
     fireEvent.click(screen.getByText("QQQ"));
-    expect(useAvwapSpy).toHaveBeenCalledWith("kospi", "1D", "QQQ");
+    expect(useAvwapSpy).toHaveBeenCalledWith("us_etf", "1D", "QQQ");
   });
 
   it("formats USD trading amount correctly with amount_unit 백만$", () => {

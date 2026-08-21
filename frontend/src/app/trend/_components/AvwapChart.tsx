@@ -15,8 +15,10 @@ import {
   HistogramSeries,
   LineStyle,
   PriceScaleMode,
+  createSeriesMarkers,
 } from "lightweight-charts";
 import { useAvwapChart, useStockSearch } from "@/hooks/useAvwapChart";
+import { useDebounce } from "@/hooks/useDebounce";
 import { api, type AvwapPoint, type StockSearchResult } from "@/lib/api";
 import { toChartTime, toFiniteNumber } from "./_lib/chartTime";
 import { AvwapQuickAnchorPopover } from "./AvwapQuickAnchorPopover";
@@ -32,6 +34,7 @@ import {
   DEFAULT_SUPERTREND_CONFIG,
   type SupertrendConfig,
 } from "@/lib/supertrend";
+import { SupertrendBandPrimitive, type SupertrendBandItem } from "@/lib/supertrendBandPrimitive";
 import { SupertrendSettingsPopover } from "./SupertrendSettingsPopover";
 
 const MA_COLORS: Record<string, string> = {
@@ -96,8 +99,20 @@ export function AvwapChart() {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const isSelectingRef = useRef(false);
 
-  const { data: searchResults, isLoading: isSearching } = useStockSearch(searchQuery, searchType, searchCountry);
-  const { data: chartData, isLoading, error } = useAvwapChart(market, interval, symbol);
+  const debouncedSearchQuery = useDebounce(searchQuery, 150);
+  const { data: searchResults, isLoading: isSearching } = useStockSearch(
+    debouncedSearchQuery,
+    searchType,
+    searchCountry
+  );
+  const chartMarket = symbol
+    ? searchType === "etf"
+      ? searchCountry === "us"
+        ? "us_etf"
+        : "etf"
+      : market
+    : market;
+  const { data: chartData, isLoading, error } = useAvwapChart(chartMarket, interval, symbol);
 
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -176,6 +191,9 @@ export function AvwapChart() {
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const selectedLineIdRef = useRef<string | null>(null);
   const mainLinesMapRef = useRef<Map<string, { id: string; name: string; series: ISeriesApi<any>; color: string; defaultWidth: number }>>(new Map());
+  const supertrendBandPrimitiveRef = useRef<SupertrendBandPrimitive | null>(null);
+  const supertrendUpMarkersRef = useRef<any>(null);
+  const supertrendDnMarkersRef = useRef<any>(null);
 
   // Click-to-Anchor Picker Mode
   const [isPickerMode, setIsPickerMode] = useState(false);
@@ -316,8 +334,11 @@ export function AvwapChart() {
 
     const upLineData: { time: string; value?: number }[] = [];
     const dnLineData: { time: string; value?: number }[] = [];
+    const bandData: SupertrendBandItem[] = [];
+    const buyMarkers: any[] = [];
+    const sellMarkers: any[] = [];
 
-    res.points.forEach((pt) => {
+    res.points.forEach((pt, idx) => {
       const time = toChartTime(pt.time);
       if (!time) return;
       if (pt.trend === 1) {
@@ -327,12 +348,46 @@ export function AvwapChart() {
         dnLineData.push({ time, value: pt.value });
         upLineData.push({ time });
       }
+
+      const rawPt = chartData.points[idx];
+      const price = rawPt
+        ? (rawPt.open + rawPt.high + rawPt.low + rawPt.close) / 4
+        : pt.value;
+      bandData.push({
+        time,
+        price,
+        supertrend: pt.value,
+        trend: pt.trend,
+      });
+
+      if (pt.buySignal) {
+        buyMarkers.push({
+          time,
+          position: "belowBar",
+          color: "#22c55e",
+          shape: "arrowUp",
+          text: "BUY",
+          size: 2,
+        });
+      } else if (pt.sellSignal) {
+        sellMarkers.push({
+          time,
+          position: "aboveBar",
+          color: "#f43f5e",
+          shape: "arrowDown",
+          text: "SELL",
+          size: 2,
+        });
+      }
     });
 
     return {
       raw: res,
       upLineData,
       dnLineData,
+      bandData,
+      buyMarkers,
+      sellMarkers,
     };
   }, [chartData?.points, supertrendConfig]);
 
@@ -572,6 +627,9 @@ export function AvwapChart() {
       seriesRef.current.clear();
       anchorSeriesMapRef.current.clear();
       crosshairPriceLinesRef.current.clear();
+      supertrendBandPrimitiveRef.current = null;
+      supertrendUpMarkersRef.current = null;
+      supertrendDnMarkersRef.current = null;
     };
     cleanup();
 
@@ -1048,6 +1106,11 @@ export function AvwapChart() {
           });
           activeSeries.push(candleSeries);
 
+          // Supertrend Band Highlighting (Background Shading Primitive)
+          const stBand = new SupertrendBandPrimitive();
+          candleSeries.attachPrimitive(stBand);
+          supertrendBandPrimitiveRef.current = stBand;
+
           const closeHoverLine = candleSeries.createPriceLine({
             price: 0,
             color: "#ef4444",
@@ -1233,7 +1296,7 @@ export function AvwapChart() {
           // Supertrend Up (Green) & Down (Red)
           const stUpSeries = chart.addSeries(LineSeries, {
             color: "#10b981",
-            lineWidth: 2,
+            lineWidth: 1,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: false,
@@ -1244,12 +1307,14 @@ export function AvwapChart() {
             name: "Supertrend(상승)",
             series: stUpSeries,
             color: "#10b981",
-            defaultWidth: 2,
+            defaultWidth: 1,
           });
+          const stUpMarkers = createSeriesMarkers(stUpSeries, []);
+          supertrendUpMarkersRef.current = stUpMarkers;
 
           const stDnSeries = chart.addSeries(LineSeries, {
             color: "#ef4444",
-            lineWidth: 2,
+            lineWidth: 1,
             lineStyle: LineStyle.Solid,
             priceLineVisible: false,
             lastValueVisible: false,
@@ -1260,8 +1325,10 @@ export function AvwapChart() {
             name: "Supertrend(하락)",
             series: stDnSeries,
             color: "#ef4444",
-            defaultWidth: 2,
+            defaultWidth: 1,
           });
+          const stDnMarkers = createSeriesMarkers(stDnSeries, []);
+          supertrendDnMarkersRef.current = stDnMarkers;
 
           const stHoverLine = candleSeries.createPriceLine({
             price: 0,
@@ -1759,6 +1826,21 @@ export function AvwapChart() {
             seriesIdx++;
           }
 
+          // Supertrend Band Highlighting
+          if (supertrendBandPrimitiveRef.current && supertrendSeries) {
+            supertrendBandPrimitiveRef.current.setData(supertrendSeries.bandData);
+            supertrendBandPrimitiveRef.current.setVisible(showSupertrend && supertrendConfig.highlighting);
+          }
+          // Supertrend Buy/Sell Signals outside upper/lower lines
+          if (supertrendUpMarkersRef.current) {
+            const markers = showSupertrend && supertrendConfig.showSignals ? supertrendSeries?.buyMarkers || [] : [];
+            supertrendUpMarkersRef.current.setMarkers(markers);
+          }
+          if (supertrendDnMarkersRef.current) {
+            const markers = showSupertrend && supertrendConfig.showSignals ? supertrendSeries?.sellMarkers || [] : [];
+            supertrendDnMarkersRef.current.setMarkers(markers);
+          }
+
           // Anchors
           chartData.anchors?.forEach((anc) => {
             const aS = anchorSeriesMapRef.current.get(anc.id);
@@ -1857,7 +1939,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showHp, hpResult, showSupertrend, supertrendSeries]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -1921,6 +2003,21 @@ export function AvwapChart() {
         }
       }
 
+      // Supertrend Band Highlighting
+      if (supertrendBandPrimitiveRef.current) {
+        supertrendBandPrimitiveRef.current.setData(supertrendSeries?.bandData || []);
+        supertrendBandPrimitiveRef.current.setVisible(showSupertrend && supertrendConfig.highlighting);
+      }
+      // Supertrend Buy/Sell Signals outside upper/lower lines
+      if (supertrendUpMarkersRef.current) {
+        const markers = showSupertrend && supertrendConfig.showSignals ? supertrendSeries?.buyMarkers || [] : [];
+        supertrendUpMarkersRef.current.setMarkers(markers);
+      }
+      if (supertrendDnMarkersRef.current) {
+        const markers = showSupertrend && supertrendConfig.showSignals ? supertrendSeries?.sellMarkers || [] : [];
+        supertrendDnMarkersRef.current.setMarkers(markers);
+      }
+
       chartData.anchors?.forEach((anc) => {
         const aS = anchorSeriesMapRef.current.get(anc.id);
         if (aS) {
@@ -1940,7 +2037,7 @@ export function AvwapChart() {
         }
       });
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, enabledAnchors, chartData, hpResult, supertrendSeries]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, enabledAnchors, chartData, hpResult, supertrendSeries]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -2016,8 +2113,7 @@ export function AvwapChart() {
     ma: latestPoint.ma,
     hpTrend: latestHpInfo?.trend,
     hpDev: latestHpInfo?.deviation,
-    supertrendVal: hoveredData?.supertrend ? hoveredData.supertrend.value : latestSupertrendInfo?.value,
-    supertrendTrend: hoveredData?.supertrend ? hoveredData.supertrend.trend : latestSupertrendInfo?.trend,
+    supertrend: latestSupertrendInfo,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -2715,16 +2811,16 @@ export function AvwapChart() {
                 </span>
               </span>
             )}
-            {showSupertrend && activeDisplay.supertrendVal !== null && activeDisplay.supertrendVal !== undefined && (
+            {showSupertrend && activeDisplay.supertrend?.value !== null && activeDisplay.supertrend?.value !== undefined && (
               <span>
                 Supertrend({supertrendConfig.atrPeriod}, {supertrendConfig.multiplier}):{" "}
                 <span
                   className={`font-bold ${
-                    activeDisplay.supertrendTrend === 1 ? "text-emerald-400" : "text-rose-400"
+                    activeDisplay.supertrend.trend === 1 ? "text-emerald-400" : "text-rose-400"
                   }`}
                 >
-                  {activeDisplay.supertrendVal.toLocaleString(undefined, {
-                    maximumFractionDigits: activeDisplay.supertrendVal < 10 ? 2 : 1,
+                  {activeDisplay.supertrend.value.toLocaleString(undefined, {
+                    maximumFractionDigits: activeDisplay.supertrend.value < 10 ? 2 : 1,
                   })}
                 </span>
               </span>

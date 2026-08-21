@@ -641,7 +641,7 @@ def _get_etf_master_list() -> List[Tuple[str, str]]:
     try:
         conn = sqlite3.connect(f"file:{Path(e_path).resolve()}?mode=ro", uri=True)
         cur = conn.cursor()
-        cur.execute("SELECT DISTINCT 종목코드, 종목명 FROM etf_price")
+        cur.execute("SELECT 종목코드, 종목명 FROM etf_price WHERE 날짜 = (SELECT MAX(날짜) FROM etf_price)")
         _ETF_MASTER_CACHE = cur.fetchall()
         conn.close()
     except Exception as e:
@@ -831,14 +831,24 @@ def resolve_stock_info(query: str, asset_type: Optional[str] = None) -> Optional
         return None
 
     # 3. asset_type is None or "all":
-    # 3-1. 6-digit numeric -> KR stock then KR ETF
+    # 3-1. 6-digit numeric -> fast exact check on KR stock and KR ETF
     if q.isdigit() and len(q) <= 6:
-        kr_stock = resolve_stock_info(q, asset_type="stock")
-        if kr_stock:
-            return kr_stock
-        kr_etf = resolve_stock_info(q, asset_type="etf")
-        if kr_etf:
-            return kr_etf
+        code_6 = q.zfill(6)
+        sm_path = os.path.expanduser("~/.cache/db/stock_master.db")
+        if os.path.exists(sm_path):
+            try:
+                conn = sqlite3.connect(f"file:{Path(sm_path).resolve()}?mode=ro", uri=True)
+                cur = conn.cursor()
+                cur.execute("SELECT 종목코드, 종목명, 시장구분 FROM stock_master WHERE 종목코드 = ?", (code_6,))
+                row = cur.fetchone()
+                conn.close()
+                if row:
+                    return row[0], row[1], row[2] or "KOSPI"
+            except Exception:
+                pass
+        for code, name in _get_etf_master_list():
+            if code == code_6:
+                return code, name, "ETF"
 
     # 3-2. Exact Symbol/Ticker match (US Stock vs US ETF)
     us_stocks = _get_us_stock_master_list()

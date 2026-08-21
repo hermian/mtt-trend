@@ -71,7 +71,7 @@ export function StockListModal({
   const searchUrl = useMemo(() => {
     if (stockNames.length === 0) return "";
     const commaStringNoSpace = stockNames.join(",");
-    return getStreamlitSearchUrl(commaStringNoSpace);
+    return getStreamlitSearchUrl(commaStringNoSpace, "stock");
   }, [stockNames]);
 
   if (!isOpen) return null;

@@ -5,6 +5,7 @@ import type { StockHeatmapGroup, StockHeatmapItem } from "@/lib/api";
 import { squarify, type Rect } from "../_lib/treemap";
 import { heatColor, type ColorScale } from "../_lib/colors";
 import { formatMarcap, formatReturn, truncate } from "../_lib/format";
+import { getStreamlitSearchUrl } from "@/lib/streamlitUrl";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Group-level treemap  (Step 1)
@@ -269,6 +270,7 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
 interface StockTreemapProps {
   group: StockHeatmapGroup;
   scale: ColorScale;
+  onSelectStock?: (stock: StockHeatmapItem) => void;
 }
 
 interface HoverState {
@@ -281,7 +283,7 @@ interface SelectedState {
   stock: StockHeatmapItem;
 }
 
-export function StockTreemap({ group, scale }: StockTreemapProps) {
+export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -317,9 +319,11 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
       setSelected((prev) =>
         prev?.stock.code === stock.code ? null : { stock },
       );
+    } else if (onSelectStock) {
+      onSelectStock(stock);
     } else {
       window.open(
-        `http://hermian.duckdns.org:15888/?search=${encodeURIComponent(stock.name)}`,
+        getStreamlitSearchUrl(stock.name, "stock"),
         "_blank",
         "noopener",
       );
@@ -497,15 +501,48 @@ export function StockTreemap({ group, scale }: StockTreemapProps) {
             </div>
           </div>
 
-          <div className="mt-3">
-            <a
-              href={`http://hermian.duckdns.org:15888/?search=${encodeURIComponent(selected.stock.name)}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-emerald-500 active:bg-emerald-700"
-            >
-              상세 정보 보기 ↗
-            </a>
+          <div className="mt-3 grid grid-cols-1 gap-2">
+            {onSelectStock && (
+              <button
+                type="button"
+                onClick={() => {
+                  onSelectStock(selected.stock);
+                  setSelected(null);
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-sky-600 px-3 py-2 text-xs font-bold text-white transition hover:bg-sky-500 active:bg-sky-700"
+              >
+                📊 1년 실선 차트 & 상세 모달 보기
+              </button>
+            )}
+
+            <div className="grid grid-cols-3 gap-1.5 pt-1">
+              <a
+                href={getStreamlitSearchUrl(selected.stock.name, "stock")}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center rounded-lg border border-indigo-700/60 bg-indigo-950/80 p-2 text-center text-[11px] font-bold text-indigo-200 transition hover:bg-indigo-900"
+              >
+                <span>⚡ Streamlit</span>
+              </a>
+
+              <a
+                href={`/trend?tab=avwap&symbol=${encodeURIComponent(selected.stock.code)}&name=${encodeURIComponent(selected.stock.name)}&type=stock&country=kr`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center rounded-lg border border-sky-700/60 bg-sky-950/80 p-2 text-center text-[11px] font-bold text-sky-200 transition hover:bg-sky-900"
+              >
+                <span>📈 AVWAP</span>
+              </a>
+
+              <a
+                href={`https://m.stock.naver.com/domestic/stock/${encodeURIComponent(selected.stock.code)}/total`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-col items-center justify-center rounded-lg border border-emerald-700/60 bg-emerald-950/80 p-2 text-center text-[11px] font-bold text-emerald-200 transition hover:bg-emerald-900"
+              >
+                <span>🟢 네이버</span>
+              </a>
+            </div>
           </div>
         </div>
       )}

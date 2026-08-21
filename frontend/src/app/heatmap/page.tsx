@@ -8,6 +8,8 @@ import { Legend } from "./_components/Legend";
 import { GroupTreemap, StockTreemap } from "./_components/TreemapChart";
 import { buildColorScale } from "./_lib/colors";
 import { StockListModal } from "./_components/StockListModal";
+import { StockDetailModal } from "./_components/StockDetailModal";
+import type { StockHeatmapItem } from "@/lib/api";
 import {
   DEFAULT_HEATMAP_CONTROLS,
   loadSavedHeatmapControls,
@@ -40,6 +42,7 @@ export default function StockHeatmapPage() {
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialGroup, setModalInitialGroup] = useState<string | null>(null);
+  const [selectedStock, setSelectedStock] = useState<StockHeatmapItem | null>(null);
   const isMarketGrouping = MARKET_GROUPINGS.has(controls.grouping);
 
   const handleSaveDefault = () => {
@@ -223,7 +226,11 @@ export default function StockHeatmapPage() {
 
         {showStockTreemap && stockTreemapGroup && (
           <div className="rounded-lg border border-gray-800 bg-gray-950/60 p-2">
-            <StockTreemap group={stockTreemapGroup} scale={scale} />
+            <StockTreemap
+              group={stockTreemapGroup}
+              scale={scale}
+              onSelectStock={setSelectedStock}
+            />
           </div>
         )}
 
@@ -246,6 +253,14 @@ export default function StockHeatmapPage() {
         groups={data?.groups ?? []}
         initialGroup={modalInitialGroup}
         groupingTitle={GROUPING_TITLES[controls.grouping]}
+      />
+
+      <StockDetailModal
+        isOpen={!!selectedStock}
+        onClose={() => setSelectedStock(null)}
+        stock={selectedStock}
+        groupName={drilledGroup ?? stockTreemapGroup?.name}
+        periodLabel={GROUPING_TITLES[controls.grouping]}
       />
     </div>
   );

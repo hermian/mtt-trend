@@ -13,6 +13,7 @@ interface HeatmapSectionBlockProps {
   scale: ColorScale;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
 }
 
 export function HeatmapSectionBlock({
@@ -22,6 +23,7 @@ export function HeatmapSectionBlock({
   scale,
   market,
   onHover,
+  onSelectEtf,
 }: HeatmapSectionBlockProps) {
   const items = buildSectionGroups(groups, section);
   if (items.length === 0) return null;
@@ -41,6 +43,7 @@ export function HeatmapSectionBlock({
             scale={scale}
             market={market}
             onHover={onHover}
+            onSelectEtf={onSelectEtf}
             gridCols={section.gridCols}
           />
         ))}

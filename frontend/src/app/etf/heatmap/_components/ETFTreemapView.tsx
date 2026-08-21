@@ -12,6 +12,7 @@ interface ETFTreemapViewProps {
   market: "KR" | "US";
   scale?: ColorScale;
   onHover: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
 }
 
 export interface TransformedETFGroup {
@@ -37,6 +38,7 @@ export function ETFTreemapView({
   market,
   scale: propScale,
   onHover,
+  onSelectEtf,
 }: ETFTreemapViewProps) {
   const [drilledGroup, setDrilledGroup] = useState<string | null>(null);
   const [krViewMode, setKrViewMode] = useState<"representatives" | "categories">("representatives");
@@ -173,6 +175,7 @@ export function ETFTreemapView({
             scale={scale}
             market={market}
             onHover={onHover}
+            onSelectEtf={onSelectEtf}
             showSectorBadge={true}
           />
         ) : !drilledGroup ? (
@@ -188,6 +191,7 @@ export function ETFTreemapView({
               scale={scale}
               market={market}
               onHover={onHover}
+              onSelectEtf={onSelectEtf}
             />
           )
         )}
@@ -390,10 +394,18 @@ interface StockTreemapProps {
   scale: ColorScale;
   market: "KR" | "US";
   onHover: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
   showSectorBadge?: boolean;
 }
 
-function StockTreemap({ group, scale, market, onHover, showSectorBadge = false }: StockTreemapProps) {
+function StockTreemap({
+  group,
+  scale,
+  market,
+  onHover,
+  onSelectEtf,
+  showSectorBadge = false,
+}: StockTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
 
@@ -417,11 +429,15 @@ function StockTreemap({ group, scale, market, onHover, showSectorBadge = false }
   }, [group.etfs, width, height]);
 
   const handleTileClick = (e: React.MouseEvent, item: TransformedETFGroup["etfs"][number]) => {
-    if (market === "KR") {
-      window.open(`https://finance.naver.com/item/main.naver?code=${item.code}`, "_blank");
+    if (onSelectEtf) {
+      onSelectEtf(item.raw);
     } else {
-      const codeUrl = item.url || item.code;
-      window.open(`https://m.stock.naver.com/worldstock/stock/${codeUrl}/total`, "_blank");
+      if (market === "KR") {
+        window.open(`https://finance.naver.com/item/main.naver?code=${item.code}`, "_blank");
+      } else {
+        const codeUrl = item.url || item.code;
+        window.open(`https://m.stock.naver.com/worldstock/stock/${codeUrl}/total`, "_blank");
+      }
     }
   };
 

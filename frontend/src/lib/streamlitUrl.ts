@@ -12,7 +12,21 @@ export function getStreamlitBaseUrl(): string {
   return raw.replace(/\/+$/, "");
 }
 
-/** Streamlit 종목 검색 링크: `{base}/?search={종목명}` */
-export function getStreamlitSearchUrl(stockName: string): string {
-  return `${getStreamlitBaseUrl()}/?search=${encodeURIComponent(stockName)}`;
+export type StreamlitDataType = "stock" | "etf" | "us_etf";
+
+/** Streamlit 종목 검색 링크: `{base}/?search={종목명}&type={type}` */
+export function getStreamlitSearchUrl(
+  stockName: string,
+  type?: StreamlitDataType
+): string {
+  const base = getStreamlitBaseUrl();
+  const params = new URLSearchParams();
+  if (stockName) {
+    params.set("search", stockName);
+  }
+  if (type) {
+    params.set("type", type);
+  }
+  const qs = params.toString();
+  return qs ? `${base}/?${qs}` : base;
 }

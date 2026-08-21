@@ -64,6 +64,7 @@ interface GlobalMapHeatmapProps {
   period: PeriodKey;
   scale: ColorScale;
   onHover?: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
 }
 
 // Compact cell layout customized for the world map overlay to prevent vertical text wrap/overlapping
@@ -72,11 +73,13 @@ function CompactHeatmapCell({
   period,
   scale,
   onHover,
+  onSelectEtf,
 }: {
   etf: ETFItem;
   period: PeriodKey;
   scale: ColorScale;
   onHover?: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
 }) {
   const val = etf.returns?.[period] ?? null;
   const { fill, text } = heatColor(val, scale);
@@ -86,11 +89,17 @@ function CompactHeatmapCell({
       href={etfLink(etf, "GLOBAL")}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => {
+        if (onSelectEtf) {
+          e.preventDefault();
+          onSelectEtf(etf);
+        }
+      }}
       onMouseEnter={() => onHover?.(etf)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(etf)}
       onBlur={() => onHover?.(null)}
-      className="flex w-full flex-col overflow-hidden rounded-sm border border-gray-800/80 text-left transition-transform hover:z-10 hover:scale-[1.03] focus:outline-none"
+      className="flex w-full flex-col overflow-hidden rounded-sm border border-gray-800/80 text-left transition-transform hover:z-10 hover:scale-[1.03] focus:outline-none cursor-pointer"
       title={`${etf.name} (${etf.code})`}
     >
       <span className="truncate bg-gray-850 px-1 py-0.5 text-[8.5px] font-medium leading-none text-gray-200 text-center block w-full">
@@ -112,7 +121,7 @@ function CompactHeatmapCell({
   );
 }
 
-export function GlobalMapHeatmap({ data, period, scale, onHover }: GlobalMapHeatmapProps) {
+export function GlobalMapHeatmap({ data, period, scale, onHover, onSelectEtf }: GlobalMapHeatmapProps) {
   // Collect all ETFs from the groups
   const allEtfs = data.groups.flatMap((g) => g.etfs);
 
@@ -145,6 +154,7 @@ export function GlobalMapHeatmap({ data, period, scale, onHover }: GlobalMapHeat
                 period={period}
                 scale={scale}
                 onHover={onHover}
+                onSelectEtf={onSelectEtf}
               />
             </div>
           );

@@ -26,4 +26,14 @@ describe("streamlitUrl", () => {
       `${STREAMLIT_BASE_URL}/?search=%EB%A1%AF%EB%8D%B0%EC%BC%80%EB%AF%B8%EC%B9%BC`
     );
   });
+
+  it("type 파라미터가 주어지면 쿼리스트링에 포함한다", () => {
+    vi.stubEnv("NEXT_PUBLIC_STREAMLIT_URL", "");
+    expect(getStreamlitSearchUrl("KODEX 200", "etf")).toBe(
+      `${STREAMLIT_BASE_URL}/?search=KODEX+200&type=etf`
+    );
+    expect(getStreamlitSearchUrl("SPY", "us_etf")).toBe(
+      `${STREAMLIT_BASE_URL}/?search=SPY&type=us_etf`
+    );
+  });
 });

@@ -10,6 +10,7 @@ import { ColorLegend } from "./_components/ColorLegend";
 import { PeriodFilter } from "./_components/PeriodFilter";
 import { GlobalMapHeatmap } from "./_components/GlobalMapHeatmap";
 import { ETFTreemapView } from "./_components/ETFTreemapView";
+import { ETFDetailModal } from "./_components/ETFDetailModal";
 import { KR_SECTIONS, US_SECTIONS } from "./_lib/sections";
 import type { ETFItem, HeatmapData, PeriodKey } from "./_lib/types";
 
@@ -27,6 +28,7 @@ export default function ETFHeatmapPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [hoveredEtf, setHoveredEtf] = useState<ETFItem | null>(null);
+  const [selectedModalEtf, setSelectedModalEtf] = useState<ETFItem | null>(null);
 
   useEffect(() => {
     if (activeTab !== "KR" && activeTab !== "US" && activeTab !== "GLOBAL") return;
@@ -175,6 +177,7 @@ export default function ETFHeatmapPage() {
               period={selectedPeriod}
               scale={scale}
               onHover={setHoveredEtf}
+              onSelectEtf={setSelectedModalEtf}
             />
           ) : viewMode === "treemap" ? (
             <ETFTreemapView
@@ -183,6 +186,7 @@ export default function ETFHeatmapPage() {
               market={activeTab}
               scale={scale}
               onHover={setHoveredEtf}
+              onSelectEtf={setSelectedModalEtf}
             />
           ) : (
             <>
@@ -200,6 +204,7 @@ export default function ETFHeatmapPage() {
                         label={idx.name}
                         market={activeTab}
                         onHover={setHoveredEtf}
+                        onSelectEtf={setSelectedModalEtf}
                       />
                     ))}
                   </div>
@@ -218,6 +223,7 @@ export default function ETFHeatmapPage() {
                       scale={scale}
                       market={activeTab}
                       onHover={setHoveredEtf}
+                      onSelectEtf={setSelectedModalEtf}
                     />
                   ))}
                 </div>
@@ -231,6 +237,7 @@ export default function ETFHeatmapPage() {
                       scale={scale}
                       market={activeTab}
                       onHover={setHoveredEtf}
+                      onSelectEtf={setSelectedModalEtf}
                     />
                   ))}
                 </div>
@@ -250,6 +257,7 @@ export default function ETFHeatmapPage() {
                         scale={scale}
                         market={activeTab}
                         onHover={setHoveredEtf}
+                        onSelectEtf={setSelectedModalEtf}
                       />
                     ))}
                 </div>
@@ -261,7 +269,15 @@ export default function ETFHeatmapPage() {
         </div>
       )}
 
-      {hoveredEtf && <HeatmapTooltip etf={hoveredEtf} />}
+      {hoveredEtf && <HeatmapTooltip etf={hoveredEtf} market={activeTab} />}
+
+      <ETFDetailModal
+        isOpen={!!selectedModalEtf}
+        onClose={() => setSelectedModalEtf(null)}
+        etf={selectedModalEtf}
+        market={activeTab}
+        selectedPeriod={selectedPeriod}
+      />
     </div>
   );
 }

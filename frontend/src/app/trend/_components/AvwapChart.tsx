@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createChart,
@@ -83,16 +84,46 @@ function toDimColor(hexOrRgb: string, alpha: number = 0.5): string {
 }
 
 export function AvwapChart() {
+  const searchParams = useSearchParams();
+  const paramSymbol = searchParams?.get("symbol") || null;
+  const paramName = searchParams?.get("name") || null;
+  const paramType = searchParams?.get("type") || null;
+  const paramCountry = searchParams?.get("country") || null;
+  const paramMarket = searchParams?.get("market") || null;
+
   const [market, setMarket] = useState<AvwapMarket>("kospi");
   const [interval, setInterval] = useState<"1D" | "1W" | "1M" | "1Y">("1D");
-  const [symbol, setSymbol] = useState<string | null>(null);
+  const [symbol, setSymbol] = useState<string | null>(paramSymbol || null);
   const [priceScaleMode, setPriceScaleMode] = useState<"log" | "linear">("log");
   const [ddPeriod, setDdPeriod] = useState<"52w" | "3y" | "all">("52w");
 
   // Stock Search state
-  const [searchCountry, setSearchCountry] = useState<"kr" | "us">("kr");
-  const [searchType, setSearchType] = useState<"stock" | "etf">("stock");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchCountry, setSearchCountry] = useState<"kr" | "us">(
+    paramCountry === "us" || paramMarket === "us_etf" || paramMarket === "us" ? "us" : "kr"
+  );
+  const [searchType, setSearchType] = useState<"stock" | "etf">(
+    paramType === "etf" || paramMarket === "etf" || paramMarket === "us_etf" ? "etf" : "stock"
+  );
+  const [searchQuery, setSearchQuery] = useState(
+    paramSymbol ? (paramName ? `${paramName} (${paramSymbol})` : paramSymbol) : ""
+  );
+
+  useEffect(() => {
+    if (paramSymbol) {
+      setSymbol(paramSymbol);
+      if (paramType === "etf" || paramMarket === "etf" || paramMarket === "us_etf") {
+        setSearchType("etf");
+      } else if (paramType === "stock") {
+        setSearchType("stock");
+      }
+      if (paramCountry === "us" || paramMarket === "us_etf" || paramMarket === "us") {
+        setSearchCountry("us");
+      } else if (paramCountry === "kr") {
+        setSearchCountry("kr");
+      }
+      setSearchQuery(paramName ? `${paramName} (${paramSymbol})` : paramSymbol);
+    }
+  }, [paramSymbol, paramName, paramType, paramCountry, paramMarket]);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);

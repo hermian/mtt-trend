@@ -12,6 +12,7 @@ interface HeatmapGroupProps {
   scale: ColorScale;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
   gridCols?: number;
 }
 
@@ -23,6 +24,7 @@ export function HeatmapGroup({
   scale,
   market,
   onHover,
+  onSelectEtf,
   gridCols,
 }: HeatmapGroupProps) {
   const showLabel = Boolean(label);
@@ -51,6 +53,7 @@ export function HeatmapGroup({
             scale={scale}
             market={market}
             onHover={onHover}
+            onSelectEtf={onSelectEtf}
           />
         ))}
       </div>

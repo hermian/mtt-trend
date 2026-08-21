@@ -13,6 +13,7 @@ interface HeatmapCellProps {
   label?: string;
   market?: MarketKey;
   onHover?: (etf: ETFItem | null) => void;
+  onSelectEtf?: (etf: ETFItem) => void;
 }
 
 export function HeatmapCell({
@@ -22,6 +23,7 @@ export function HeatmapCell({
   label,
   market,
   onHover,
+  onSelectEtf,
 }: HeatmapCellProps) {
   const val = etf.returns?.[period] ?? null;
   const { fill, text } = heatColor(val, scale);
@@ -32,11 +34,17 @@ export function HeatmapCell({
       href={etfLink(etf, market)}
       target="_blank"
       rel="noopener noreferrer"
+      onClick={(e) => {
+        if (onSelectEtf) {
+          e.preventDefault();
+          onSelectEtf(etf);
+        }
+      }}
       onMouseEnter={() => onHover?.(etf)}
       onMouseLeave={() => onHover?.(null)}
       onFocus={() => onHover?.(etf)}
       onBlur={() => onHover?.(null)}
-      className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-gray-800/80 text-left transition-transform hover:z-10 hover:scale-[1.03] focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-500"
+      className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-gray-800/80 text-left transition-transform hover:z-10 hover:scale-[1.03] focus:outline-none focus-visible:ring-1 focus-visible:ring-sky-500 cursor-pointer"
       title={`${etf.name} (${etf.code})`}
     >
       <span className="truncate bg-gray-800 px-1.5 py-0.5 text-[10px] font-medium leading-tight text-gray-200">

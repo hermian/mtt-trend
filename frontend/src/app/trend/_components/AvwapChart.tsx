@@ -37,6 +37,7 @@ import {
 } from "@/lib/supertrend";
 import { SupertrendBandPrimitive, type SupertrendBandItem } from "@/lib/supertrendBandPrimitive";
 import { SupertrendSettingsPopover } from "./SupertrendSettingsPopover";
+import { StockNameLink } from "@/components/StockNameLink";
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -2743,10 +2744,31 @@ export function AvwapChart() {
             >
               {chartData.market === "ETF" ? "ETF" : isStockMode ? "종목" : "지수"}
             </span>
-            <span className="text-gray-200 font-bold">
-              {chartData.name}
-              {chartData.symbol ? ` (${chartData.symbol})` : ""}
-            </span>
+            {chartData.name ? (
+              isStockMode || chartData.market === "ETF" || chartData.market === "US_ETF" ? (
+                <StockNameLink
+                  name={chartData.name}
+                  type={
+                    chartData.market === "US_ETF" || (searchCountry === "us" && searchType === "etf")
+                      ? "us_etf"
+                      : chartData.market === "ETF" || searchType === "etf"
+                      ? "etf"
+                      : "stock"
+                  }
+                  className="text-gray-200 font-bold hover:text-blue-400 hover:underline transition-colors inline-flex items-center gap-1 cursor-pointer"
+                  title={`${chartData.name} Screener 차트 열기 (새 창)`}
+                >
+                  <span>{chartData.name}</span>
+                  {chartData.symbol ? <span className="font-normal text-gray-400">({chartData.symbol})</span> : null}
+                  <span className="text-[10px] text-gray-500 hover:text-blue-400">↗</span>
+                </StockNameLink>
+              ) : (
+                <span className="text-gray-200 font-bold">
+                  {chartData.name}
+                  {chartData.symbol ? ` (${chartData.symbol})` : ""}
+                </span>
+              )
+            ) : null}
           </span>
         )}
 
@@ -2934,9 +2956,27 @@ export function AvwapChart() {
           {/* Panel 2: Main Candlestick & AVWAP */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
             <div className="absolute top-2 left-3 z-10 flex items-center gap-2 text-xs font-bold text-gray-300 bg-gray-900/70 px-2.5 py-1 rounded border border-gray-700/80 backdrop-blur-sm">
-              <span className="text-white uppercase">
-                {chartData?.name || (symbol ? symbol : market)}
-              </span>
+              {chartData?.name && (isStockMode || chartData.market === "ETF" || chartData.market === "US_ETF") ? (
+                <StockNameLink
+                  name={chartData.name}
+                  type={
+                    chartData.market === "US_ETF" || (searchCountry === "us" && searchType === "etf")
+                      ? "us_etf"
+                      : chartData.market === "ETF" || searchType === "etf"
+                      ? "etf"
+                      : "stock"
+                  }
+                  className="text-white uppercase hover:text-blue-400 hover:underline transition-colors inline-flex items-center gap-1 cursor-pointer"
+                  title={`${chartData.name} Screener 차트 열기 (새 창)`}
+                >
+                  <span>{chartData.name}</span>
+                  <span className="text-[10px] text-gray-400">↗</span>
+                </StockNameLink>
+              ) : (
+                <span className="text-white uppercase">
+                  {chartData?.name || (symbol ? symbol : market)}
+                </span>
+              )}
               <span className="text-blue-400">{interval}</span>
               <span className="text-purple-400 font-mono text-[11px]">[{priceScaleMode.toUpperCase()}]</span>
               <span className="text-gray-500">|</span>

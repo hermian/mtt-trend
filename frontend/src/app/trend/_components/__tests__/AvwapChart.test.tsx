@@ -705,4 +705,34 @@ describe("AvwapChart Component", () => {
     fireEvent.click(stBtn);
     expect(screen.queryByText(/Supertrend\(14, 3\):/)).not.toBeInTheDocument();
   });
+
+  it("renders stock name with screener link when stock mode is active", () => {
+    const mockStockData = {
+      ...mockChartData,
+      market: "KOSPI",
+      symbol: "018880",
+      name: "한온시스템",
+    };
+
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockStockData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const screenerLinks = screen.getAllByRole("link", { name: /한온시스템/ });
+    expect(screenerLinks.length).toBeGreaterThanOrEqual(1);
+
+    screenerLinks.forEach((link) => {
+      expect(link.getAttribute("target")).toBe("_blank");
+      expect(link.getAttribute("rel")).toBe("noopener noreferrer");
+      expect(link.getAttribute("href")).toContain("search=%ED%95%9C%EC%98%A8%EC%8B%9C%EC%8A%A4%ED%85%9C");
+    });
+  });
 });

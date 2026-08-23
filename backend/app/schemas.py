@@ -575,3 +575,91 @@ class ReturnComparisonResponse(BaseModel):
     rolling_correlations: Dict[str, List[RollingCorrelationPair]] = {}
 
 
+# --- KR 종목 수급 분석 (AVWAP 수급 탭) ---
+class SupplyDemandSumPeriod(BaseModel):
+    preset: str
+    start: str
+    end: str
+    label: str
+
+
+class SupplyDemandPoint(BaseModel):
+    date: str
+    close: float
+    force_oscillator: Optional[float] = None
+    accumulation_3ma: Dict[str, Optional[float]]
+    dispersion_pct: Dict[str, Optional[float]]
+    norm_accumulation: Dict[str, Optional[float]]
+
+
+class SupplyDemandTableRow(BaseModel):
+    label: str
+    종가: Optional[float] = None
+    거래량: Optional[float] = None
+    개인: Optional[float] = None
+    세력: Optional[float] = None
+    외국인: Optional[float] = None
+    기관계: Optional[float] = None
+    금융투자: Optional[float] = None
+    보험: Optional[float] = None
+    투신: Optional[float] = None
+    기타금융: Optional[float] = None
+    은행: Optional[float] = None
+    연기금: Optional[float] = None
+    사모: Optional[float] = None
+    기타법인: Optional[float] = None
+    기타외국인: Optional[float] = None
+
+
+class DispersionTableRow(BaseModel):
+    stat: Optional[str] = None
+    date: Optional[str] = None
+    개인: Optional[float] = None
+    세력: Optional[float] = None
+    외국인: Optional[float] = None
+    기관계: Optional[float] = None
+    금융투자: Optional[float] = None
+    보험: Optional[float] = None
+    투신: Optional[float] = None
+    기타금융: Optional[float] = None
+    은행: Optional[float] = None
+    연기금: Optional[float] = None
+    사모: Optional[float] = None
+    기타법인: Optional[float] = None
+    기타외국인: Optional[float] = None
+
+
+class PeriodSumItem(BaseModel):
+    investor: str
+    value: float
+
+
+class PeriodSumsPresetBundle(BaseModel):
+    sum_period: SupplyDemandSumPeriod
+    period_sums: List[PeriodSumItem]
+
+
+class SupplyDemandPeriodSumsResponse(BaseModel):
+    code: str
+    name: str
+    sum_period: SupplyDemandSumPeriod
+    period_sums: List[PeriodSumItem]
+
+
+class SupplyDemandResponse(BaseModel):
+    code: str
+    name: str
+    data_first: str
+    data_last: str
+    sum_period: SupplyDemandSumPeriod
+    series: List[SupplyDemandPoint]
+    table_supply: List[SupplyDemandTableRow]
+    table_lds: List[SupplyDemandTableRow]
+    table_dispersion_stats: List[DispersionTableRow]
+    table_dispersion_recent: List[DispersionTableRow]
+    table_dispersion_peak: List[DispersionTableRow]
+    period_sums: List[PeriodSumItem]
+    period_sums_by_preset: Dict[str, PeriodSumsPresetBundle]
+    columns: List[str]
+
+

@@ -799,6 +799,29 @@ export const api = {
     return data;
   },
 
+  // GET /api/charts/supply-demand → SupplyDemandResponse (프리셋 합계 포함, 1회 로드)
+  getSupplyDemand: async (code: string): Promise<SupplyDemandResponse> => {
+    const { data } = await apiClient.get<SupplyDemandResponse>("/api/charts/supply-demand", {
+      params: { code },
+    });
+    return data;
+  },
+
+  // GET /api/charts/supply-demand/period-sums → 커스텀 기간 합계만
+  getSupplyDemandPeriodSums: async (
+    code: string,
+    sumStart: string,
+    sumEnd: string
+  ): Promise<SupplyDemandPeriodSumsResponse> => {
+    const { data } = await apiClient.get<SupplyDemandPeriodSumsResponse>(
+      "/api/charts/supply-demand/period-sums",
+      {
+        params: { code, sum_start: sumStart, sum_end: sumEnd },
+      }
+    );
+    return data;
+  },
+
   // GET /api/charts/stocks/search → StockSearchResult[]
   searchStocks: async (
     query: string,
@@ -956,6 +979,68 @@ export interface AvwapChartResponse {
   points: AvwapPoint[];
   anchors: AvwapAnchorSeries[];
   preset_dates: string[];
+}
+
+// Supply Demand (AVWAP 수급) Types
+export interface SupplyDemandSumPeriod {
+  preset: string;
+  start: string;
+  end: string;
+  label: string;
+}
+
+export interface SupplyDemandPoint {
+  date: string;
+  close: number;
+  force_oscillator: number | null;
+  accumulation_3ma: Record<string, number | null>;
+  dispersion_pct: Record<string, number | null>;
+  norm_accumulation: Record<string, number | null>;
+}
+
+export interface SupplyDemandTableRow {
+  label: string;
+  [key: string]: string | number | null | undefined;
+}
+
+export interface DispersionTableRow {
+  stat?: string;
+  date?: string;
+  [key: string]: string | number | null | undefined;
+}
+
+export interface PeriodSumItem {
+  investor: string;
+  value: number;
+}
+
+export interface PeriodSumsPresetBundle {
+  sum_period: SupplyDemandSumPeriod;
+  period_sums: PeriodSumItem[];
+}
+
+export interface SupplyDemandPeriodSumsResponse {
+  code: string;
+  name: string;
+  sum_period: SupplyDemandSumPeriod;
+  period_sums: PeriodSumItem[];
+}
+
+export interface SupplyDemandResponse {
+  code: string;
+  name: string;
+  data_first: string;
+  data_last: string;
+  sum_period: SupplyDemandSumPeriod;
+  series: SupplyDemandPoint[];
+  table_supply: SupplyDemandTableRow[];
+  table_lds: SupplyDemandTableRow[];
+  table_dispersion_stats: DispersionTableRow[];
+  table_dispersion_recent: DispersionTableRow[];
+  table_dispersion_peak: DispersionTableRow[];
+  period_sums: PeriodSumItem[];
+  period_sums_by_preset: Record<string, PeriodSumsPresetBundle>;
+  columns: string[];
 }
 
 // Return Comparison (수익률 비교) Types

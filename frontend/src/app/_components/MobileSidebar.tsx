@@ -7,6 +7,7 @@ import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import clsx from "clsx";
 import { SyncButton } from "./SyncButton";
+import { buildTrendTabHref } from "../_lib/trendTabHref";
 
 interface MobileSidebarProps {
   isOpen: boolean;
@@ -129,6 +130,8 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
     (searchParams.get("tab") === "kospi_weather" || searchParams.get("tab") === "weather_20panel");
   const isAvwapActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "avwap";
+  const isAvwapSugeubActive =
+    pathname.startsWith("/trend") && searchParams.get("tab") === "avwap_sugeub";
   const isReturnsActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "returns";
   return (
@@ -260,7 +263,7 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
 
           {/* AVWAP 차트 Button-styled Link */}
           <Link
-            href="/trend?tab=avwap"
+            href={buildTrendTabHref("avwap", searchParams)}
             onClick={onClose}
             className={clsx(
               "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
@@ -284,6 +287,32 @@ export function MobileSidebar({ isOpen, onClose }: MobileSidebarProps) {
               <path d="M6 20v-4" />
             </svg>
             <span className="truncate">AVWAP 차트</span>
+          </Link>
+
+          {/* AVWAP 수급 Button-styled Link */}
+          <Link
+            href={buildTrendTabHref("avwap_sugeub", searchParams)}
+            onClick={onClose}
+            className={clsx(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+              isAvwapSugeubActive
+                ? "bg-emerald-600 text-white shadow-lg shadow-emerald-500/20 font-bold"
+                : "bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30 border border-emerald-600/30"
+            )}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="w-5 h-5 flex-shrink-0"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M12 2v20M2 12h20" />
+            </svg>
+            <span className="truncate">AVWAP 수급</span>
           </Link>
 
           {/* 수익률 비교 Button-styled Link */}

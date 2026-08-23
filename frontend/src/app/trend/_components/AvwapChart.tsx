@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   createChart,
@@ -38,6 +38,7 @@ import {
 import { SupertrendBandPrimitive, type SupertrendBandItem } from "@/lib/supertrendBandPrimitive";
 import { SupertrendSettingsPopover } from "./SupertrendSettingsPopover";
 import { StockNameLink } from "@/components/StockNameLink";
+import { syncTrendStockUrl } from "@/app/_lib/trendTabHref";
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -86,6 +87,7 @@ function toDimColor(hexOrRgb: string, alpha: number = 0.5): string {
 
 export function AvwapChart() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const paramSymbol = searchParams?.get("symbol") || null;
   const paramName = searchParams?.get("name") || null;
   const paramType = searchParams?.get("type") || null;
@@ -145,6 +147,7 @@ export function AvwapChart() {
       : market
     : market;
   const { data: chartData, isLoading, error } = useAvwapChart(chartMarket, interval, symbol);
+  const queryClient = useQueryClient();
 
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -463,18 +466,21 @@ export function AvwapChart() {
   // Select stock from search
   const handleSelectStock = (stock: StockSearchResult) => {
     isSelectingRef.current = true;
-    if (stock.market === "ETF" || stock.market === "US_ETF") {
-      setSearchType("etf");
-    } else {
-      setSearchType("stock");
-    }
-    if (
+    const nextType = stock.market === "ETF" || stock.market === "US_ETF" ? "etf" : "stock";
+    const nextCountry =
       stock.market === "US_ETF" ||
       stock.market === "US" ||
       stock.market === "NASDAQ" ||
       stock.market === "NYSE" ||
       stock.market === "AMEX"
-    ) {
+        ? "us"
+        : "kr";
+    if (stock.market === "ETF" || stock.market === "US_ETF") {
+      setSearchType("etf");
+    } else {
+      setSearchType("stock");
+    }
+    if (nextCountry === "us") {
       setSearchCountry("us");
     } else {
       setSearchCountry("kr");
@@ -483,6 +489,12 @@ export function AvwapChart() {
     setSearchQuery(`${stock.name} (${stock.code})`);
     setShowDropdown(false);
     setSelectedIndex(-1);
+    syncTrendStockUrl(router, searchParams, "avwap", {
+      code: stock.code,
+      name: stock.name,
+      type: nextType,
+      country: nextCountry,
+    });
     searchInputRef.current?.blur();
     setTimeout(() => {
       isSelectingRef.current = false;
@@ -496,6 +508,7 @@ export function AvwapChart() {
     setSearchQuery("");
     setShowDropdown(false);
     setSelectedIndex(-1);
+    syncTrendStockUrl(router, searchParams, "avwap", null);
     if (targetMarket) {
       setMarket(targetMarket);
     }
@@ -504,7 +517,6 @@ export function AvwapChart() {
     }, 150);
   };
 
-  const queryClient = useQueryClient();
   const [showQuickAnchorPopover, setShowQuickAnchorPopover] = useState(false);
   const [showAnchorManagerModal, setShowAnchorManagerModal] = useState(false);
 
@@ -2328,9 +2340,16 @@ export function AvwapChart() {
                         handleSelectStock(targetStock);
                       } else if (searchQuery.trim()) {
                         isSelectingRef.current = true;
-                        setSymbol(searchQuery.trim());
+                        const raw = searchQuery.trim();
+                        setSymbol(raw);
                         setShowDropdown(false);
                         setSelectedIndex(-1);
+                        syncTrendStockUrl(router, searchParams, "avwap", {
+                          code: raw,
+                          name: raw,
+                          type: searchType,
+                          country: searchCountry,
+                        });
                         searchInputRef.current?.blur();
                         setTimeout(() => {
                           isSelectingRef.current = false;

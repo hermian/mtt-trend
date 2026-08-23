@@ -33,6 +33,8 @@ from app.schemas import (
     CustomAnchorResponse,
     ReturnComparisonRequest,
     ReturnComparisonResponse,
+    SupplyDemandResponse,
+    SupplyDemandPeriodSumsResponse,
 )
 from app.utils.returns_utils import compute_return_comparison
 from app.utils.wics_index_utils import (
@@ -44,6 +46,7 @@ from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
 from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
+from app.utils.sugeub_utils import DEFAULT_SUM_PERIOD, load_supply_demand_analysis, load_supply_demand_period_sums
 from app.utils.custom_anchor_utils import (
     get_custom_anchors,
     create_custom_anchor,
@@ -1134,6 +1137,42 @@ async def search_stocks_endpoint(
     종목명 또는 종목코드로 주식/ETF 검색 목록을 반환합니다.
     """
     return search_stocks_db(query=q, limit=limit, asset_type=type, market=market)
+
+
+@router.get("/supply-demand", response_model=SupplyDemandResponse)
+async def get_supply_demand_data(
+    code: str = Query(..., description="KR 종목코드 또는 종목명 (예: 005930, 삼성전자)"),
+    sum: str = Query(DEFAULT_SUM_PERIOD, description="순매수 합계 프리셋: 1m | 3m | 6m | 12m"),
+    sum_start: str = Query("", description="순매수 합계 시작일 YYYY-MM-DD (지정 시 sum 무시)"),
+    sum_end: str = Query("", description="순매수 합계 종료일 YYYY-MM-DD"),
+):
+    """
+    KR 종목 수급 분석 데이터 (stock_analyzer 동일 산출물, JSON).
+    sugeub.sqlite + marcap.duckdb 기반.
+    """
+    data = load_supply_demand_analysis(code, sum, sum_start, sum_end)
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supply-demand data not found for '{code}'. Check sugeub DB and marcap price DB.",
+        )
+    return data
+
+
+@router.get("/supply-demand/period-sums", response_model=SupplyDemandPeriodSumsResponse)
+async def get_supply_demand_period_sums(
+    code: str = Query(..., description="KR 종목코드 또는 종목명"),
+    sum_start: str = Query("", description="순매수 합계 시작일 YYYY-MM-DD"),
+    sum_end: str = Query("", description="순매수 합계 종료일 YYYY-MM-DD"),
+):
+    """순매수 합계만 재계산 (커스텀 기간). 시계열 JSON 재전송 없음."""
+    data = load_supply_demand_period_sums(code, sum_start, sum_end)
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supply-demand period sums not found for '{code}'.",
+        )
+    return data
 
 
 @router.get("/avwap", response_model=AvwapChartResponse)

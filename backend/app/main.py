@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from sqlalchemy.orm import Session
 
 from app.database import create_tables, SessionLocal
@@ -169,6 +170,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ---------------------------------------------------------------------------
+# GZip – 대용량 차트 JSON(수급 ~5MB, AVWAP ~3MB) 응답 압축
+# ---------------------------------------------------------------------------
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # ---------------------------------------------------------------------------
 # Routers

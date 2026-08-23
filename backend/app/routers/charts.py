@@ -1140,7 +1140,7 @@ async def search_stocks_endpoint(
 
 
 @router.get("/supply-demand", response_model=SupplyDemandResponse)
-async def get_supply_demand_data(
+def get_supply_demand_data(
     code: str = Query(..., description="KR 종목코드 또는 종목명 (예: 005930, 삼성전자)"),
     sum: str = Query(DEFAULT_SUM_PERIOD, description="순매수 합계 프리셋: 1m | 3m | 6m | 12m"),
     sum_start: str = Query("", description="순매수 합계 시작일 YYYY-MM-DD (지정 시 sum 무시)"),
@@ -1160,7 +1160,7 @@ async def get_supply_demand_data(
 
 
 @router.get("/supply-demand/period-sums", response_model=SupplyDemandPeriodSumsResponse)
-async def get_supply_demand_period_sums(
+def get_supply_demand_period_sums(
     code: str = Query(..., description="KR 종목코드 또는 종목명"),
     sum_start: str = Query("", description="순매수 합계 시작일 YYYY-MM-DD"),
     sum_end: str = Query("", description="순매수 합계 종료일 YYYY-MM-DD"),
@@ -1176,7 +1176,7 @@ async def get_supply_demand_period_sums(
 
 
 @router.get("/avwap", response_model=AvwapChartResponse)
-async def get_avwap_chart_data(
+def get_avwap_chart_data(
     market: str = Query("kospi", description="kospi | kosdaq | sp500 | nasdaq100 | dow | etf"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
     symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자, 069500, KODEX 200)"),

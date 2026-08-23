@@ -41,6 +41,42 @@ DEFAULT_SUM_PERIOD = "3m"
 NORM_COLS = ["세력", "외국인", "기관계", "개인"]
 ACCUM_MA_COLS = ["세력", "외국인", "기관계", "개인"]
 
+# ---------------------------------------------------------------------------
+# 인메모리 캐시 — 키: ("analysis"|"period_sums", code, sum_period, sum_start, sum_end)
+# 값: (sugeub.sqlite mtime, marcap.duckdb mtime, 응답 dict)
+# DB 파일이 갱신되면(장마감 후 수집) mtime 불일치로 자동 재계산.
+# ---------------------------------------------------------------------------
+_SUGEUB_CACHE: dict[tuple[str, str, str, str, str], tuple[float, float, Any]] = {}
+
+
+def _db_mtimes() -> tuple[float, float]:
+    def _mtime(path: str) -> float:
+        try:
+            return Path(path).stat().st_mtime
+        except OSError:
+            return 0.0
+
+    return _mtime(DB_FILE), _mtime(MARCAP_DB)
+
+
+def invalidate_sugeub_cache() -> None:
+    """수급 분석 인메모리 캐시 전체 무효화."""
+    _SUGEUB_CACHE.clear()
+
+
+def _cached_result(
+    key: tuple[str, str, str, str, str],
+) -> Optional[Any]:
+    sugeub_mtime, marcap_mtime = _db_mtimes()
+    cached = _SUGEUB_CACHE.get(key)
+    if cached is not None and cached[0] == sugeub_mtime and cached[1] == marcap_mtime:
+        return cached[2]
+    return None
+
+
+def _store_result(key: tuple[str, str, str, str, str], result: Any) -> None:
+    _SUGEUB_CACHE[key] = (*_db_mtimes(), result)
+
 
 def _parse_date(s: Optional[str]) -> Optional[datetime]:
     if not s:
@@ -350,6 +386,11 @@ def load_supply_demand_period_sums(
     if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR") and not (code.isdigit() and len(code) == 6):
         return None
 
+    cache_key = ("period_sums", code, "", sum_start or "", sum_end or "")
+    cached = _cached_result(cache_key)
+    if cached is not None:
+        return cached
+
     raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
     if raw_df.empty:
         return None
@@ -363,7 +404,7 @@ def load_supply_demand_period_sums(
     data_first, data_last = df.index.min(), df.index.max()
     sum_from, sum_to, sel = resolve_sum_window("", sum_start, sum_end, data_first, data_last)
     label = f"{sum_from:%Y-%m-%d} ~ {sum_to:%Y-%m-%d}"
-    return {
+    result = {
         "code": code,
         "name": name,
         "sum_period": {
@@ -374,6 +415,8 @@ def load_supply_demand_period_sums(
         },
         "period_sums": _compute_period_sums(df, sum_from, sum_to),
     }
+    _store_result(cache_key, result)
+    return result
 
 
 def load_supply_demand_analysis(
@@ -390,6 +433,11 @@ def load_supply_demand_analysis(
         # KR stock only — resolve_stock_info returns KOSPI/KOSDAQ for domestic
         if not code.isdigit() or len(code) != 6:
             return None
+
+    cache_key = ("analysis", code, sum_period or "", sum_start or "", sum_end or "")
+    cached = _cached_result(cache_key)
+    if cached is not None:
+        return cached
 
     raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
     if raw_df.empty:
@@ -427,7 +475,7 @@ def load_supply_demand_analysis(
     period_sums = _compute_period_sums(df, sum_from, sum_to)
     period_sums_by_preset = _build_period_sums_by_preset(df, data_first, data_last)
 
-    return {
+    result = {
         "code": code,
         "name": name,
         "data_first": data_first.strftime("%Y-%m-%d"),
@@ -448,3 +496,5 @@ def load_supply_demand_analysis(
         "period_sums_by_preset": period_sums_by_preset,
         "columns": TABLE_BASE_COLS,
     }
+    _store_result(cache_key, result)
+    return result

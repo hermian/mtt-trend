@@ -92,8 +92,8 @@ export function AvwapSugeubPanel({
 
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar">
-      <div className="max-w-[1300px] mx-auto px-4 py-6">
-        <div className="bg-white rounded-lg shadow-md px-6 py-8 space-y-12">
+      <div className="max-w-[1300px] mx-auto px-2 sm:px-4 py-3 sm:py-6">
+        <div className="bg-white rounded-lg shadow-md px-3 sm:px-6 py-5 sm:py-8 space-y-8 sm:space-y-12">
           <header className="text-center space-y-2">
             <h2 className="text-xl font-bold text-gray-800">종목 분석기</h2>
             <p className="text-sm text-gray-600">

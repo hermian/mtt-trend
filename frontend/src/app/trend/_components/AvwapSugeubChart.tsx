@@ -114,11 +114,11 @@ export function AvwapSugeubChart() {
 
   return (
     <div className="flex flex-col h-full bg-[#f8f9fa] text-gray-900 select-none">
-      <div className="bg-white border-b border-gray-200 px-4 py-3 flex flex-wrap items-center justify-between gap-3 sticky top-0 z-20 shadow-sm">
-        <div className="flex items-center gap-3 flex-wrap">
+      <div className="bg-white border-b border-gray-200 px-3 sm:px-4 py-3 flex flex-wrap items-center justify-between gap-2 sm:gap-3 sticky top-0 z-20 shadow-sm">
+        <div className="flex items-center gap-3 flex-wrap w-full sm:w-auto">
           <h1 className="text-sm font-bold text-gray-800 whitespace-nowrap">AVWAP 수급</h1>
-          <div className="relative">
-            <div className="flex items-center bg-white border border-gray-300 focus-within:border-blue-500 rounded px-2.5 py-1.5 text-sm min-w-[320px] shadow-sm">
+          <div className="relative flex-1 min-w-0 sm:flex-none sm:w-[320px]">
+            <div className="flex items-center bg-white border border-gray-300 focus-within:border-blue-500 rounded px-2.5 py-1.5 text-sm shadow-sm">
               <input
                 ref={searchInputRef}
                 type="text"

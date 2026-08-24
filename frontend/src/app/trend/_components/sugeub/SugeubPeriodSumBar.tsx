@@ -61,24 +61,24 @@ export function SugeubPeriodSumBar({
             {p.label}
           </button>
         ))}
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-xs w-full sm:w-auto sm:justify-center">
           <input
             type="date"
             value={customStart}
             onChange={(e) => onCustomStartChange(e.target.value)}
-            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700"
+            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700 flex-1 min-w-0 max-w-[150px] sm:max-w-none"
           />
-          <span className="text-gray-500">~</span>
+          <span className="text-gray-500 shrink-0">~</span>
           <input
             type="date"
             value={customEnd}
             onChange={(e) => onCustomEndChange(e.target.value)}
-            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700"
+            className="bg-white border border-gray-300 rounded px-2 py-1 text-gray-700 flex-1 min-w-0 max-w-[150px] sm:max-w-none"
           />
           <button
             type="button"
             onClick={onApplyCustom}
-            className="px-2 py-1 rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200"
+            className="px-2 py-1 rounded bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200 shrink-0"
           >
             적용
           </button>
@@ -87,7 +87,7 @@ export function SugeubPeriodSumBar({
       <p className="text-center text-[11px] text-gray-500">
         {isLoading ? "합계 계산 중..." : sumPeriod.label}
       </p>
-      <div className="flex items-stretch justify-center gap-1 px-2 overflow-x-auto min-h-[200px]">
+      <div className="flex items-stretch gap-1 px-1 sm:px-2 overflow-x-auto overscroll-x-contain min-h-[200px]">
         {periodSums.map((item) => {
           const positive = item.value > 0;
           const negative = item.value < 0;
@@ -96,7 +96,7 @@ export function SugeubPeriodSumBar({
           return (
             <div
               key={item.investor}
-              className="flex flex-col items-center min-w-[52px] flex-1 max-w-[72px]"
+              className="flex flex-col items-center min-w-[44px] sm:min-w-[52px] flex-1 max-w-[72px]"
             >
               <span
                 className={`text-[9px] tabular-nums h-4 leading-4 ${

@@ -663,3 +663,41 @@ class SupplyDemandResponse(BaseModel):
     columns: List[str]
 
 
+# --- Trend-up Breadth Schemas ---
+class HistogramBin(BaseModel):
+    x_start: float
+    x_end: float
+    x_label: str
+    count: int
+    is_latest_bin: bool = False
+
+
+class DistributionStats(BaseModel):
+    latest: Optional[float] = None
+    percentile: Optional[float] = None
+    median: Optional[float] = None
+    mean: Optional[float] = None
+    min: Optional[float] = None
+    max: Optional[float] = None
+    total_days: int = 0
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    bins: List[HistogramBin] = []
+
+class TrendUpBreadthPoint(BaseModel):
+    time: str
+    trend_up_ratio: Optional[float] = None
+    trend_up_ratio_5ma: Optional[float] = None
+    trend_up_stocks: Optional[int] = None
+    total_stocks: Optional[int] = None
+
+
+class TrendUpBreadthResponse(BaseModel):
+    universe: str
+    universe_name: str
+    index_data: List[ChartDataPoint]
+    breadth_data: List[TrendUpBreadthPoint]
+    distribution_daily: DistributionStats
+    distribution_5ma: DistributionStats
+
+

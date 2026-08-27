@@ -128,6 +128,9 @@ export function Sidebar() {
     pathname.startsWith("/trend") && searchParams.get("tab") === "avwap_sugeub";
   const isReturnsActive =
     pathname.startsWith("/trend") && searchParams.get("tab") === "returns";
+  const isTrendUpBreadthActive =
+    pathname.startsWith("/trend") &&
+    (searchParams.get("tab") === "trend_up_breadth" || searchParams.get("tab") === "market_breadth");
   return (
     <aside
       className={clsx(
@@ -242,6 +245,33 @@ export function Sidebar() {
             <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
           </svg>
           {!collapsed && <span className="truncate">KOSPI Weather</span>}
+        </Link>
+
+        {/* Trend-up Breadth 전용 탭 Button-styled Link */}
+        <Link
+          href="/trend?tab=trend_up_breadth"
+          className={clsx(
+            "flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-sm h-10 w-full mt-2",
+            isTrendUpBreadthActive
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold"
+              : "bg-blue-600/20 text-blue-400 hover:bg-blue-600/30 border border-blue-600/30"
+          )}
+          title={collapsed ? "Trend-up Breadth" : undefined}
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-5 h-5 flex-shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 3v18h18" />
+            <path d="m19 7-7 7-4-4-5 5" />
+          </svg>
+          {!collapsed && <span className="truncate">Trend-up Breadth</span>}
         </Link>
 
         {/* AVWAP 차트 Button-styled Link */}

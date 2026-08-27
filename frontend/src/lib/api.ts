@@ -853,7 +853,23 @@ export const api = {
     const { data } = await apiClient.post<CustomAnchorResponse>("/api/charts/avwap/anchors", payload);
     return data;
   },
-
+  getTrendUpBreadthData: async (
+    universe: string = "krx300",
+    startDate?: string,
+    endDate?: string
+  ): Promise<TrendUpBreadthResponse> => {
+    const { data } = await apiClient.get<TrendUpBreadthResponse>(
+      "/api/charts/trend-up-breadth",
+      {
+        params: {
+          universe,
+          start_date: startDate || undefined,
+          end_date: endDate || undefined,
+        },
+      }
+    );
+    return data;
+  },
   updateCustomAnchor: async (
     id: string,
     payload: CustomAnchorUpdate
@@ -1114,6 +1130,63 @@ export interface ReturnComparisonResponse {
   statistics: ReturnStatistics[];
   correlations: Record<string, CorrelationMatrix | null>;
   rolling_correlations: Record<string, RollingCorrelationPair[]>;
+}
+
+// Trend-up Breadth Types
+export interface HistogramBin {
+  x_start: number;
+  x_end: number;
+  x_label: string;
+  count: number;
+  is_latest_bin: boolean;
+}
+
+export interface DistributionStats {
+  latest?: number | null;
+  percentile?: number | null;
+  median?: number | null;
+  mean?: number | null;
+  min?: number | null;
+  max?: number | null;
+  total_days: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  bins: HistogramBin[];
+}
+
+export interface TrendUpBreadthPoint {
+  time: string;
+  trend_up_ratio?: number | null;
+  trend_up_ratio_5ma?: number | null;
+  trend_up_stocks?: number | null;
+  total_stocks?: number | null;
+}
+
+export interface TrendUpBreadthResponse {
+  universe: string;
+  universe_name: string;
+  index_data: ChartDataPoint[];
+  breadth_data: TrendUpBreadthPoint[];
+  distribution_daily: DistributionStats;
+  distribution_5ma: DistributionStats;
+}
+
+export async function getTrendUpBreadthData(
+  universe: string = "krx300",
+  startDate?: string,
+  endDate?: string
+): Promise<TrendUpBreadthResponse> {
+  const { data } = await apiClient.get<TrendUpBreadthResponse>(
+    "/api/charts/trend-up-breadth",
+    {
+      params: {
+        universe,
+        start_date: startDate || undefined,
+        end_date: endDate || undefined,
+      },
+    }
+  );
+  return data;
 }
 
 export { API_CONFIG };

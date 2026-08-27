@@ -35,6 +35,7 @@ from app.schemas import (
     ReturnComparisonResponse,
     SupplyDemandResponse,
     SupplyDemandPeriodSumsResponse,
+    TrendUpBreadthResponse,
 )
 from app.utils.returns_utils import compute_return_comparison
 from app.utils.wics_index_utils import (
@@ -44,6 +45,7 @@ from app.utils.wics_index_utils import (
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data
+from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
 from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
 from app.utils.sugeub_utils import DEFAULT_SUM_PERIOD, load_supply_demand_analysis, load_supply_demand_period_sums
@@ -153,6 +155,17 @@ async def get_stockbee_mm_data(
         return StockbeeMmResponse(data=[], years=[])
     rows, years = result
     return StockbeeMmResponse(data=[StockbeeMmRow(**r) for r in rows], years=years)
+
+@router.get("/trend-up-breadth", response_model=TrendUpBreadthResponse)
+async def get_trend_up_breadth_endpoint(
+    universe: str = Query("krx300", description="유니버스 구분 (krx300, kospi, kosdaq, all)"),
+    start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
+    end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
+):
+    """
+    Market Breadth - Trend-up Breadth (추세 상승 종목 비율 및 확산도) 및 기술통계/분포 히스토그램을 반환합니다.
+    """
+    return load_trend_up_breadth_data(universe=universe, start_date=start_date, end_date=end_date)
 
 
 @router.get("/macro", response_model=MacroDataResponse)

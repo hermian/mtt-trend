@@ -436,7 +436,28 @@ export const TrendUpBreadthPanel: React.FC = () => {
       lastValueVisible: true,
     });
 
-    // Reference Price Line: Median (AGENTS.md 규칙: title 생략, 눈금자 배지만 표시)
+    // Reference Price Lines (AGENTS.md 규칙: title 생략, 오른쪽 Y축 눈금자 배지 표시)
+    // 1. 15% 침체/바닥 기준선 (하늘색 점선)
+    ma5Series.createPriceLine({
+      price: 15.0,
+      color: "#38bdf8",
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "",
+    });
+
+    // 2. 60% 과열/경계 기준선 (붉은색 점선)
+    ma5Series.createPriceLine({
+      price: 60.0,
+      color: "#ef4444",
+      lineWidth: 1,
+      lineStyle: LineStyle.Dashed,
+      axisLabelVisible: true,
+      title: "",
+    });
+
+    // 3. Median 중앙값 기준선 (회색 점선)
     if (data.distribution_5ma.median != null) {
       ma5Series.createPriceLine({
         price: data.distribution_5ma.median,
@@ -447,7 +468,6 @@ export const TrendUpBreadthPanel: React.FC = () => {
         title: "",
       });
     }
-
     const dailyData: LineData<Time>[] = [];
     const ma5Data: LineData<Time>[] = [];
     const breadthMap = new Map<string, TrendUpBreadthPoint>();
@@ -710,14 +730,16 @@ export const TrendUpBreadthPanel: React.FC = () => {
                       상승종목: <strong className="text-gray-200">{hoveredBreadth.trendUpStocks}</strong> / {hoveredBreadth.totalStocks}개
                     </span>
                   )}
-                  {data?.distribution_5ma.median != null && (
-                    <span className="text-gray-400 border-l border-gray-700 pl-2">
-                      중앙값 기준선: <strong className="text-gray-300">{data.distribution_5ma.median.toFixed(1)}%</strong>
-                    </span>
-                  )}
+                  {/* 기준선 안내 칩 */}
+                  <div className="flex items-center gap-2 border-l border-gray-700 pl-2 text-[10px] bg-gray-950/80 px-2 py-0.5 rounded border border-gray-800">
+                    <span className="text-sky-400 font-semibold">침체 15%</span>
+                    <span className="text-gray-500">·</span>
+                    <span className="text-gray-300">중앙 {data?.distribution_5ma.median?.toFixed(1) ?? "27.0"}%</span>
+                    <span className="text-gray-500">·</span>
+                    <span className="text-red-400 font-semibold">과열 60%</span>
+                  </div>
                 </div>
               </div>
-
               {/* Breadth Chart Canvas */}
               <div ref={breadthChartContainerRef} className="w-full" />
             </div>

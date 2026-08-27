@@ -372,6 +372,13 @@ export const TrendUpBreadthPanel: React.FC = () => {
     });
     indexChartRef.current = indexChart;
 
+    const candleSeries = indexChart.addSeries(CandlestickSeries, {
+      upColor: "#ef4444",
+      downColor: "#3b82f6",
+      borderVisible: false,
+      wickUpColor: "#ef4444",
+      wickDownColor: "#3b82f6",
+    });
     const sma10Series = indexChart.addSeries(LineSeries, { color: "#a855f7", lineWidth: 1, priceLineVisible: false });
     const sma20Series = indexChart.addSeries(LineSeries, { color: "#eab308", lineWidth: 1, priceLineVisible: false });
     const sma50Series = indexChart.addSeries(LineSeries, { color: "#3b82f6", lineWidth: 2, priceLineVisible: false });

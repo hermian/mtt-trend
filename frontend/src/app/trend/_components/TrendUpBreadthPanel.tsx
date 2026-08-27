@@ -573,7 +573,7 @@ export const TrendUpBreadthPanel: React.FC = () => {
     setPeriod(newPeriod);
   };
   return (
-    <div className="flex flex-col gap-4 p-4 min-h-screen bg-gray-950 text-white custom-scrollbar">
+    <div className="flex flex-col gap-4 pb-12 w-full text-white">
       {/* Control Bar & Universe Selection */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-900 border border-gray-800 rounded-xl p-3.5 shadow-md">
         {/* Left: Title & Universe Toggle */}

@@ -121,6 +121,7 @@ export interface MacroDataPoint {
   vxn?: number;
   us_2y?: number;
   us_10y?: number;
+  us_30y?: number;
   us_spread?: number;
   kr_10y?: number;
   usdkrw?: number;

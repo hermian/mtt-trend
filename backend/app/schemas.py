@@ -37,6 +37,7 @@ class MacroDataPoint(BaseModel):
     vxn: Optional[float] = None          # Cboe Nasdaq 100 Volatility Index → index_ohlcv(index_name='vxn')
     us_2y: Optional[float] = None
     us_10y: Optional[float] = None
+    us_30y: Optional[float] = None
     us_spread: Optional[float] = None
     kr_10y: Optional[float] = None
     usdkrw: Optional[float] = None

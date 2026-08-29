@@ -63,6 +63,7 @@ def temp_macro_db(monkeypatch):
             date TEXT NOT NULL,
             y2 REAL,
             y10 REAL,
+            y30 REAL,
             y2y10_spread REAL,
             kr10 REAL,
             PRIMARY KEY (date)
@@ -233,11 +234,11 @@ def temp_macro_db(monkeypatch):
     ])
 
     cursor.executemany("""
-        INSERT INTO us_treasury_yield (date, y2, y10, y2y10_spread, kr10) VALUES (?, ?, ?, ?, ?)
+        INSERT INTO us_treasury_yield (date, y2, y10, y30, y2y10_spread, kr10) VALUES (?, ?, ?, ?, ?, ?)
     """, [
-        ("2026-06-24", 4.2, 4.5, 0.3, 3.1),
-        ("2026-06-25", 4.3, 4.6, 0.3, 3.2),
-        ("2026-06-26", 4.4, 4.7, 0.3, 3.3),
+        ("2026-06-24", 4.2, 4.5, 4.8, 0.3, 3.1),
+        ("2026-06-25", 4.3, 4.6, 4.9, 0.3, 3.2),
+        ("2026-06-26", 4.4, 4.7, 5.0, 0.3, 3.3),
     ])
 
     # 주간 일평균수출 — 구간 시작 전 관측 + 주중 1점만 있어도 ffill
@@ -282,6 +283,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["vxn"] == 22.0
     assert pt["us_2y"] == 4.2
     assert pt["us_10y"] == 4.5
+    assert pt["us_30y"] == 4.8
     assert pt["us_spread"] == 0.3
     assert pt["kr_10y"] == 3.1
     assert pt["fed_funds"] == 4.33

@@ -202,6 +202,7 @@ async def get_macro_chart_data(
       vxn        index_ohlcv(index_name='vxn') — Cboe Nasdaq 100 Volatility Index (2001~)
       us_2y      us_treasury_yield(y2)
       us_10y     us_treasury_yield(y10)
+      us_30y     us_treasury_yield(y30)
       us_spread  us_treasury_yield(y2y10_spread)
       kr_10y     us_treasury_yield(kr10)
       usdkrw     fx_rate(usdkrw)
@@ -245,6 +246,7 @@ async def get_macro_chart_data(
         "vxn":       ("index_ohlcv",        "close",       "index_name = 'vxn'"),
         "us_2y":     ("us_treasury_yield",  "y2",          None),
         "us_10y":    ("us_treasury_yield",  "y10",         None),
+        "us_30y":    ("us_treasury_yield",  "y30",         None),
         "us_spread": ("us_treasury_yield",  "y2y10_spread", None),
         "kr_10y":    ("us_treasury_yield",  "kr10",        None),
         "usdkrw":    ("fx_rate",            "usdkrw",      None),
@@ -478,6 +480,7 @@ async def get_macro_chart_data(
             vxn=p.get("vxn"),
             us_2y=p.get("us_2y"),
             us_10y=p.get("us_10y"),
+            us_30y=p.get("us_30y"),
             us_spread=p.get("us_spread"),
             kr_10y=p.get("kr_10y"),
             usdkrw=p.get("usdkrw"),

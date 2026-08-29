@@ -43,6 +43,7 @@ const INDICATOR_CATEGORIES: Record<string, CategoryKey> = {
 
   us_2y: "rates",
   us_10y: "rates",
+  us_30y: "rates",
   us_spread: "rates",
   kr_10y: "rates",
   fed_funds: "rates",
@@ -135,6 +136,7 @@ const INDICATORS: IndicatorDef[] = [
   { id: "vxn", label: "VXN", color: "#38bdf8", raw: (v) => `VXN ${v.toFixed(1)}` },
   { id: "us_2y", label: "US 2Y", color: "#60a5fa", raw: (v) => `2Y ${v.toFixed(2)}%` },
   { id: "us_10y", label: "US 10Y", color: "#818cf8", raw: (v) => `10Y ${v.toFixed(2)}%` },
+  { id: "us_30y", label: "US 30Y", color: "#a5b4fc", raw: (v) => `30Y ${v.toFixed(2)}%` },
   { id: "us_spread", label: "US 2-10", color: "#4ade80", raw: (v) => `2-10 ${v.toFixed(2)}%` },
   { id: "kr_10y", label: "KR 10Y", color: "#fbbf24", raw: (v) => `KR10 ${v.toFixed(2)}%` },
   { id: "fed_funds", label: "Fed Funds", color: "#67e8f9", raw: (v) => `FF ${v.toFixed(2)}%` },

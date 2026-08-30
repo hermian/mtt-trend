@@ -31,10 +31,7 @@ const PRESETS: { id: ProfilePreset; label: string }[] = [
 
 const BIN_OPTIONS = [5, 7, 10, 15];
 
-export const INVESTOR_CONFIG: Record<
-  string,
-  { label: string; color: string }
-> = {
+export const MAIN_INVESTOR_CONFIG = {
   개인: {
     label: "개인",
     color: "#2563eb",
@@ -47,33 +44,65 @@ export const INVESTOR_CONFIG: Record<
     label: "기관계",
     color: "#15803d",
   },
-  연기금: {
-    label: "연기금 등",
-    color: "#84cc16",
-  },
-};
+} as const;
 
-const EXTRA_INVESTORS: Record<
-  string,
-  { label: string; color: string }
-> = {
-  금융투자: {
-    label: "금융투자",
-    color: "#f59e0b",
-  },
-  투신: {
-    label: "투신",
-    color: "#c026d3",
-  },
-  사모: {
-    label: "사모",
-    color: "#7c3aed",
-  },
-  기타법인: {
-    label: "기타법인",
-    color: "#78716c",
-  },
-};
+export const INSTITUTIONAL_SUB_ENTITIES = [
+  { key: "금융투자", label: "금융투자", color: "#f59e0b" },
+  { key: "연기금", label: "연기금", color: "#84cc16" },
+  { key: "투신", label: "투신", color: "#c026d3" },
+  { key: "사모", label: "사모", color: "#7c3aed" },
+  { key: "기타기관", label: "기타(보험/은행 등)", color: "#64748b" },
+] as const;
+
+export interface InstitutionalBreakdown {
+  items: Array<{ key: string; label: string; value: number; color: string }>;
+  positives: Array<{ key: string; label: string; value: number; color: string }>;
+  negatives: Array<{ key: string; label: string; value: number; color: string }>;
+  posSum: number;
+  negSum: number;
+  instTotal: number;
+}
+
+export function getInstitutionalBreakdown(
+  bin: SupplyDemandPriceProfileBin,
+  activeSubKeys?: Set<string>
+): InstitutionalBreakdown {
+  const geumtu = Number(bin["금융투자"] || 0);
+  const yeon = Number(bin["연기금"] || 0);
+  const tusin = Number(bin["투신"] || 0);
+  const samo = Number(bin["사모"] || 0);
+  const bohum = Number(bin["보험"] || 0);
+  const eunhaeng = Number(bin["은행"] || 0);
+  const gitafin = Number(bin["기타금융"] || 0);
+  const gita = bohum + eunhaeng + gitafin;
+  const instTotal = Number(bin["기관계"] || (geumtu + yeon + tusin + samo + gita));
+
+  const allItems = [
+    { key: "금융투자", label: "금융투자", value: geumtu, color: "#f59e0b" },
+    { key: "연기금", label: "연기금", value: yeon, color: "#84cc16" },
+    { key: "투신", label: "투신", value: tusin, color: "#c026d3" },
+    { key: "사모", label: "사모", value: samo, color: "#7c3aed" },
+    { key: "기타기관", label: "기타(보험/은행 등)", value: gita, color: "#64748b" },
+  ];
+
+  const filteredItems = activeSubKeys
+    ? allItems.filter((item) => activeSubKeys.has(item.key))
+    : allItems;
+
+  const positives = filteredItems.filter((item) => item.value > 0);
+  const negatives = filteredItems.filter((item) => item.value < 0);
+  const posSum = positives.reduce((acc, curr) => acc + curr.value, 0);
+  const negSum = negatives.reduce((acc, curr) => acc + Math.abs(curr.value), 0);
+
+  return {
+    items: filteredItems,
+    positives,
+    negatives,
+    posSum,
+    negSum,
+    instTotal,
+  };
+}
 
 function formatKoreanDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -129,17 +158,18 @@ export function SugeubPriceProfileChart({
   const [customEnd, setCustomEnd] = useState<string>("");
   const [binCount, setBinCount] = useState<number>(7);
   const [showPriceLine, setShowPriceLine] = useState<boolean>(true);
-  const [visibleInvestors, setVisibleInvestors] = useState<Record<string, boolean>>({
+  const [visibleEntities, setVisibleEntities] = useState<Record<string, boolean>>({
     개인: true,
     외국인: true,
     기관계: true,
-    연기금: true,
-    금융투자: false,
-    투신: false,
-    사모: false,
-    기타법인: false,
   });
-  const [showExtraInvestors, setShowExtraInvestors] = useState<boolean>(false);
+  const [visibleSubInstitutions, setVisibleSubInstitutions] = useState<Record<string, boolean>>({
+    금융투자: true,
+    연기금: true,
+    투신: true,
+    사모: true,
+    기타기관: true,
+  });
   const [hoveredBin, setHoveredBin] = useState<SupplyDemandPriceProfileBin | null>(null);
   const [hoveredPointIndex, setHoveredPointIndex] = useState<number | null>(null);
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -184,21 +214,27 @@ export function SugeubPriceProfileChart({
     }
   };
 
-  const handleToggleInvestor = (investorKey: string) => {
-    setVisibleInvestors((prev) => ({
+  const handleToggleMainEntity = (key: "개인" | "외국인" | "기관계") => {
+    setVisibleEntities((prev) => ({
       ...prev,
-      [investorKey]: !prev[investorKey],
+      [key]: !prev[key],
     }));
   };
 
-  // 4 main default investors (개인, 외국인, 기관계, 연기금) + any enabled extra investors
-  const activeInvestorKeys = useMemo(() => {
-    const list = ["개인", "외국인", "기관계", "연기금"];
-    if (showExtraInvestors) {
-      list.push("금융투자", "투신", "사모", "기타법인");
-    }
-    return list.filter((k) => visibleInvestors[k]);
-  }, [visibleInvestors, showExtraInvestors]);
+  const handleToggleSubInstitution = (key: string) => {
+    setVisibleSubInstitutions((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const activeSubKeysSet = useMemo(() => {
+    const set = new Set<string>();
+    Object.entries(visibleSubInstitutions).forEach(([k, v]) => {
+      if (v) set.add(k);
+    });
+    return set;
+  }, [visibleSubInstitutions]);
 
   // Reverse bins so highest price is at top (same as financial chart / 매물대.png)
   const displayBins = useMemo(() => {
@@ -216,18 +252,24 @@ export function SugeubPriceProfileChart({
     return { min, max: max === min ? min + 1000 : max };
   }, [displayBins]);
 
-  // Max absolute value across active investors for bar horizontal scaling
+  // Max absolute value across 3 main bars (개인, 외국인, 기관계 positive/negative sums) for horizontal scaling
   const maxAbsValue = useMemo(() => {
     if (!data?.bins || data.bins.length === 0) return 100000;
     let max = 0;
     for (const b of data.bins) {
-      for (const inv of activeInvestorKeys) {
-        const val = Math.abs(Number(b[inv] || 0));
-        if (val > max) max = val;
+      if (visibleEntities["개인"]) {
+        max = Math.max(max, Math.abs(Number(b["개인"] || 0)));
+      }
+      if (visibleEntities["외국인"]) {
+        max = Math.max(max, Math.abs(Number(b["외국인"] || 0)));
+      }
+      if (visibleEntities["기관계"]) {
+        const instBreakdown = getInstitutionalBreakdown(b, activeSubKeysSet);
+        max = Math.max(max, instBreakdown.posSum, instBreakdown.negSum);
       }
     }
     return getNiceMaxDomain(max);
-  }, [data?.bins, activeInvestorKeys]);
+  }, [data?.bins, visibleEntities, activeSubKeysSet]);
 
   // Generate X-axis ticks (e.g. -max, -max/2, 0, +max/2, +max)
   const xTicks = useMemo(() => {
@@ -265,7 +307,7 @@ export function SugeubPriceProfileChart({
 
   // SVG dimensions for the overlaid stock price path
   const svgViewBoxWidth = 1000;
-  const rowHeightPx = 64;
+  const rowHeightPx = 68;
   const totalChartHeightPx = Math.max(300, displayBins.length * rowHeightPx);
 
   // Calculate SVG Points for the Price Line (X: 0 to 1000, Y: 0 to totalChartHeightPx)
@@ -351,103 +393,137 @@ export function SugeubPriceProfileChart({
             </span>
           </h3>
           <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded text-white/90">
-            기본 1Y 수급 매물대 + 종가 실선
+            기본 1Y 매물대 (개인·외국인·기관계 3대 주체 통합)
           </span>
         </div>
       </div>
 
       <div className="p-3 sm:p-5 space-y-4">
-        {/* 2. Subtitle & Interactive Legend (Investors + Price Line Toggle) */}
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 border-b border-gray-100 pb-3">
-          <div className="text-xs sm:text-sm font-semibold text-gray-800">
-            {name} 매물대 - 개인 / 외국인 / 기관계 / 연기금 등
+        {/* 2. Subtitle & Interactive Legend: 3 Main Entities + Institutional Sub-forces */}
+        <div className="flex flex-col gap-2.5 border-b border-gray-100 pb-3">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5">
+            <div className="text-xs sm:text-sm font-semibold text-gray-800">
+              {name} 매물대 - 개인 / 외국인 / 기관계 (금융투자·연기금·투신·사모·기타)
+            </div>
+
+            {/* 3 Main Bars + Price Line Toggle */}
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              {/* 개인 Toggle */}
+              <button
+                type="button"
+                onClick={() => handleToggleMainEntity("개인")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+                  visibleEntities["개인"]
+                    ? "bg-white shadow-xs font-semibold"
+                    : "bg-gray-100 text-gray-400 border-gray-200 opacity-60 line-through"
+                }`}
+                style={{
+                  borderColor: visibleEntities["개인"] ? "#2563eb" : undefined,
+                  color: visibleEntities["개인"] ? "#2563eb" : undefined,
+                }}
+                title="개인 바 토글"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
+                  style={{ backgroundColor: visibleEntities["개인"] ? "#2563eb" : "#9ca3af" }}
+                />
+                <span>개인</span>
+              </button>
+
+              {/* 외국인 Toggle */}
+              <button
+                type="button"
+                onClick={() => handleToggleMainEntity("외국인")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+                  visibleEntities["외국인"]
+                    ? "bg-white shadow-xs font-semibold"
+                    : "bg-gray-100 text-gray-400 border-gray-200 opacity-60 line-through"
+                }`}
+                style={{
+                  borderColor: visibleEntities["외국인"] ? "#dc2626" : undefined,
+                  color: visibleEntities["외국인"] ? "#dc2626" : undefined,
+                }}
+                title="외국인 바 토글"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
+                  style={{ backgroundColor: visibleEntities["외국인"] ? "#dc2626" : "#9ca3af" }}
+                />
+                <span>외국인</span>
+              </button>
+
+              {/* 기관계 Toggle */}
+              <button
+                type="button"
+                onClick={() => handleToggleMainEntity("기관계")}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+                  visibleEntities["기관계"]
+                    ? "bg-white shadow-xs font-semibold"
+                    : "bg-gray-100 text-gray-400 border-gray-200 opacity-60 line-through"
+                }`}
+                style={{
+                  borderColor: visibleEntities["기관계"] ? "#15803d" : undefined,
+                  color: visibleEntities["기관계"] ? "#15803d" : undefined,
+                }}
+                title="기관계 전체 바 토글"
+              >
+                <span
+                  className="w-2.5 h-2.5 rounded-xs shrink-0"
+                  style={{ backgroundColor: visibleEntities["기관계"] ? "#15803d" : "#9ca3af" }}
+                />
+                <span>기관계 (통합 바)</span>
+              </button>
+
+              {/* Overlaid Close Price Line Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowPriceLine((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+                  showPriceLine
+                    ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
+                    : "bg-gray-100 text-gray-400 border-gray-200 line-through"
+                }`}
+                title="매물대 내 종가 실선 차트 On/Off"
+              >
+                <span className="w-3 h-0.5 bg-current rounded shrink-0" />
+                <span>종가 실선 차트</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {/* Investor Toggles */}
-            {Object.entries(INVESTOR_CONFIG).map(([key, cfg]) => {
-              const isChecked = visibleInvestors[key] !== false;
+          {/* Institutional Sub-categories Legend & Toggles (기관계 내부 색상 가이드) */}
+          <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-50/90 rounded border border-gray-200 text-xs">
+            <span className="text-gray-700 text-[11px] font-bold mr-1 flex items-center gap-1">
+              <span>기관계 내부 세부 세력:</span>
+            </span>
+            {INSTITUTIONAL_SUB_ENTITIES.map((sub) => {
+              const isChecked = visibleSubInstitutions[sub.key] !== false;
               return (
                 <button
-                  key={key}
+                  key={sub.key}
                   type="button"
-                  onClick={() => handleToggleInvestor(key)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
-                    isChecked
-                      ? "bg-white shadow-xs font-semibold"
-                      : "bg-gray-100 text-gray-400 border-gray-200 opacity-60 line-through"
-                  }`}
-                  style={{
-                    borderColor: isChecked ? cfg.color : undefined,
-                    color: isChecked ? cfg.color : undefined,
-                  }}
-                  title={`${cfg.label} 토글`}
-                >
-                  <span
-                    className="w-2.5 h-2.5 rounded-xs shrink-0"
-                    style={{ backgroundColor: isChecked ? cfg.color : "#9ca3af" }}
-                  />
-                  <span>{cfg.label}</span>
-                </button>
-              );
-            })}
-
-            {/* Overlaid Close Price Line Toggle */}
-            <button
-              type="button"
-              onClick={() => setShowPriceLine((v) => !v)}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
-                showPriceLine
-                  ? "bg-slate-900 text-white border-slate-900 font-bold shadow-xs"
-                  : "bg-gray-100 text-gray-400 border-gray-200 line-through"
-              }`}
-              title="매물대 내 종가 실선 차트 On/Off"
-            >
-              <span className="w-3 h-0.5 bg-current rounded shrink-0" />
-              <span>종가 실선 차트</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowExtraInvestors((v) => !v)}
-              className="px-2 py-1 text-[11px] rounded text-gray-500 hover:text-gray-800 hover:bg-gray-100 border border-dashed border-gray-300"
-            >
-              {showExtraInvestors ? "세부 주체 숨기기" : "+ 세부 주체 추가 (금융투자 등)"}
-            </button>
-          </div>
-        </div>
-
-        {/* 2-1. Extra Investors Toggle Bar (if enabled) */}
-        {showExtraInvestors && (
-          <div className="flex flex-wrap items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200 text-xs">
-            <span className="text-gray-500 text-[11px] font-medium mr-1">추가 주체:</span>
-            {Object.entries(EXTRA_INVESTORS).map(([key, cfg]) => {
-              const isChecked = !!visibleInvestors[key];
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => handleToggleInvestor(key)}
+                  onClick={() => handleToggleSubInstitution(sub.key)}
                   className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs transition-all ${
                     isChecked
                       ? "bg-white font-medium shadow-xs"
-                      : "bg-gray-200 text-gray-400 border-gray-300 opacity-60"
+                      : "bg-gray-200 text-gray-400 border-gray-300 opacity-60 line-through"
                   }`}
                   style={{
-                    borderColor: isChecked ? cfg.color : undefined,
-                    color: isChecked ? cfg.color : undefined,
+                    borderColor: isChecked ? sub.color : undefined,
+                    color: isChecked ? sub.color : undefined,
                   }}
+                  title={`${sub.label} 토글`}
                 >
                   <span
-                    className="w-2 h-2 rounded-xs shrink-0"
-                    style={{ backgroundColor: isChecked ? cfg.color : "#9ca3af" }}
+                    className="w-2.5 h-2.5 rounded-xs shrink-0"
+                    style={{ backgroundColor: isChecked ? sub.color : "#9ca3af" }}
                   />
-                  <span>{cfg.label}</span>
+                  <span>{sub.label}</span>
                 </button>
               );
             })}
           </div>
-        )}
+        </div>
 
         {/* 3. Controls Bar: Presets & Date Range Inputs */}
         <div className="flex flex-wrap items-center justify-between gap-3 bg-gray-50/70 p-3 rounded-lg border border-gray-200/80">
@@ -594,34 +670,71 @@ export function SugeubPriceProfileChart({
                   <span className="font-bold text-slate-800">
                     구간 {hoveredBin.price_label}원 ({hoveredBin.days}일):
                   </span>
-                  {activeInvestorKeys.map((inv) => {
-                    const val = Number(hoveredBin[inv] || 0);
-                    const cfg = INVESTOR_CONFIG[inv] || EXTRA_INVESTORS[inv];
+                  {/* 개인 */}
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-xs bg-blue-600" />
+                    <span className="text-gray-600">개인:</span>
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        Number(hoveredBin["개인"] || 0) > 0
+                          ? "text-red-600"
+                          : Number(hoveredBin["개인"] || 0) < 0
+                          ? "text-blue-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {formatNumberCommas(Number(hoveredBin["개인"] || 0))}주
+                    </span>
+                  </span>
+
+                  {/* 외국인 */}
+                  <span className="inline-flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-xs bg-red-600" />
+                    <span className="text-gray-600">외국인:</span>
+                    <span
+                      className={`font-semibold tabular-nums ${
+                        Number(hoveredBin["외국인"] || 0) > 0
+                          ? "text-red-600"
+                          : Number(hoveredBin["외국인"] || 0) < 0
+                          ? "text-blue-600"
+                          : "text-gray-500"
+                      }`}
+                    >
+                      {formatNumberCommas(Number(hoveredBin["외국인"] || 0))}주
+                    </span>
+                  </span>
+
+                  {/* 기관계 합계 & 세부 */}
+                  {(() => {
+                    const inst = getInstitutionalBreakdown(hoveredBin);
                     return (
-                      <span key={inv} className="inline-flex items-center gap-1">
+                      <span className="inline-flex items-center gap-1 bg-gray-100/80 px-1.5 py-0.5 rounded border border-gray-200">
+                        <span className="w-2 h-2 rounded-xs bg-emerald-700" />
+                        <span className="font-bold text-gray-800">기관계:</span>
                         <span
-                          className="w-2 h-2 rounded-xs"
-                          style={{ backgroundColor: cfg?.color || "#6b7280" }}
-                        />
-                        <span className="text-gray-600">{cfg?.label || inv}:</span>
-                        <span
-                          className={`font-semibold tabular-nums ${
-                            val > 0
+                          className={`font-bold tabular-nums ${
+                            inst.instTotal > 0
                               ? "text-red-600"
-                              : val < 0
+                              : inst.instTotal < 0
                               ? "text-blue-600"
-                              : "text-gray-500"
+                              : "text-gray-600"
                           }`}
                         >
-                          {formatNumberCommas(val)}주 ({formatUnitShort(val)})
+                          {formatNumberCommas(inst.instTotal)}주
+                        </span>
+                        <span className="text-[10px] text-gray-500 ml-1">
+                          (금투: {formatUnitShort(Number(hoveredBin["금융투자"] || 0))}, 연기금:{" "}
+                          {formatUnitShort(Number(hoveredBin["연기금"] || 0))}, 투신:{" "}
+                          {formatUnitShort(Number(hoveredBin["투신"] || 0))}, 사모:{" "}
+                          {formatUnitShort(Number(hoveredBin["사모"] || 0))})
                         </span>
                       </span>
                     );
-                  })}
+                  })()}
                 </div>
               ) : (
                 <div className="text-[11px] text-gray-400">
-                  마우스를 올리면 날짜별 종가 및 가격대별 수급 상세가 실시간 표시됩니다.
+                  마우스를 올리면 개인·외국인·기관계 및 기관 세부 순매수가 표시됩니다.
                 </div>
               )}
             </div>
@@ -629,7 +742,7 @@ export function SugeubPriceProfileChart({
             {/* UNIFIED CHART: Volume Profile with Overlaid Stock Close Price Path */}
             <div className="relative border border-gray-200 rounded-lg bg-white overflow-x-auto shadow-xs">
               <div className="min-w-[720px]">
-                {/* Chart Header Bar with Timeline on Top and Net Buy label */}
+                {/* Chart Header Bar */}
                 <div className="grid grid-cols-[140px_1fr] bg-gray-100 border-b border-gray-200 text-xs font-semibold text-gray-700 py-2">
                   <div className="px-3 text-center border-r border-gray-200">
                     가격대(원)
@@ -639,7 +752,7 @@ export function SugeubPriceProfileChart({
                       시작: {data.start}
                     </span>
                     <span className="font-bold text-gray-800">
-                      순매수(주) & 종가 실선 추세 (0 중심축)
+                      순매수(주) — 개인 / 외국인 / 기관계 (내부 다색 분할)
                     </span>
                     <span className="text-[11px] text-gray-500 font-normal">
                       종료: {data.end}
@@ -655,10 +768,14 @@ export function SugeubPriceProfileChart({
                   className="relative cursor-crosshair"
                   style={{ height: totalChartHeightPx }}
                 >
-                  {/* Layer 1: Price Bin Rows with Grouped Investor Bars */}
+                  {/* Layer 1: Price Bin Rows with 3 Main Bars (개인, 외국인, 기관계) */}
                   <div className="absolute inset-0 flex flex-col justify-between divide-y divide-gray-100 z-0">
                     {displayBins.map((bin) => {
                       const isHovered = hoveredBin?.bin_index === bin.bin_index;
+                      const gaeinVal = Number(bin["개인"] || 0);
+                      const foreignVal = Number(bin["외국인"] || 0);
+                      const instBreakdown = getInstitutionalBreakdown(bin, activeSubKeysSet);
+
                       return (
                         <div
                           key={bin.bin_index}
@@ -676,7 +793,7 @@ export function SugeubPriceProfileChart({
                             </span>
                           </div>
 
-                          {/* Right: Grouped Horizontal Bars centered at 0 */}
+                          {/* Right: 3 Horizontal Bars centered at 0 */}
                           <div className="relative px-2 py-1 flex flex-col justify-center gap-1">
                             {/* Vertical Background Grid Lines */}
                             <div
@@ -699,55 +816,134 @@ export function SugeubPriceProfileChart({
                               })}
                             </div>
 
-                            {/* Horizontal Bars for Each Active Investor */}
-                            {activeInvestorKeys.map((inv) => {
-                              const val = Number(bin[inv] || 0);
-                              const cfg = INVESTOR_CONFIG[inv] || EXTRA_INVESTORS[inv];
-                              const abs = Math.abs(val);
-                              const widthPct = Math.min((abs / maxAbsValue) * 50, 50);
-                              const isPositive = val > 0;
-                              const isNegative = val < 0;
-
-                              return (
-                                <div
-                                  key={inv}
-                                  className="relative flex items-center h-2.5 w-full z-10"
-                                >
-                                  {/* Left half (Negative, 0 to -max) */}
-                                  <div className="w-1/2 flex justify-end relative h-full">
-                                    {isNegative && (
-                                      <div
-                                        className="h-full rounded-l transition-all duration-300"
-                                        style={{
-                                          width: `${widthPct * 2}%`,
-                                          backgroundColor: cfg?.color || "#3b82f6",
-                                          opacity: 0.85,
-                                        }}
-                                        title={`${cfg?.label || inv}: ${val.toLocaleString()}주`}
-                                      />
-                                    )}
-                                  </div>
-
-                                  {/* Center 0 baseline */}
-                                  <div className="w-[1px] h-full bg-gray-400 shrink-0 z-20" />
-
-                                  {/* Right half (Positive, 0 to +max) */}
-                                  <div className="w-1/2 flex justify-start relative h-full">
-                                    {isPositive && (
-                                      <div
-                                        className="h-full rounded-r transition-all duration-300"
-                                        style={{
-                                          width: `${widthPct * 2}%`,
-                                          backgroundColor: cfg?.color || "#ef4444",
-                                          opacity: 0.85,
-                                        }}
-                                        title={`${cfg?.label || inv}: ${val.toLocaleString()}주`}
-                                      />
-                                    )}
-                                  </div>
+                            {/* BAR 1: 개인 (Blue) */}
+                            {visibleEntities["개인"] && (
+                              <div
+                                className="relative flex items-center h-2.5 w-full z-10"
+                                title={`개인: ${gaeinVal.toLocaleString()}주`}
+                              >
+                                {/* Left half (Negative) */}
+                                <div className="w-1/2 flex justify-end relative h-full">
+                                  {gaeinVal < 0 && (
+                                    <div
+                                      className="h-full rounded-l transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min((Math.abs(gaeinVal) / maxAbsValue) * 100, 100)}%`,
+                                        backgroundColor: "#2563eb",
+                                        opacity: 0.85,
+                                      }}
+                                    />
+                                  )}
                                 </div>
-                              );
-                            })}
+                                {/* Center 0 */}
+                                <div className="w-[1px] h-full bg-gray-400 shrink-0 z-20" />
+                                {/* Right half (Positive) */}
+                                <div className="w-1/2 flex justify-start relative h-full">
+                                  {gaeinVal > 0 && (
+                                    <div
+                                      className="h-full rounded-r transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min((gaeinVal / maxAbsValue) * 100, 100)}%`,
+                                        backgroundColor: "#2563eb",
+                                        opacity: 0.85,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* BAR 2: 외국인 (Red) */}
+                            {visibleEntities["외국인"] && (
+                              <div
+                                className="relative flex items-center h-2.5 w-full z-10"
+                                title={`외국인: ${foreignVal.toLocaleString()}주`}
+                              >
+                                {/* Left half (Negative) */}
+                                <div className="w-1/2 flex justify-end relative h-full">
+                                  {foreignVal < 0 && (
+                                    <div
+                                      className="h-full rounded-l transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min((Math.abs(foreignVal) / maxAbsValue) * 100, 100)}%`,
+                                        backgroundColor: "#dc2626",
+                                        opacity: 0.85,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                                {/* Center 0 */}
+                                <div className="w-[1px] h-full bg-gray-400 shrink-0 z-20" />
+                                {/* Right half (Positive) */}
+                                <div className="w-1/2 flex justify-start relative h-full">
+                                  {foreignVal > 0 && (
+                                    <div
+                                      className="h-full rounded-r transition-all duration-300"
+                                      style={{
+                                        width: `${Math.min((foreignVal / maxAbsValue) * 100, 100)}%`,
+                                        backgroundColor: "#dc2626",
+                                        opacity: 0.85,
+                                      }}
+                                    />
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* BAR 3: 기관계 (Multi-colored Segmented Single Bar) */}
+                            {visibleEntities["기관계"] && (
+                              <div
+                                className="relative flex items-center h-3 w-full z-10 rounded-xs"
+                                title={`기관계 총합: ${instBreakdown.instTotal.toLocaleString()}주`}
+                              >
+                                {/* Left half (Negative Selling Sub-institutions stacked from 0 to left) */}
+                                <div className="w-1/2 flex justify-end relative h-full">
+                                  {instBreakdown.negatives.map((seg, sIdx) => {
+                                    const widthPct = Math.min((Math.abs(seg.value) / maxAbsValue) * 100, 100);
+                                    const isOuterLeft = sIdx === instBreakdown.negatives.length - 1;
+                                    return (
+                                      <div
+                                        key={seg.key}
+                                        className={`h-full transition-all duration-300 ${
+                                          isOuterLeft ? "rounded-l" : ""
+                                        }`}
+                                        style={{
+                                          width: `${widthPct}%`,
+                                          backgroundColor: seg.color,
+                                          opacity: 0.9,
+                                        }}
+                                        title={`기관계 > ${seg.label}: ${seg.value.toLocaleString()}주`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+
+                                {/* Center 0 */}
+                                <div className="w-[1px] h-full bg-gray-500 shrink-0 z-20" />
+
+                                {/* Right half (Positive Buying Sub-institutions stacked from 0 to right) */}
+                                <div className="w-1/2 flex justify-start relative h-full">
+                                  {instBreakdown.positives.map((seg, sIdx) => {
+                                    const widthPct = Math.min((seg.value / maxAbsValue) * 100, 100);
+                                    const isOuterRight = sIdx === instBreakdown.positives.length - 1;
+                                    return (
+                                      <div
+                                        key={seg.key}
+                                        className={`h-full transition-all duration-300 ${
+                                          isOuterRight ? "rounded-r" : ""
+                                        }`}
+                                        style={{
+                                          width: `${widthPct}%`,
+                                          backgroundColor: seg.color,
+                                          opacity: 0.9,
+                                        }}
+                                        title={`기관계 > ${seg.label}: ${seg.value.toLocaleString()}주`}
+                                      />
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         </div>
                       );
@@ -935,33 +1131,100 @@ export function SugeubPriceProfileChart({
 
             {/* Bottom Total Period Sums Summary Card */}
             {data.total_period_sums && (
-              <div className="p-3 bg-gray-50 rounded border border-gray-200 flex flex-wrap items-center justify-between gap-3 text-xs">
-                <div className="text-gray-700 font-semibold">
-                  기간 전체 순매수 합계 ({data.label}):
+              <div className="p-3 bg-gray-50 rounded border border-gray-200 flex flex-col gap-2 text-xs">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-200 pb-1.5">
+                  <div className="text-gray-800 font-bold">
+                    기간 전체 3대 주체 순매수 합계 ({data.label}):
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-4 tabular-nums">
+                    {/* 개인 */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-xs bg-blue-600" />
+                      <span className="text-gray-600 font-medium">개인:</span>
+                      <span
+                        className={`font-bold ${
+                          Number(data.total_period_sums["개인"] || 0) > 0
+                            ? "text-red-600"
+                            : Number(data.total_period_sums["개인"] || 0) < 0
+                            ? "text-blue-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {formatNumberCommas(Number(data.total_period_sums["개인"] || 0))}주 (
+                        {formatUnitShort(Number(data.total_period_sums["개인"] || 0))})
+                      </span>
+                    </div>
+
+                    {/* 외국인 */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-xs bg-red-600" />
+                      <span className="text-gray-600 font-medium">외국인:</span>
+                      <span
+                        className={`font-bold ${
+                          Number(data.total_period_sums["외국인"] || 0) > 0
+                            ? "text-red-600"
+                            : Number(data.total_period_sums["외국인"] || 0) < 0
+                            ? "text-blue-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {formatNumberCommas(Number(data.total_period_sums["외국인"] || 0))}주 (
+                        {formatUnitShort(Number(data.total_period_sums["외국인"] || 0))})
+                      </span>
+                    </div>
+
+                    {/* 기관계 */}
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-xs bg-emerald-700" />
+                      <span className="text-gray-600 font-medium">기관계:</span>
+                      <span
+                        className={`font-bold ${
+                          Number(data.total_period_sums["기관계"] || 0) > 0
+                            ? "text-red-600"
+                            : Number(data.total_period_sums["기관계"] || 0) < 0
+                            ? "text-blue-600"
+                            : "text-gray-600"
+                        }`}
+                      >
+                        {formatNumberCommas(Number(data.total_period_sums["기관계"] || 0))}주 (
+                        {formatUnitShort(Number(data.total_period_sums["기관계"] || 0))})
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex flex-wrap items-center gap-3 sm:gap-4 tabular-nums">
-                  {activeInvestorKeys.map((inv) => {
-                    const val = Number(data.total_period_sums[inv] || 0);
-                    const cfg = INVESTOR_CONFIG[inv] || EXTRA_INVESTORS[inv];
+
+                {/* Institutional Sub-breakdown details in footer */}
+                <div className="flex flex-wrap items-center gap-3 text-[11px] text-gray-600 pt-0.5">
+                  <span className="font-semibold text-gray-700">기관계 내부 세부:</span>
+                  {INSTITUTIONAL_SUB_ENTITIES.map((sub) => {
+                    let val = 0;
+                    if (sub.key === "기타기관") {
+                      val =
+                        Number(data.total_period_sums["보험"] || 0) +
+                        Number(data.total_period_sums["은행"] || 0) +
+                        Number(data.total_period_sums["기타금융"] || 0);
+                    } else {
+                      val = Number(data.total_period_sums[sub.key] || 0);
+                    }
                     return (
-                      <div key={inv} className="flex items-center gap-1.5">
+                      <span key={sub.key} className="inline-flex items-center gap-1 tabular-nums">
                         <span
                           className="w-2 h-2 rounded-xs"
-                          style={{ backgroundColor: cfg?.color || "#6b7280" }}
+                          style={{ backgroundColor: sub.color }}
                         />
-                        <span className="text-gray-600">{cfg?.label || inv}:</span>
+                        <span>{sub.label}:</span>
                         <span
-                          className={`font-bold ${
+                          className={`font-semibold ${
                             val > 0
                               ? "text-red-600"
                               : val < 0
                               ? "text-blue-600"
-                              : "text-gray-600"
+                              : "text-gray-500"
                           }`}
                         >
                           {formatNumberCommas(val)}주 ({formatUnitShort(val)})
                         </span>
-                      </div>
+                      </span>
                     );
                   })}
                 </div>

@@ -97,10 +97,11 @@ describe("SugeubPriceProfileChart", () => {
     renderWithClient(<SugeubPriceProfileChart code="222800" name="심텍" />);
 
     expect(await screen.findByText(/심텍 매물대 분석/)).toBeInTheDocument();
-    expect(screen.getByText(/기본 1Y 수급 매물대 \+ 종가 실선/)).toBeInTheDocument();
-    expect(screen.getByText(/심텍 매물대 - 개인 \/ 외국인 \/ 기관계 \/ 연기금 등/)).toBeInTheDocument();
+    expect(screen.getByText(/기본 1Y 매물대 \(개인·외국인·기관계 3대 주체 통합\)/)).toBeInTheDocument();
+    expect(screen.getByText(/심텍 매물대 - 개인 \/ 외국인 \/ 기관계/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "1Y (기본)" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /종가 실선 차트/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /기관계 \(통합 바\)/ })).toBeInTheDocument();
   });
 
   it("renders price bins, bars, and overlaid price line within the same chart", async () => {
@@ -110,7 +111,7 @@ describe("SugeubPriceProfileChart", () => {
     expect(screen.getByText("64,000 ~ 84,000")).toBeInTheDocument();
     expect(screen.getByText("84,000 ~ 104,000")).toBeInTheDocument();
     expect(screen.getByText("가격대(원)")).toBeInTheDocument();
-    expect(screen.getByText(/순매수\(주\) & 종가 실선 추세/)).toBeInTheDocument();
+    expect(screen.getByText(/순매수\(주\) — 개인 \/ 외국인 \/ 기관계/)).toBeInTheDocument();
   });
 
   it("allows toggling overlaid close price line on and off", async () => {

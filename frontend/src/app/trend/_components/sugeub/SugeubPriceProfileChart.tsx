@@ -795,22 +795,26 @@ export function SugeubPriceProfileChart({
 
                           {/* Right: 3 Horizontal Bars centered at 0 */}
                           <div className="relative px-2 py-1 flex flex-col justify-center gap-1">
-                            {/* Vertical Background Grid Lines */}
+                            {/* Vertical Background Grid Lines aligned with xTicks */}
                             <div
-                              className="absolute inset-0 flex justify-between pointer-events-none px-2"
+                              className="absolute inset-0 pointer-events-none px-2"
                               aria-hidden
                             >
-                              {xTicks.map((tick) => {
+                              {xTicks.map((tick, idx) => {
                                 const isCenter = tick === 0;
+                                const isEdge = idx === 0 || idx === xTicks.length - 1;
+                                if (isEdge) return null;
                                 return (
                                   <div
                                     key={tick}
-                                    className={`h-full border-r ${
+                                    className={`absolute top-0 bottom-0 ${
                                       isCenter
-                                        ? "border-gray-400 border-dashed"
-                                        : "border-gray-100"
+                                        ? "border-r border-gray-400 border-dashed"
+                                        : "border-r border-gray-100"
                                     }`}
-                                    style={{ width: `${100 / (xTicks.length - 1)}%` }}
+                                    style={{
+                                      left: `calc(8px + (100% - 16px) * ${idx / (xTicks.length - 1)})`,
+                                    }}
                                   />
                                 );
                               })}

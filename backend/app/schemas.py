@@ -664,6 +664,59 @@ class SupplyDemandResponse(BaseModel):
     columns: List[str]
 
 
+class SupplyDemandPriceProfileBin(BaseModel):
+    bin_index: int
+    price_low: float
+    price_high: float
+    price_label: str
+    days: int
+    개인: float = 0.0
+    외국인: float = 0.0
+    금융투자: float = 0.0
+    연기금: float = 0.0
+    기관계: float = 0.0
+    보험: float = 0.0
+    투신: float = 0.0
+    기타금융: float = 0.0
+    은행: float = 0.0
+    사모: float = 0.0
+    기타법인: float = 0.0
+    기타외국인: float = 0.0
+    세력: float = 0.0
+    거래량: float = 0.0
+
+
+class PriceProfilePoint(BaseModel):
+    date: str
+    close: float
+    open: Optional[float] = None
+    high: Optional[float] = None
+    low: Optional[float] = None
+    volume: Optional[float] = None
+    change_pct: Optional[float] = None
+
+
+class SupplyDemandPriceProfileResponse(BaseModel):
+    code: str
+    name: str
+    market: str
+    data_first: str
+    data_last: str
+    start: str
+    end: str
+    label: str
+    preset: str
+    min_price: float
+    max_price: float
+    step_size: float
+    bins: List[SupplyDemandPriceProfileBin]
+    price_series: List[PriceProfilePoint] = []
+    investors: List[str]
+    total_period_sums: Dict[str, float]
+
+
+
+
 # --- Trend-up Breadth Schemas ---
 class HistogramBin(BaseModel):
     x_start: float

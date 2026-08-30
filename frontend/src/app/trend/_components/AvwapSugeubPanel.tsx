@@ -7,6 +7,7 @@ import { SugeubTables } from "./sugeub/SugeubTables";
 import { SugeubMaChart } from "./sugeub/SugeubMaChart";
 import { SugeubDispersionChart } from "./sugeub/SugeubDispersionChart";
 import { SugeubPeriodSumBar } from "./sugeub/SugeubPeriodSumBar";
+import { SugeubPriceProfileChart } from "./sugeub/SugeubPriceProfileChart";
 import { SugeubRangeControls } from "./sugeub/SugeubRangeControls";
 import { DEFAULT_SUGEB_RANGE, type SugeubRangePreset } from "./sugeub/sugeubChartHelpers";
 import { DISPERSION_DEFAULT_VISIBLE, DISPLAY_COLS } from "./sugeub/constants";
@@ -146,6 +147,15 @@ export function AvwapSugeubPanel({
               onCustomStartChange={onCustomSumStartChange}
               onCustomEndChange={onCustomSumEndChange}
               onApplyCustom={onApplyCustomSum}
+            />
+          </section>
+
+          <section>
+            <SugeubPriceProfileChart
+              code={data.code}
+              name={data.name}
+              defaultFirstDate={data.data_first}
+              defaultLastDate={data.data_last}
             />
           </section>
         </div>

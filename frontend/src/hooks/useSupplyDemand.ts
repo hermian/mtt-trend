@@ -1,5 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import { api, type SupplyDemandResponse } from "@/lib/api";
+import {
+  api,
+  type SupplyDemandResponse,
+  type SupplyDemandPriceProfileResponse,
+} from "@/lib/api";
 
 export type SupplySumPreset = "1m" | "3m" | "6m" | "12m";
 
@@ -33,3 +37,31 @@ export const useSupplyDemandCustomPeriodSums = (
     staleTime: 60 * 1000,
   });
 };
+
+export interface PriceProfileParams {
+  preset?: string;
+  start?: string;
+  end?: string;
+  bins?: number;
+}
+
+/** 수급별 매물대 데이터 (기본 1y) */
+export const useSupplyDemandPriceProfile = (
+  code: string | null | undefined,
+  params?: PriceProfileParams,
+  enabled: boolean = true
+) => {
+  const preset = params?.preset ?? "1y";
+  const start = params?.start ?? "";
+  const end = params?.end ?? "";
+  const bins = params?.bins ?? 7;
+
+  return useQuery<SupplyDemandPriceProfileResponse>({
+    queryKey: ["supplyDemandPriceProfile", code || "", preset, start, end, bins],
+    queryFn: () =>
+      api.getSupplyDemandPriceProfile(code!, { preset, start, end, bins }),
+    enabled: enabled && !!code,
+    staleTime: 2 * 60 * 1000,
+  });
+};
+

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 import sqlite3
 from datetime import datetime, timedelta
@@ -498,3 +499,194 @@ def load_supply_demand_analysis(
     }
     _store_result(cache_key, result)
     return result
+
+
+PROFILE_PRESETS: dict[str, int] = {
+    "1m": 31,
+    "3m": 91,
+    "6m": 182,
+    "1y": 365,
+    "12m": 365,
+    "3y": 1095,
+}
+
+
+def _calculate_nice_step(raw_step: float) -> float:
+    if raw_step <= 0:
+        return 1000.0
+    magnitude = 10 ** math.floor(math.log10(raw_step))
+    fraction = raw_step / magnitude
+    if fraction <= 1.2:
+        nice_fraction = 1.0
+    elif fraction <= 2.5:
+        nice_fraction = 2.0
+    elif fraction <= 6.0:
+        nice_fraction = 5.0
+    else:
+        nice_fraction = 10.0
+    return nice_fraction * magnitude
+
+
+def load_supply_demand_price_profile(
+    code_or_name: str,
+    preset: str = "1y",
+    start_str: str = "",
+    end_str: str = "",
+    bins_count: int = 7,
+) -> Optional[dict[str, Any]]:
+    """
+    KR 종목 수급별 매물대 (Volume Profile by Investor).
+    기본 1y 기준 또는 시작/종료 날짜 커스텀 지정.
+    """
+    info = resolve_stock_info(code_or_name, asset_type="stock")
+    if not info:
+        return None
+    code, name, market = info
+    if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR") and not (code.isdigit() and len(code) == 6):
+        return None
+
+    cache_key = ("price_profile", code, preset or "", start_str or "", end_str or "", str(bins_count))
+    cached = _cached_result(cache_key)
+    if cached is not None:
+        return cached
+
+    raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
+    if raw_df.empty:
+        return None
+
+    price_df = fetch_price(code, pd.to_datetime(raw_df["일자"]).min(), datetime.now())
+    if price_df.empty:
+        return None
+
+    df = build_dataset(raw_df, price_df)
+    if df.empty:
+        return None
+
+    data_first = df.index.min()
+    data_last = df.index.max()
+
+    end_dt = _parse_date(end_str)
+    if end_dt is None or not end_str:
+        end_dt = data_last
+    else:
+        end_dt = min(end_dt, data_last)
+
+    start_dt = _parse_date(start_str)
+    used_preset = preset or "1y"
+    if start_dt is not None and start_str and start_dt < end_dt:
+        used_preset = "custom"
+        start_dt = max(start_dt, data_first)
+    elif used_preset == "all":
+        start_dt = data_first
+    elif used_preset == "ytd":
+        start_dt = max(datetime(end_dt.year, 1, 1), data_first)
+    else:
+        days = PROFILE_PRESETS.get(used_preset, 365)
+        start_dt = max(end_dt - timedelta(days=days), data_first)
+
+    period_df = df.loc[start_dt:end_dt].copy()
+    if period_df.empty:
+        return None
+
+    p_min = float(period_df["종가"].min())
+    p_max = float(period_df["종가"].max())
+
+    bins_n = max(3, min(bins_count or 7, 30))
+    price_diff = p_max - p_min
+
+    if price_diff <= 0:
+        step = max(p_min * 0.05, 100.0)
+        start_price = math.floor(p_min / step) * step
+        end_price = start_price + step
+    else:
+        raw_step = price_diff / bins_n
+        step = _calculate_nice_step(raw_step)
+        start_price = math.floor(p_min / step) * step
+        end_price = math.ceil(p_max / step) * step
+        if end_price <= start_price:
+            end_price = start_price + step
+
+    bin_intervals: list[tuple[float, float]] = []
+    curr = start_price
+    while curr < end_price:
+        nxt = curr + step
+        bin_intervals.append((curr, nxt))
+        curr = nxt
+
+    if len(bin_intervals) < 3 or len(bin_intervals) > 20:
+        bin_intervals = []
+        exact_step = price_diff / bins_n
+        for i in range(bins_n):
+            b_low = p_min + i * exact_step
+            b_high = p_min + (i + 1) * exact_step if i < bins_n - 1 else p_max
+            bin_intervals.append((b_low, b_high))
+        step = exact_step
+
+    if "세력" not in period_df.columns and "외국인" in period_df.columns and "기관계" in period_df.columns:
+        period_df["세력"] = period_df["외국인"] + period_df["기관계"]
+
+    bins_result: list[dict[str, Any]] = []
+    for idx, (b_low, b_high) in enumerate(bin_intervals):
+        is_last = (idx == len(bin_intervals) - 1)
+        if is_last:
+            sub = period_df[(period_df["종가"] >= b_low) & (period_df["종가"] <= b_high)]
+        else:
+            sub = period_df[(period_df["종가"] >= b_low) & (period_df["종가"] < b_high)]
+
+        price_label = f"{int(round(b_low)):,} ~ {int(round(b_high)):,}"
+        bin_entry: dict[str, Any] = {
+            "bin_index": idx,
+            "price_low": float(b_low),
+            "price_high": float(b_high),
+            "price_label": price_label,
+            "days": int(len(sub)),
+            "거래량": float(sub["거래량"].sum()) if not sub.empty and "거래량" in sub.columns else 0.0,
+        }
+        for col in DISPLAY_COLS:
+            bin_entry[col] = float(sub[col].sum()) if not sub.empty and col in sub.columns else 0.0
+
+        bins_result.append(bin_entry)
+
+    total_period_sums = {
+        col: float(period_df[col].sum()) if col in period_df.columns else 0.0
+        for col in DISPLAY_COLS
+    }
+
+    price_series: list[dict[str, Any]] = []
+    prev_close = None
+    for dt, row in period_df.iterrows():
+        close_val = float(row["종가"])
+        chg_pct = round(((close_val - prev_close) / prev_close * 100), 2) if prev_close else 0.0
+        prev_close = close_val
+        price_series.append({
+            "date": dt.strftime("%Y-%m-%d"),
+            "close": close_val,
+            "open": float(row["시가"]) if "시가" in row and pd.notna(row["시가"]) else close_val,
+            "high": float(row["고가"]) if "고가" in row and pd.notna(row["고가"]) else close_val,
+            "low": float(row["저가"]) if "저가" in row and pd.notna(row["저가"]) else close_val,
+            "volume": float(row["거래량"]) if "거래량" in row and pd.notna(row["거래량"]) else 0.0,
+            "change_pct": chg_pct,
+        })
+
+    label = f"{start_dt:%Y-%m-%d} ~ {end_dt:%Y-%m-%d}"
+    result = {
+        "code": code,
+        "name": name,
+        "market": market,
+        "data_first": data_first.strftime("%Y-%m-%d"),
+        "data_last": data_last.strftime("%Y-%m-%d"),
+        "start": start_dt.strftime("%Y-%m-%d"),
+        "end": end_dt.strftime("%Y-%m-%d"),
+        "label": label,
+        "preset": used_preset,
+        "min_price": p_min,
+        "max_price": p_max,
+        "step_size": float(step),
+        "bins": bins_result,
+        "price_series": price_series,
+        "investors": [c for c in DISPLAY_COLS if c in period_df.columns],
+        "total_period_sums": total_period_sums,
+    }
+    _store_result(cache_key, result)
+    return result
+

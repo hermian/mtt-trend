@@ -35,6 +35,7 @@ from app.schemas import (
     ReturnComparisonResponse,
     SupplyDemandResponse,
     SupplyDemandPeriodSumsResponse,
+    SupplyDemandPriceProfileResponse,
     TrendUpBreadthResponse,
 )
 from app.utils.returns_utils import compute_return_comparison
@@ -48,7 +49,12 @@ from app.utils.foreign_flow_utils import load_foreign_flow_data
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
 from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
-from app.utils.sugeub_utils import DEFAULT_SUM_PERIOD, load_supply_demand_analysis, load_supply_demand_period_sums
+from app.utils.sugeub_utils import (
+    DEFAULT_SUM_PERIOD,
+    load_supply_demand_analysis,
+    load_supply_demand_period_sums,
+    load_supply_demand_price_profile,
+)
 from app.utils.custom_anchor_utils import (
     get_custom_anchors,
     create_custom_anchor,
@@ -1189,6 +1195,34 @@ def get_supply_demand_period_sums(
             detail=f"Supply-demand period sums not found for '{code}'.",
         )
     return data
+
+
+@router.get("/supply-demand/price-profile", response_model=SupplyDemandPriceProfileResponse)
+def get_supply_demand_price_profile(
+    code: str = Query(..., description="KR 종목코드 또는 종목명 (예: 005930, 삼성전자)"),
+    preset: str = Query("1y", description="순매수 매물대 프리셋: 1m | 3m | 6m | 1y | 3y | ytd | all (기본값: 1y)"),
+    start: str = Query("", description="시작일 YYYY-MM-DD (지정 시 preset 무시)"),
+    end: str = Query("", description="종료일 YYYY-MM-DD"),
+    bins: int = Query(7, ge=3, le=30, description="가격대 구간 개수 (기본값: 7)"),
+):
+    """
+    KR 종목 수급별 매물대 데이터 (기본 1y 기준, 시작/종료일 지정 가능).
+    체슬리투자자문 스타일 수급별 매물대 (가로 막대 차트).
+    """
+    data = load_supply_demand_price_profile(
+        code_or_name=code,
+        preset=preset,
+        start_str=start,
+        end_str=end,
+        bins_count=bins,
+    )
+    if not data:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Supply-demand price profile not found for '{code}'. Check sugeub DB and marcap price DB.",
+        )
+    return data
+
 
 
 @router.get("/avwap", response_model=AvwapChartResponse)

@@ -23,6 +23,12 @@ vi.mock("@/hooks/useDebounce", () => ({
   useDebounce: vi.fn((val) => val),
 }));
 
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/trend",
+}));
+
 // Mock lightweight-charts
 vi.mock("lightweight-charts", () => ({
   createChart: vi.fn(() => ({

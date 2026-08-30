@@ -823,6 +823,31 @@ export const api = {
     return data;
   },
 
+  // GET /api/charts/supply-demand/price-profile → 수급별 매물대 데이터
+  getSupplyDemandPriceProfile: async (
+    code: string,
+    params?: {
+      preset?: string;
+      start?: string;
+      end?: string;
+      bins?: number;
+    }
+  ): Promise<SupplyDemandPriceProfileResponse> => {
+    const { data } = await apiClient.get<SupplyDemandPriceProfileResponse>(
+      "/api/charts/supply-demand/price-profile",
+      {
+        params: {
+          code,
+          preset: params?.preset,
+          start: params?.start,
+          end: params?.end,
+          bins: params?.bins,
+        },
+      }
+    );
+    return data;
+  },
+
   // GET /api/charts/stocks/search → StockSearchResult[]
   searchStocks: async (
     query: string,
@@ -1059,6 +1084,60 @@ export interface SupplyDemandResponse {
   period_sums_by_preset: Record<string, PeriodSumsPresetBundle>;
   columns: string[];
 }
+
+export interface SupplyDemandPriceProfileBin {
+  bin_index: number;
+  price_low: number;
+  price_high: number;
+  price_label: string;
+  days: number;
+  개인: number;
+  외국인: number;
+  금융투자: number;
+  연기금: number;
+  기관계?: number;
+  보험?: number;
+  투신?: number;
+  기타금융?: number;
+  은행?: number;
+  사모?: number;
+  기타법인?: number;
+  기타외국인?: number;
+  세력?: number;
+  거래량?: number;
+  [key: string]: string | number | undefined;
+}
+
+export interface PriceProfilePoint {
+  date: string;
+  close: number;
+  open?: number;
+  high?: number;
+  low?: number;
+  volume?: number;
+  change_pct?: number;
+}
+
+export interface SupplyDemandPriceProfileResponse {
+  code: string;
+  name: string;
+  market: string;
+  data_first: string;
+  data_last: string;
+  start: string;
+  end: string;
+  label: string;
+  preset: string;
+  min_price: number;
+  max_price: number;
+  step_size: number;
+  bins: SupplyDemandPriceProfileBin[];
+  price_series: PriceProfilePoint[];
+  investors: string[];
+  total_period_sums: Record<string, number>;
+}
+
+
 
 // Return Comparison (수익률 비교) Types
 export interface ReturnComparisonItem {

@@ -59,3 +59,43 @@ def test_supply_demand_api_invalid_code():
 def test_supply_demand_api_missing_code():
     response = client.get("/api/charts/supply-demand")
     assert response.status_code == 422
+
+
+def test_supply_demand_price_profile_1y_default(sugeub_available):
+    response = client.get("/api/charts/supply-demand/price-profile?code=005930")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == "005930"
+    assert data["name"]
+    assert data["preset"] == "1y"
+    assert len(data["bins"]) >= 3
+    assert "개인" in data["investors"]
+    assert "외국인" in data["investors"]
+    assert "금융투자" in data["investors"]
+    assert "연기금" in data["investors"]
+    for b in data["bins"]:
+        assert "price_low" in b
+        assert "price_high" in b
+        assert "price_label" in b
+        assert "개인" in b
+        assert "외국인" in b
+        assert "금융투자" in b
+        assert "연기금" in b
+
+
+def test_supply_demand_price_profile_custom_dates(sugeub_available):
+    response = client.get(
+        "/api/charts/supply-demand/price-profile?code=222800&start=2026-01-02&end=2026-08-28&bins=7"
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == "222800"
+    assert data["start"] == "2026-01-02"
+    assert data["end"] == "2026-08-28"
+    assert len(data["bins"]) >= 5
+
+
+def test_supply_demand_price_profile_invalid_code():
+    response = client.get("/api/charts/supply-demand/price-profile?code=INVALID_CODE_999")
+    assert response.status_code == 404
+

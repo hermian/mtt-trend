@@ -44,6 +44,19 @@ const mockData: SupplyDemandResponse = {
   columns: ["종가", "거래량", "개인"],
 };
 
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+const renderWithClient = (ui: React.ReactElement) => {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      {ui}
+    </QueryClientProvider>
+  );
+};
+
 describe("AvwapSugeubPanel", () => {
   const defaultProps = {
     symbol: "039490",
@@ -59,30 +72,32 @@ describe("AvwapSugeubPanel", () => {
     onApplyCustomSum: vi.fn(),
   };
 
-  it("renders supply table and chart sections", () => {
-    render(<AvwapSugeubPanel {...defaultProps} />);
+  it("renders supply table, chart sections, and price profile chart", () => {
+    renderWithClient(<AvwapSugeubPanel {...defaultProps} />);
     expect(screen.getByText(/키움증권.*039490/)).toBeInTheDocument();
     expect(screen.getByText("수급 분석표 (상세)")).toBeInTheDocument();
     expect(screen.getByText("차트 분석")).toBeInTheDocument();
     expect(screen.getByText("주체별 순매수 합계")).toBeInTheDocument();
+    expect(screen.getByText(/키움증권 매물대 분석/)).toBeInTheDocument();
   });
 
   it("shows loading state", () => {
-    render(
+    renderWithClient(
       <AvwapSugeubPanel {...defaultProps} data={undefined} isLoading={true} />
     );
     expect(screen.getByText(/수급 분석 데이터를 로드하는 중/)).toBeInTheDocument();
   });
 
   it("shows empty state when no symbol", () => {
-    render(<AvwapSugeubPanel {...defaultProps} symbol={null} data={undefined} />);
+    renderWithClient(<AvwapSugeubPanel {...defaultProps} symbol={null} data={undefined} />);
     expect(screen.getByText(/종목코드\(예: 005930\)/)).toBeInTheDocument();
   });
 
   it("calls onSumPresetChange when preset clicked", () => {
     const onSumPresetChange = vi.fn();
-    render(<AvwapSugeubPanel {...defaultProps} onSumPresetChange={onSumPresetChange} />);
-    fireEvent.click(screen.getByRole("button", { name: "6M" }));
+    renderWithClient(<AvwapSugeubPanel {...defaultProps} onSumPresetChange={onSumPresetChange} />);
+    const buttons = screen.getAllByRole("button", { name: "6M" });
+    fireEvent.click(buttons[0]);
     expect(onSumPresetChange).toHaveBeenCalledWith("6m");
   });
 });

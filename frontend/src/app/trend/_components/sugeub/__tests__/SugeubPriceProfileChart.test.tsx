@@ -178,7 +178,7 @@ describe("SugeubPriceProfileChart", () => {
     expect(gaeinBtn.className).toContain("line-through");
   });
 
-  it("shows hover summary when mouse enters a price bin row", async () => {
+  it("shows hover summary when mouse enters a price bin row including total volume", async () => {
     renderWithClient(<SugeubPriceProfileChart code="222800" name="심텍" />);
 
     const binText = await screen.findByText("44,000 ~ 64,000");
@@ -188,6 +188,22 @@ describe("SugeubPriceProfileChart", () => {
     if (row) {
       fireEvent.mouseEnter(row);
       expect(await screen.findByText(/구간 44,000 ~ 64,000원/)).toBeInTheDocument();
+      expect(screen.getByText(/총 거래량:/)).toBeInTheDocument();
     }
+  });
+
+  it("allows toggling traditional volume profile bar on and off", async () => {
+    renderWithClient(<SugeubPriceProfileChart code="222800" name="심텍" />);
+
+    const tradBtn = await screen.findByRole("button", { name: /전통 매물대/ });
+    expect(tradBtn.className).toContain("bg-slate-100");
+
+    // Toggle off
+    fireEvent.click(tradBtn);
+    expect(tradBtn.className).toContain("line-through");
+
+    // Toggle back on
+    fireEvent.click(tradBtn);
+    expect(tradBtn.className).toContain("bg-slate-100");
   });
 });

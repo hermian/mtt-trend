@@ -158,6 +158,7 @@ export function SugeubPriceProfileChart({
   const [customEnd, setCustomEnd] = useState<string>("");
   const [binCount, setBinCount] = useState<number>(7);
   const [showPriceLine, setShowPriceLine] = useState<boolean>(true);
+  const [showTraditionalProfile, setShowTraditionalProfile] = useState<boolean>(true);
   const [visibleEntities, setVisibleEntities] = useState<Record<string, boolean>>({
     개인: true,
     외국인: true,
@@ -252,21 +253,47 @@ export function SugeubPriceProfileChart({
     return { min, max: max === min ? min + 1000 : max };
   }, [displayBins]);
 
-  // Max absolute value across 3 main bars (개인, 외국인, 기관계 positive/negative sums) for horizontal scaling
+  // Total volume and max volume across all bins for traditional volume profile
+  const { maxBinVolume, totalProfileVolume } = useMemo(() => {
+    if (!displayBins || displayBins.length === 0) {
+      return { maxBinVolume: 1, totalProfileVolume: 1 };
+    }
+    let maxV = 0;
+    let totalV = 0;
+    for (const b of displayBins) {
+      const v = Number(b["거래량"] || 0);
+      if (v > maxV) maxV = v;
+      totalV += v;
+    }
+    return {
+      maxBinVolume: maxV > 0 ? maxV : 1,
+      totalProfileVolume: totalV > 0 ? totalV : 1,
+    };
+  }, [displayBins]);
+
+  // Max absolute stacked value across all entities (개인, 외국인, 기관계) for horizontal scaling
   const maxAbsValue = useMemo(() => {
     if (!data?.bins || data.bins.length === 0) return 100000;
     let max = 0;
     for (const b of data.bins) {
-      if (visibleEntities["개인"]) {
-        max = Math.max(max, Math.abs(Number(b["개인"] || 0)));
-      }
+      let posSum = 0;
+      let negSum = 0;
       if (visibleEntities["외국인"]) {
-        max = Math.max(max, Math.abs(Number(b["외국인"] || 0)));
+        const val = Number(b["외국인"] || 0);
+        if (val > 0) posSum += val;
+        else if (val < 0) negSum += Math.abs(val);
       }
       if (visibleEntities["기관계"]) {
         const instBreakdown = getInstitutionalBreakdown(b, activeSubKeysSet);
-        max = Math.max(max, instBreakdown.posSum, instBreakdown.negSum);
+        posSum += instBreakdown.posSum;
+        negSum += instBreakdown.negSum;
       }
+      if (visibleEntities["개인"]) {
+        const val = Number(b["개인"] || 0);
+        if (val > 0) posSum += val;
+        else if (val < 0) negSum += Math.abs(val);
+      }
+      max = Math.max(max, posSum, negSum);
     }
     return getNiceMaxDomain(max);
   }, [data?.bins, visibleEntities, activeSubKeysSet]);
@@ -307,8 +334,8 @@ export function SugeubPriceProfileChart({
 
   // SVG dimensions for the overlaid stock price path
   const svgViewBoxWidth = 1000;
-  const rowHeightPx = 68;
-  const totalChartHeightPx = Math.max(300, displayBins.length * rowHeightPx);
+  const rowHeightPx = 52;
+  const totalChartHeightPx = Math.max(280, displayBins.length * rowHeightPx);
 
   // Calculate SVG Points for the Price Line (X: 0 to 1000, Y: 0 to totalChartHeightPx)
   const priceSvgPoints = useMemo(() => {
@@ -472,6 +499,21 @@ export function SugeubPriceProfileChart({
                   style={{ backgroundColor: visibleEntities["기관계"] ? "#15803d" : "#9ca3af" }}
                 />
                 <span>기관계 (통합 바)</span>
+              </button>
+
+              {/* Traditional Volume Profile Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowTraditionalProfile((v) => !v)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border transition-all ${
+                  showTraditionalProfile
+                    ? "bg-slate-100 text-slate-800 border-slate-400 font-semibold shadow-xs"
+                    : "bg-gray-100 text-gray-400 border-gray-200 opacity-60 line-through"
+                }`}
+                title="전통적인 총 거래량 매물대 (알파 0.5) On/Off"
+              >
+                <span className="w-3 h-2.5 rounded-xs shrink-0 bg-slate-400/70 border border-slate-500/50" />
+                <span>전통 매물대 (거래량)</span>
               </button>
 
               {/* Overlaid Close Price Line Toggle */}
@@ -670,6 +712,23 @@ export function SugeubPriceProfileChart({
                   <span className="font-bold text-slate-800">
                     구간 {hoveredBin.price_label}원 ({hoveredBin.days}일):
                   </span>
+                  {/* 총 거래량 (전통 매물대) */}
+                  <span className="inline-flex items-center gap-1 bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-300/80 font-medium text-slate-700">
+                    <span className="w-2 h-2 rounded-xs bg-slate-400/80" />
+                    <span>총 거래량:</span>
+                    <span className="font-bold tabular-nums text-slate-900">
+                      {formatNumberCommas(Number(hoveredBin["거래량"] || 0))}주
+                    </span>
+                    <span className="text-[10px] text-slate-500">
+                      (
+                      {(
+                        (Number(hoveredBin["거래량"] || 0) / totalProfileVolume) *
+                        100
+                      ).toFixed(1)}
+                      %)
+                    </span>
+                  </span>
+
                   {/* 개인 */}
                   <span className="inline-flex items-center gap-1">
                     <span className="w-2 h-2 rounded-xs bg-blue-600" />
@@ -793,9 +852,9 @@ export function SugeubPriceProfileChart({
                             </span>
                           </div>
 
-                          {/* Right: 3 Horizontal Bars centered at 0 */}
-                          <div className="relative px-2 py-1 flex flex-col justify-center gap-1">
-                            {/* Vertical Background Grid Lines aligned with xTicks */}
+                          {/* Right: Price Profile Area (Layer 1 Traditional Volume Profile + Layer 2 Investor Stacked Bar) */}
+                          <div className="relative px-2 py-1 flex items-center justify-center h-full">
+                            {/* Layer 0: Vertical Background Grid Lines aligned with xTicks */}
                             <div
                               className="absolute inset-0 pointer-events-none px-2"
                               aria-hidden
@@ -820,134 +879,134 @@ export function SugeubPriceProfileChart({
                               })}
                             </div>
 
-                            {/* BAR 1: 개인 (Blue) */}
-                            {visibleEntities["개인"] && (
-                              <div
-                                className="relative flex items-center h-2.5 w-full z-10"
-                                title={`개인: ${gaeinVal.toLocaleString()}주`}
-                              >
-                                {/* Left half (Negative) */}
-                                <div className="w-1/2 flex justify-end relative h-full">
-                                  {gaeinVal < 0 && (
-                                    <div
-                                      className="h-full rounded-l transition-all duration-300"
-                                      style={{
-                                        width: `${Math.min((Math.abs(gaeinVal) / maxAbsValue) * 100, 100)}%`,
-                                        backgroundColor: "#2563eb",
-                                        opacity: 0.85,
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                                {/* Center 0 */}
-                                <div className="w-[1px] h-full bg-gray-400 shrink-0 z-20" />
-                                {/* Right half (Positive) */}
-                                <div className="w-1/2 flex justify-start relative h-full">
-                                  {gaeinVal > 0 && (
-                                    <div
-                                      className="h-full rounded-r transition-all duration-300"
-                                      style={{
-                                        width: `${Math.min((gaeinVal / maxAbsValue) * 100, 100)}%`,
-                                        backgroundColor: "#2563eb",
-                                        opacity: 0.85,
-                                      }}
-                                    />
+                            {/* Layer 1: TRADITIONAL VOLUME PROFILE (전통 매물대 - 알파 0.5, 기존 수급 매물대보다 넓은 배경 바) */}
+                            {showTraditionalProfile && (
+                              <div className="absolute inset-x-2 flex items-center pointer-events-none z-5 h-[34px]">
+                                <div
+                                  className="h-full rounded bg-slate-400/50 border border-slate-400/60 transition-all duration-300 relative overflow-hidden"
+                                  style={{
+                                    width: `${Math.min(
+                                      (Number(bin["거래량"] || 0) / maxBinVolume) * 100,
+                                      100
+                                    )}%`,
+                                    opacity: 0.5,
+                                  }}
+                                  title={`전통 매물대 총 거래량: ${formatNumberCommas(
+                                    Number(bin["거래량"] || 0)
+                                  )}주 (${(
+                                    (Number(bin["거래량"] || 0) / totalProfileVolume) *
+                                    100
+                                  ).toFixed(1)}%)`}
+                                >
+                                  {/* Volume label indicator for wide bars */}
+                                  {Number(bin["거래량"] || 0) > 0 && (
+                                    <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[9px] font-semibold text-slate-800/90 tabular-nums select-none opacity-80">
+                                      {formatUnitShort(Number(bin["거래량"] || 0))}주
+                                    </span>
                                   )}
                                 </div>
                               </div>
                             )}
 
-                            {/* BAR 2: 외국인 (Red) */}
-                            {visibleEntities["외국인"] && (
-                              <div
-                                className="relative flex items-center h-2.5 w-full z-10"
-                                title={`외국인: ${foreignVal.toLocaleString()}주`}
-                              >
-                                {/* Left half (Negative) */}
-                                <div className="w-1/2 flex justify-end relative h-full">
-                                  {foreignVal < 0 && (
-                                    <div
-                                      className="h-full rounded-l transition-all duration-300"
-                                      style={{
-                                        width: `${Math.min((Math.abs(foreignVal) / maxAbsValue) * 100, 100)}%`,
-                                        backgroundColor: "#dc2626",
-                                        opacity: 0.85,
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                                {/* Center 0 */}
-                                <div className="w-[1px] h-full bg-gray-400 shrink-0 z-20" />
-                                {/* Right half (Positive) */}
-                                <div className="w-1/2 flex justify-start relative h-full">
-                                  {foreignVal > 0 && (
-                                    <div
-                                      className="h-full rounded-r transition-all duration-300"
-                                      style={{
-                                        width: `${Math.min((foreignVal / maxAbsValue) * 100, 100)}%`,
-                                        backgroundColor: "#dc2626",
-                                        opacity: 0.85,
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                              </div>
-                            )}
+                            {/* Layer 2: SINGLE UNIFIED STACKED INVESTOR BAR (수급 매물대 - 전면) */}
+                            <div className="relative flex items-center h-5 sm:h-5.5 w-full z-10 rounded bg-transparent border border-slate-400/50 overflow-hidden shadow-2xs">
+                              {/* Left half (Negative Selling stacked from 0 to left) */}
+                              <div className="w-1/2 flex justify-end relative h-full">
+                                {/* Outer-left: 개인 (Negative) */}
+                                {visibleEntities["개인"] && gaeinVal < 0 && (
+                                  <div
+                                    className="h-full transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min((Math.abs(gaeinVal) / maxAbsValue) * 100, 100)}%`,
+                                      backgroundColor: "#2563eb",
+                                      opacity: 0.9,
+                                    }}
+                                    title={`개인 순매도: ${formatNumberCommas(gaeinVal)}주`}
+                                  />
+                                )}
 
-                            {/* BAR 3: 기관계 (Multi-colored Segmented Single Bar) */}
-                            {visibleEntities["기관계"] && (
-                              <div
-                                className="relative flex items-center h-3 w-full z-10 rounded-xs"
-                                title={`기관계 총합: ${instBreakdown.instTotal.toLocaleString()}주`}
-                              >
-                                {/* Left half (Negative Selling Sub-institutions stacked from 0 to left) */}
-                                <div className="w-1/2 flex justify-end relative h-full">
-                                  {instBreakdown.negatives.map((seg, sIdx) => {
+                                {/* Middle: 기관계 세부 주체들 (Negative) */}
+                                {visibleEntities["기관계"] &&
+                                  instBreakdown.negatives.map((seg) => {
                                     const widthPct = Math.min((Math.abs(seg.value) / maxAbsValue) * 100, 100);
-                                    const isOuterLeft = sIdx === instBreakdown.negatives.length - 1;
                                     return (
                                       <div
                                         key={seg.key}
-                                        className={`h-full transition-all duration-300 ${
-                                          isOuterLeft ? "rounded-l" : ""
-                                        }`}
+                                        className="h-full transition-all duration-300"
                                         style={{
                                           width: `${widthPct}%`,
                                           backgroundColor: seg.color,
                                           opacity: 0.9,
                                         }}
-                                        title={`기관계 > ${seg.label}: ${seg.value.toLocaleString()}주`}
+                                        title={`기관계 > ${seg.label} 순매도: ${formatNumberCommas(seg.value)}주`}
                                       />
                                     );
                                   })}
-                                </div>
 
-                                {/* Center 0 */}
-                                <div className="w-[1px] h-full bg-gray-500 shrink-0 z-20" />
-
-                                {/* Right half (Positive Buying Sub-institutions stacked from 0 to right) */}
-                                <div className="w-1/2 flex justify-start relative h-full">
-                                  {instBreakdown.positives.map((seg, sIdx) => {
-                                    const widthPct = Math.min((seg.value / maxAbsValue) * 100, 100);
-                                    const isOuterRight = sIdx === instBreakdown.positives.length - 1;
-                                    return (
-                                      <div
-                                        key={seg.key}
-                                        className={`h-full transition-all duration-300 ${
-                                          isOuterRight ? "rounded-r" : ""
-                                        }`}
-                                        style={{
-                                          width: `${widthPct}%`,
-                                          backgroundColor: seg.color,
-                                          opacity: 0.9,
-                                        }}
-                                        title={`기관계 > ${seg.label}: ${seg.value.toLocaleString()}주`}
-                                      />
-                                    );
-                                  })}
-                                </div>
+                                {/* Inner-right (closest to 0): 외국인 (Negative) */}
+                                {visibleEntities["외국인"] && foreignVal < 0 && (
+                                  <div
+                                    className="h-full transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min((Math.abs(foreignVal) / maxAbsValue) * 100, 100)}%`,
+                                      backgroundColor: "#dc2626",
+                                      opacity: 0.9,
+                                    }}
+                                    title={`외국인 순매도: ${formatNumberCommas(foreignVal)}주`}
+                                  />
+                                )}
                               </div>
-                            )}
+
+                              {/* Center 0 Axis */}
+                              <div className="w-[1.5px] h-full bg-gray-500 shrink-0 z-20" />
+
+                              {/* Right half (Positive Buying stacked from 0 to right) */}
+                              <div className="w-1/2 flex justify-start relative h-full">
+                                {/* Inner-left (closest to 0): 외국인 (Positive) */}
+                                {visibleEntities["외국인"] && foreignVal > 0 && (
+                                  <div
+                                    className="h-full transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min((foreignVal / maxAbsValue) * 100, 100)}%`,
+                                      backgroundColor: "#dc2626",
+                                      opacity: 0.9,
+                                    }}
+                                    title={`외국인 순매수: ${formatNumberCommas(foreignVal)}주`}
+                                  />
+                                )}
+
+                                {/* Middle: 기관계 세부 주체들 (Positive) */}
+                                {visibleEntities["기관계"] &&
+                                  instBreakdown.positives.map((seg) => {
+                                    const widthPct = Math.min((seg.value / maxAbsValue) * 100, 100);
+                                    return (
+                                      <div
+                                        key={seg.key}
+                                        className="h-full transition-all duration-300"
+                                        style={{
+                                          width: `${widthPct}%`,
+                                          backgroundColor: seg.color,
+                                          opacity: 0.9,
+                                        }}
+                                        title={`기관계 > ${seg.label} 순매수: ${formatNumberCommas(seg.value)}주`}
+                                      />
+                                    );
+                                  })}
+
+                                {/* Outer-right: 개인 (Positive) */}
+                                {visibleEntities["개인"] && gaeinVal > 0 && (
+                                  <div
+                                    className="h-full transition-all duration-300"
+                                    style={{
+                                      width: `${Math.min((gaeinVal / maxAbsValue) * 100, 100)}%`,
+                                      backgroundColor: "#2563eb",
+                                      opacity: 0.9,
+                                    }}
+                                    title={`개인 순매수: ${formatNumberCommas(gaeinVal)}주`}
+                                  />
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );

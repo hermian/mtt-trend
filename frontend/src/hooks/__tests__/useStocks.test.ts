@@ -56,7 +56,28 @@ describe("useStocks Hook", () => {
       // Assert
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
       expect(result.current.data).toEqual(mockStocks);
-      expect(api.api.getStocksPersistent).toHaveBeenCalledWith(5, 3, "52w_high");
+      expect(api.api.getStocksPersistent).toHaveBeenCalledWith(5, 3, "52w_high", undefined);
+    });
+
+    it("should fetch persistent strong stocks with date parameter", async () => {
+      // Arrange
+      const mockStocks = [
+        {
+          stock_name: "Samsung Electronics",
+          appearance_count: 3,
+          avg_rs: 90.0,
+          themes: ["AI", "Semiconductor"]
+        }
+      ];
+      vi.mocked(api.api.getStocksPersistent).mockResolvedValue(mockStocks);
+
+      // Act
+      const { result } = renderHook(() => useStocksPersistent(5, 3, "52w_high", "2024-01-13"), { wrapper });
+
+      // Assert
+      await waitFor(() => expect(result.current.isSuccess).toBe(true));
+      expect(result.current.data).toEqual(mockStocks);
+      expect(api.api.getStocksPersistent).toHaveBeenCalledWith(5, 3, "52w_high", "2024-01-13");
     });
 
     it("should fetch with custom parameters", async () => {
@@ -76,7 +97,7 @@ describe("useStocks Hook", () => {
 
       // Assert
       await waitFor(() => expect(result.current.isSuccess).toBe(true));
-      expect(api.api.getStocksPersistent).toHaveBeenCalledWith(7, 5, "mtt");
+      expect(api.api.getStocksPersistent).toHaveBeenCalledWith(7, 5, "mtt", undefined);
     });
 
     it("should handle empty results", async () => {

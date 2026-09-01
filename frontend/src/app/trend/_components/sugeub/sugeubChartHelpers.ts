@@ -8,11 +8,23 @@ export const SUGEB_LINE_OPTS = {
   title: "",
 } as const;
 
-export type SugeubRangePreset = "1y" | "2y" | "3y" | "5y" | "10y" | "all";
+export type SugeubRangePreset =
+  | "1m"
+  | "3m"
+  | "6m"
+  | "1y"
+  | "2y"
+  | "3y"
+  | "5y"
+  | "10y"
+  | "all";
 
 export const DEFAULT_SUGEB_RANGE: SugeubRangePreset = "2y";
 
 export const SUGEB_RANGE_PRESETS: { id: SugeubRangePreset; label: string }[] = [
+  { id: "1m", label: "1M" },
+  { id: "3m", label: "3M" },
+  { id: "6m", label: "6M" },
   { id: "1y", label: "1Y" },
   { id: "2y", label: "2Y" },
   { id: "3y", label: "3Y" },
@@ -21,7 +33,16 @@ export const SUGEB_RANGE_PRESETS: { id: SugeubRangePreset; label: string }[] = [
   { id: "all", label: "전체" },
 ];
 
-const TRADING_DAYS_PER_YEAR = 252;
+const TRADING_DAYS_MAP: Record<Exclude<SugeubRangePreset, "all">, number> = {
+  "1m": 21,
+  "3m": 63,
+  "6m": 126,
+  "1y": 252,
+  "2y": 252 * 2,
+  "3y": 252 * 3,
+  "5y": 252 * 5,
+  "10y": 252 * 10,
+};
 
 export function logicalRangeForPreset(
   seriesLength: number,
@@ -29,14 +50,8 @@ export function logicalRangeForPreset(
 ): { from: number; to: number } {
   const to = Math.max(0, seriesLength - 1);
   if (preset === "all" || seriesLength <= 0) return { from: 0, to };
-  const years: Record<Exclude<SugeubRangePreset, "all">, number> = {
-    "1y": 1,
-    "2y": 2,
-    "3y": 3,
-    "5y": 5,
-    "10y": 10,
-  };
-  const from = Math.max(0, to - years[preset] * TRADING_DAYS_PER_YEAR);
+  const count = TRADING_DAYS_MAP[preset] ?? 252 * 2;
+  const from = Math.max(0, to - count);
   return { from, to };
 }
 

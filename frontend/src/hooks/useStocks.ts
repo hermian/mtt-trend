@@ -8,10 +8,16 @@ import { api, API_CONFIG, PersistentStock, GroupActionStock, IntersectionTheme, 
 // @MX:REASON: 이 훅들은 종목 데이터를 가져오는 주요 진입점입니다.
 
 // Hook for fetching persistent strong stocks
-export function useStocksPersistent(days = 5, min = 3, source: DataSource = "52w_high") {
+export function useStocksPersistent(
+  days = 5,
+  min = 3,
+  source: DataSource = "52w_high",
+  date?: string
+) {
   return useQuery<PersistentStock[]>({
-    queryKey: ["stocks", "persistent", days, min, source],
-    queryFn: () => api.getStocksPersistent(days, min, source),
+    queryKey: ["stocks", "persistent", days, min, source, date],
+    queryFn: () => api.getStocksPersistent(days, min, source, date),
+    enabled: date !== undefined ? !!date : true,
     staleTime: API_CONFIG.DEFAULT_STALE_TIME,
   });
 }

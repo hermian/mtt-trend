@@ -74,13 +74,14 @@ def _find_latest_common_date(db: Session) -> Optional[str]:
 
 @router.get("/persistent", response_model=PersistentStocksResponse)
 def get_persistent_stocks(
+    date: Optional[str] = Query(None, description="Reference date in YYYY-MM-DD format (defaults to latest)"),
     days: int = Query(5, ge=1, le=60, description="Look-back window in trading days"),
     min: int = Query(3, ge=1, description="Minimum number of appearances required"),
     source: str = Query(SOURCE_52W, description="Data source: '52w_high' or 'mtt'"),
     db: Session = Depends(get_db),
 ):
-    """Return stocks that appeared in the top RS list at least `min` times in the last `days` days."""
-    recent = _recent_dates(db, None, days, source)
+    """Return stocks that appeared in the top RS list at least `min` times in the last `days` days up to `date`."""
+    recent = _recent_dates(db, date, days, source)
     if not recent:
         raise HTTPException(status_code=404, detail="No stock data available")
 

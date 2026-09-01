@@ -144,6 +144,18 @@ describe("API Layer - Unit Tests", () => {
         params: { days: 5, min: 3, source: "52w_high" },
       });
     });
+
+    it("should call API with date param when provided", async () => {
+      mockedGet.mockResolvedValue({
+        data: { days: 5, min_appearances: 3, stocks: [] },
+      });
+
+      await api.getStocksPersistent(5, 3, "52w_high", "2024-01-15");
+
+      expect(mockedGet).toHaveBeenCalledWith("/api/stocks/persistent", {
+        params: { days: 5, min: 3, source: "52w_high", date: "2024-01-15" },
+      });
+    });
   });
 
   describe("getStocksGroupAction", () => {

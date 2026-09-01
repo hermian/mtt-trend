@@ -93,11 +93,12 @@ describe("AvwapSugeubPanel", () => {
     expect(screen.getByText(/종목코드\(예: 005930\)/)).toBeInTheDocument();
   });
 
-  it("calls onSumPresetChange when preset clicked", () => {
+  it("calls onSumPresetChange when preset clicked in period sums", () => {
     const onSumPresetChange = vi.fn();
     renderWithClient(<AvwapSugeubPanel {...defaultProps} onSumPresetChange={onSumPresetChange} />);
     const buttons = screen.getAllByRole("button", { name: "6M" });
-    fireEvent.click(buttons[0]);
+    // buttons[0] is in SugeubRangeControls, buttons[1] is in SugeubPeriodSumBar, buttons[2] is in SugeubPriceProfileChart
+    fireEvent.click(buttons[1]);
     expect(onSumPresetChange).toHaveBeenCalledWith("6m");
   });
 });

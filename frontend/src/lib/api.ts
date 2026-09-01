@@ -676,15 +676,16 @@ export const api = {
     return data.history;
   },
 
-  // GET /api/stocks/persistent?days=5&min=3 → { days, min_appearances, stocks: PersistentStock[] }
+  // GET /api/stocks/persistent?days=5&min=3&date=YYYY-MM-DD → { days, min_appearances, stocks: PersistentStock[] }
   getStocksPersistent: async (
     days = 5,
     min = 3,
-    source: DataSource = "52w_high"
+    source: DataSource = "52w_high",
+    date?: string
   ): Promise<PersistentStock[]> => {
     const { data } = await apiClient.get<{ days: number; min_appearances: number; stocks: PersistentStock[] }>(
       "/api/stocks/persistent",
-      { params: { days, min, source } }
+      { params: { days, min, source, ...(date ? { date } : {}) } }
     );
     return data.stocks;
   },

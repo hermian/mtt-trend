@@ -53,7 +53,7 @@ export function IntersectionTab({ date, source = "mtt" }: IntersectionTabProps) 
   return (
     <div className="space-y-4">
       <p className="text-sm text-gray-400" title="테마는 교집합 종목 수가 많은 순서대로 정렬됩니다">
-        52w 신고가와 MTT 모두에서 강세인 종목 ({themes.length}개 테마)
+        {date ? `${date} 기준 ` : ""}52w 신고가와 MTT 모두에서 강세인 종목 ({themes.length}개 테마)
         <span className="ml-2 text-gray-500">ℹ️</span>
       </p>
 

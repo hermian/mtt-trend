@@ -178,4 +178,24 @@ describe("StockAnalysisTabs Component", () => {
     // Assert
     expect(screen.getByText(/데이터를 불러오는데 실패했습니다/i)).toBeInTheDocument();
   });
+
+  it("should pass date prop to useStocksPersistent", () => {
+    // Arrange
+    const spy = vi.spyOn(useStocks, "useStocksPersistent").mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null
+    } as any);
+    vi.spyOn(useStocks, "useStocksGroupAction").mockReturnValue({
+      data: [],
+      isLoading: false,
+      error: null
+    } as any);
+
+    // Act
+    render(<StockAnalysisTabs date="2024-01-15" source="mtt" />);
+
+    // Assert
+    expect(spy).toHaveBeenCalledWith(5, 3, "mtt", "2024-01-15");
+  });
 });

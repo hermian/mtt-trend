@@ -64,7 +64,7 @@ export function StockAnalysisTabs({ date, source = "mtt" }: StockAnalysisTabsPro
 
       {/* Tab Content */}
       <div className="p-6">
-        {activeTab === "persistent" && <StrongStocksTable source={source} />}
+        {activeTab === "persistent" && <StrongStocksTable date={date} source={source} />}
         {activeTab === "group-action" && <GroupActionTable date={date} source={source} />}
         {activeTab === "intersection" && <IntersectionTab date={date} source={source} />}
       </div>

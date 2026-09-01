@@ -157,6 +157,16 @@ export function applyRangeToCharts(
   charts.forEach((c) => {
     try {
       c.timeScale().setVisibleLogicalRange(range);
+      try {
+        c.priceScale("right").applyOptions({ autoScale: true });
+      } catch {
+        /* ignore */
+      }
+      try {
+        c.priceScale("close").applyOptions({ autoScale: true });
+      } catch {
+        /* ignore */
+      }
     } catch {
       /* ignore */
     }

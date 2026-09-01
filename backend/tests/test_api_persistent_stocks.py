@@ -257,3 +257,39 @@ def test_persistent_stocks_theme_rs_change_null_when_no_yesterday_data(client, t
     celltrion = stocks_map["셀트리온"]
     # 바이오 테마는 어제 데이터 없으므로 theme_rs_change = None
     assert celltrion["theme_rs_change"] is None
+
+
+# -----------------------------------------------------------------------
+# REQ-7: 기준일(date) 파라미터 적용 테스트
+# -----------------------------------------------------------------------
+
+def test_persistent_stocks_with_reference_date(client):
+    """
+    기준일(date) 파라미터가 주어졌을 때 해당 기준일 이하의 날짜 범위에서만 지속 강세 종목을 조회해야 함
+    - 2024-01-13 기준: 삼성전자는 2024-01-11, 12, 13 (3회 출현 >= min=3), change_pct=3.0 (2024-01-13 값)
+    """
+    response = client.get("/api/stocks/persistent?days=5&min=3&date=2024-01-13")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "stocks" in data
+    stocks_map = {s["stock_name"]: s for s in data["stocks"]}
+
+    assert "삼성전자" in stocks_map
+    samsung = stocks_map["삼성전자"]
+    assert samsung["appearance_count"] == 3
+    # 2024-01-13 기준 change_pct = 1.0 + 2 = 3.0 (2024-01-15의 3.5가 아님)
+    assert samsung["change_pct"] == pytest.approx(3.0, abs=0.01)
+
+
+def test_persistent_stocks_with_early_reference_date_empty(client):
+    """
+    기준일이 너무 이전이라 min 출현 횟수를 만족하지 못하는 경우 빈 목록을 반환해야 함
+    - 2024-01-12 기준: 2024-01-11, 12 (2회 출현 < min=3)
+    """
+    response = client.get("/api/stocks/persistent?days=5&min=3&date=2024-01-12")
+    assert response.status_code == 200
+
+    data = response.json()
+    assert data["stocks"] == []
+

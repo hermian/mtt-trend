@@ -71,8 +71,13 @@ function RsChangeBadge({ value }: { value: number | null | undefined }) {
 type SortKey = "stock_name" | "avg_rs" | "appearance_count";
 type SortDir = "asc" | "desc";
 
-export function StrongStocksTable({ source = "mtt" }: { source?: DataSource }) {
-  const { data: stocks, isLoading, error } = useStocksPersistent(5, 3, source);
+interface StrongStocksTableProps {
+  date?: string;
+  source?: DataSource;
+}
+
+export function StrongStocksTable({ date, source = "mtt" }: StrongStocksTableProps) {
+  const { data: stocks, isLoading, error } = useStocksPersistent(5, 3, source, date);
   const [sortKey, setSortKey] = useState<SortKey>("avg_rs");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -183,7 +188,7 @@ export function StrongStocksTable({ source = "mtt" }: { source?: DataSource }) {
   return (
     <div>
       <p className="text-sm text-gray-400 mb-3">
-        5일 중 3회 이상 출현 종목 ({stocks.length}개)
+        {date ? `${date} 기준 ` : ""}5일 중 3회 이상 출현 종목 ({stocks.length}개)
       </p>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -61,9 +61,9 @@ const SUPPLY_LEGEND: ReadonlyArray<{
   kospiOnly: boolean;
 }> = [
   { id: "foreigner", label: "외국인", color: "#ef4444", seriesIndex: 0, kospiOnly: false },
-  { id: "institution", label: "기관", color: "#3b82f6", seriesIndex: 1, kospiOnly: false },
-  { id: "program", label: "비차익", color: "#10b981", seriesIndex: 2, kospiOnly: true },
-  { id: "individual", label: "개인", color: "#f59e0b", seriesIndex: 3, kospiOnly: false },
+  { id: "institution", label: "기관", color: "#22c55e", seriesIndex: 1, kospiOnly: false },
+  { id: "program", label: "비차익", color: "#84cc16", seriesIndex: 2, kospiOnly: true },
+  { id: "individual", label: "개인", color: "#3b82f6", seriesIndex: 3, kospiOnly: false },
   { id: "future", label: "선물외인", color: "#e879f9", seriesIndex: 4, kospiOnly: true },
 ];
 
@@ -439,7 +439,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
           // 1. 기관 (KOSPI/KOSDAQ)
           const institution = chart.addSeries(LineSeries, {
-            color: "#3b82f6",
+            color: "#22c55e",
             lineWidth: 2,
             priceScaleId: "right",
             priceFormat: { type: "price", precision: 0, minMove: 1 },
@@ -448,7 +448,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
           // 2. 비차익 (KOSPI 전용)
           const program = chart.addSeries(LineSeries, {
-            color: "#10b981",
+            color: "#84cc16",
             lineWidth: 2,
             priceScaleId: "right",
             priceFormat: { type: "price", precision: 0, minMove: 1 },
@@ -457,7 +457,7 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
           // 3. 개인 (KOSPI/KOSDAQ)
           const individual = chart.addSeries(LineSeries, {
-            color: "#f59e0b",
+            color: "#3b82f6",
             lineWidth: 2,
             priceScaleId: "right",
             priceFormat: { type: "price", precision: 0, minMove: 1 },
@@ -858,22 +858,22 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
           </span>
         </div>
         <div className="flex flex-col">
-          <span className="text-blue-400 font-medium">기관</span>
-          <span className="font-semibold text-blue-400">
+          <span className="text-green-400 font-medium">기관</span>
+          <span className="font-semibold text-green-400">
             {fmt(hoveredData?.institution)}
           </span>
         </div>
         {!hoveredData?.isKosdaq && (
           <div className="flex flex-col">
-            <span className="text-emerald-400 font-medium">비차익</span>
-            <span className="font-semibold text-emerald-400">
+            <span className="text-lime-400 font-medium">비차익</span>
+            <span className="font-semibold text-lime-400">
               {fmt(hoveredData?.program)}
             </span>
           </div>
         )}
         <div className="flex flex-col">
-          <span className="text-amber-400 font-medium">개인</span>
-          <span className="font-semibold text-amber-400">
+          <span className="text-blue-400 font-medium">개인</span>
+          <span className="font-semibold text-blue-400">
             {fmt(hoveredData?.individual)}
           </span>
         </div>

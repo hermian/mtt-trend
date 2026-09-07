@@ -18,3 +18,32 @@
 
 ### 3. 지표 명칭 및 상세 수치 표기 위치
 - 각 지표의 명칭(예: `EMA10`, `VWAP`, `HP추세`, `거래대금` 등) 및 상세 수치는 **차트 상단 HUD 헤더 바 또는 툴팁/범례**에 텍스트로 표시합니다.
+
+---
+
+## Environment & Tooling Rules
+
+### 1. Python & Test Environment
+- **가상환경 경로**: Backend 실행 및 테스트 시 `backend/.venv/bin/python`, `backend/.venv/bin/pytest`를 직접 사용합니다.
+- **프론트엔드 패키지 매니저**: `pnpm`을 사용합니다 (`pnpm install`, `pnpm build`).
+
+### 2. Deployment Protocol
+- 모든 기능 개발, 버그 수정 및 로컬 검증이 완료되면 **반드시 프로젝트 루트의 `./deploy.sh`를 실행**하여 빌드 및 PM2 프로세스(`mtt-backend`, `mtt-frontend`)를 갱신합니다.
+
+### 3. Macro Data Pipeline (`screener` 연동)
+- **읽기 전용 백엔드**: `mtt-trend` 백엔드는 매크로 DB(`~/.cache/db/macro.db`)에 대해 **Read-Only(조회 전용)**로 동작합니다.
+- **수집 및 적재 전담**: 실제 데이터 수집기 및 스케줄러는 `~/workspace/git/screener/mmt/macro_collector/`에서 관리되며, 평일 18:27 KST 크론(`run_macro_refresh.sh`)으로 자동 갱신됩니다.
+- **희소 시계열 ffill 원칙**: 분기(GDP, I/GDP 등), 월간(M2, ISM), 주간(수출), 기준금리 등 발표 주기가 희소한 지표는 `charts.py`의 `ffill_series`에 등록하여 일별 거래일 축에 맞춰 직전값을 유지(`ffill`)하도록 처리해야 합니다.
+
+### 4. Git & Issue Conventions
+- **Lore 커밋 형식 준수**: 비사소한 변경 시 Git Trailer(의사결정 맥락)를 포함한 Lore 포맷으로 커밋합니다.
+  - `Fixes: #이슈번호` (또는 `Related:`)
+  - `Constraint:` (외부 제약 조건)
+  - `Rejected:` (기각된 대안과 이유)
+  - `Confidence: high|medium|low`
+  - `Scope-risk: narrow|moderate|broad`
+  - `Reversibility: clean|moderate|difficult`
+  - `Tested:` (수행한 검증)
+  - `Directive:` (향후 수정자를 위한 지침)
+- **외부 저장소 주의사항**: `screener` 저장소에 커밋할 경우 GJC pre-commit 훅이 걸려 있으므로 인가된 변경 시 `git commit --no-verify`를 사용합니다.
+- **이슈 관리**: 기능 추가 및 주요 작업 시 GitHub CLI(`gh issue create`, `gh issue view` 등)를 적극 활용합니다.

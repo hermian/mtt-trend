@@ -196,7 +196,9 @@ async def get_macro_chart_data(
     지표별 소스:
       sp500      index_ohlcv(index_name='sp500')
       nasdaq100  index_ohlcv(index_name='nasdaq100')
+      dow30      index_ohlcv(index_name='dow30')
       kospi      index_ohlcv(index_name='kospi')
+      sox        index_ohlcv(index_name='sox')
       high_yield fred_macro(BAMLH0A0HYM2)
       vix        fred_macro(VIX)
       cnn_fgi    cnn_fear_greed
@@ -222,8 +224,12 @@ async def get_macro_chart_data(
       brent      index_ohlcv(index_name='brent') — Yahoo BZ=F 선물 (2007-07~; 이전 구간은 구 Investing LCO)
       wti_fred   fred_macro(DCOILWTICO) — FRED spot
       brent_fred fred_macro(DCOILBRENTEU) — FRED spot
+      copper     index_ohlcv(index_name='copper')
+      gold       index_ohlcv(index_name='gold')
+      silver     index_ohlcv(index_name='silver')
       export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
       ism_pmi    fred_macro(ISM_PMI) — Investing 발표일 원본; 조회 시 참조월 정규화 후 ffill
+      inv_gdp    fred_macro(A006RE1Q156NBEA) — GDP 대비 민간투자 비율 (%), 분기 발표, 조회 시 ffill
       credit_kospi / credit_kosdaq          kofia_credit_loan — 신용잔고 (조원)
       credit_kospi_pct / credit_kosdaq_pct  신용잔고 ÷ index_ohlcv.marcap (%)
       forced_sell / forced_sell_ratio       kofia_stock_money — 미수금 반대매매 (억원, %)
@@ -241,6 +247,7 @@ async def get_macro_chart_data(
         "nasdaq100": ("index_ohlcv",        "close",       "index_name = 'nasdaq100'"),
         "dow30":     ("index_ohlcv",        "close",       "index_name = 'dow30'"),
         "kospi":     ("index_ohlcv",        "close",       "index_name = 'kospi'"),
+        "sox":       ("index_ohlcv",        "close",       "index_name = 'sox'"),
         "high_yield": ("fred_macro",        "value",       "series_id = 'BAMLH0A0HYM2'"),
         "vix":       ("fred_macro",         "value",       "series_id = 'VIX'"),
         "cnn_fgi":   ("cnn_fear_greed",     "value",       None),
@@ -282,6 +289,7 @@ async def get_macro_chart_data(
         "m2": "M2SL",
         "gdp": "GDP",
         "gdp_real": "GDPC1",
+        "inv_gdp": "A006RE1Q156NBEA",
     }
     # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
     ism_ffill_series_id = "ISM_PMI"
@@ -475,6 +483,7 @@ async def get_macro_chart_data(
             nasdaq100=p.get("nasdaq100"),
             dow30=p.get("dow30"),
             kospi=p.get("kospi"),
+            sox=p.get("sox"),
             high_yield=p.get("high_yield"),
             cnn_fgi=p.get("cnn_fgi"),
             kr_fgi=p.get("kr_fgi"),
@@ -506,6 +515,7 @@ async def get_macro_chart_data(
             m2=p.get("m2"),
             gdp=p.get("gdp"),
             gdp_real=p.get("gdp_real"),
+            inv_gdp=p.get("inv_gdp"),
             export_avg=p.get("export_avg"),
             ism_pmi=p.get("ism_pmi"),
             credit_kospi=p.get("credit_kospi"),
@@ -1227,12 +1237,12 @@ def get_supply_demand_price_profile(
 
 @router.get("/avwap", response_model=AvwapChartResponse)
 def get_avwap_chart_data(
-    market: str = Query("kospi", description="kospi | kosdaq | sp500 | nasdaq100 | dow | etf"),
+    market: str = Query("kospi", description="kospi | kosdaq | sp500 | nasdaq100 | dow | sox | etf"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
     symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자, 069500, KODEX 200)"),
 ):
     """
-    KOSPI / KOSDAQ / S&P500 / NASDAQ100 / DOW 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    KOSPI / KOSDAQ / S&P500 / NASDAQ100 / DOW / SOX 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
     """
     data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
     if not data:

@@ -110,6 +110,7 @@ export interface MacroDataPoint {
   nasdaq100?: number;
   dow30?: number;
   kospi?: number;
+  sox?: number;
   high_yield?: number;
   cnn_fgi?: number;
   kr_fgi?: number;
@@ -144,6 +145,8 @@ export interface MacroDataPoint {
   gdp?: number;
   /** US 실질 GDP (십억 USD) — FRED GDPC1 */
   gdp_real?: number;
+  /** 미국 GDP 대비 민간투자 비율 (%) — FRED A006RE1Q156NBEA */
+  inv_gdp?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

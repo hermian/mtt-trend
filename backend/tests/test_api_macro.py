@@ -116,6 +116,9 @@ def temp_macro_db(monkeypatch):
         ("2026-06-24", "kospi", 2500.0),
         ("2026-06-25", "kospi", 2510.0),
         ("2026-06-26", "kospi", 2520.0),
+        ("2026-06-24", "sox", 5200.0),
+        ("2026-06-25", "sox", 5210.0),
+        ("2026-06-26", "sox", 5220.0),
         ("2026-06-24", "move", 80.0),
         ("2026-06-25", "move", 81.0),
         ("2026-06-26", "move", 82.0),
@@ -207,6 +210,7 @@ def temp_macro_db(monkeypatch):
         ("2026-06-01", "M2SL", 21000.5),
         ("2026-04-01", "GDP", 28000.0),
         ("2026-04-01", "GDPC1", 22500.0),
+        ("2026-04-01", "A006RE1Q156NBEA", 17.6),
     ])
     
     cursor.executemany("""
@@ -273,6 +277,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["nasdaq100"] == 18000.0
     assert pt["dow30"] == 39000.0
     assert pt["kospi"] == 2500.0
+    assert pt["sox"] == 5200.0
     assert pt["high_yield"] == 3.1
     assert pt["cnn_fgi"] == 45.0
     assert pt["vix"] == 15.0
@@ -298,6 +303,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["m2"] == 21000.5
     assert pt["gdp"] == 28000.0
     assert pt["gdp_real"] == 22500.0
+    assert pt["inv_gdp"] == 17.6
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5

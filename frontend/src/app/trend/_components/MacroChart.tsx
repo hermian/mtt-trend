@@ -18,13 +18,13 @@ import type { MacroDataPoint } from "@/lib/api";
 import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
 
 /** HP 장기추세·이탈도를 적용할 지수 (FinJump DSTOA005001 / DSTOA006001) */
-const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "dow30", "kospi"]);
+const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "dow30", "kospi", "sox"]);
 
 /** ISM PMI histogram: 확장(>=50) / 수축(<50) */
 const ISM_EXPAND_COLOR = "#a855f7";
 const ISM_CONTRACT_COLOR = "#f43f5e";
 
-export type CategoryKey = "all" | "indices" | "rates" | "fx" | "commodities" | "macro_sentiment";
+export type CategoryKey = "all" | "indices" | "rates" | "fx" | "commodities" | "economy" | "sentiment";
 
 export const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "all", label: "전체" },
@@ -32,7 +32,8 @@ export const CATEGORIES: { key: CategoryKey; label: string }[] = [
   { key: "rates", label: "금리/채권" },
   { key: "fx", label: "환율" },
   { key: "commodities", label: "원자재" },
-  { key: "macro_sentiment", label: "수급/경제/심리" },
+  { key: "economy", label: "경기/경제" },
+  { key: "sentiment", label: "심리/수급" },
 ];
 
 const INDICATOR_CATEGORIES: Record<string, CategoryKey> = {
@@ -40,6 +41,7 @@ const INDICATOR_CATEGORIES: Record<string, CategoryKey> = {
   nasdaq100: "indices",
   dow30: "indices",
   kospi: "indices",
+  sox: "indices",
 
   us_2y: "rates",
   us_10y: "rates",
@@ -64,25 +66,27 @@ const INDICATOR_CATEGORIES: Record<string, CategoryKey> = {
   gold: "commodities",
   silver: "commodities",
 
-  m2: "macro_sentiment",
-  gdp: "macro_sentiment",
-  gdp_real: "macro_sentiment",
-  cnn_fgi: "macro_sentiment",
-  kr_fgi: "macro_sentiment",
-  vix: "macro_sentiment",
-  vkospi: "macro_sentiment",
-  pcr: "macro_sentiment",
-  move: "macro_sentiment",
-  vxsmh: "macro_sentiment",
-  vxn: "macro_sentiment",
-  export_avg: "macro_sentiment",
-  ism_pmi: "macro_sentiment",
-  credit_kospi: "macro_sentiment",
-  credit_kosdaq: "macro_sentiment",
-  credit_kospi_pct: "macro_sentiment",
-  credit_kosdaq_pct: "macro_sentiment",
-  forced_sell: "macro_sentiment",
-  forced_sell_ratio: "macro_sentiment",
+  m2: "economy",
+  gdp: "economy",
+  gdp_real: "economy",
+  inv_gdp: "economy",
+  export_avg: "economy",
+  ism_pmi: "economy",
+
+  cnn_fgi: "sentiment",
+  kr_fgi: "sentiment",
+  vix: "sentiment",
+  vkospi: "sentiment",
+  pcr: "sentiment",
+  move: "sentiment",
+  vxsmh: "sentiment",
+  vxn: "sentiment",
+  credit_kospi: "sentiment",
+  credit_kosdaq: "sentiment",
+  credit_kospi_pct: "sentiment",
+  credit_kosdaq_pct: "sentiment",
+  forced_sell: "sentiment",
+  forced_sell_ratio: "sentiment",
 };
 
 interface MacroChartProps {
@@ -106,6 +110,7 @@ const INDICATORS: IndicatorDef[] = [
   { id: "nasdaq100", label: "NDX", color: "#22d3ee", raw: (v) => `NDX ${v.toFixed(0)}` },
   { id: "dow30", label: "Dow", color: "#60a5fa", raw: (v) => `DOW ${v.toFixed(0)}` },
   { id: "kospi", label: "KOSPI", color: "#f87171", raw: (v) => `KOSPI ${v.toFixed(0)}` },
+  { id: "sox", label: "SOX", color: "#a855f7", raw: (v) => `SOX ${v.toFixed(0)}` },
   {
     id: "export_avg",
     label: "일평균수출",
@@ -151,6 +156,7 @@ const INDICATORS: IndicatorDef[] = [
   { id: "m2", label: "US M2", color: "#06b6d4", raw: (v) => `M2 $${(v / 1000).toFixed(2)}T` },
   { id: "gdp", label: "US GDP", color: "#8b5cf6", raw: (v) => `GDP $${(v / 1000).toFixed(2)}T` },
   { id: "gdp_real", label: "US Real GDP", color: "#e879f9", raw: (v) => `rGDP $${(v / 1000).toFixed(2)}T` },
+  { id: "inv_gdp", label: "US I/GDP", color: "#2563eb", raw: (v) => `I/GDP ${v.toFixed(1)}%` },
   { id: "usdkrw", label: "USD/KRW", color: "#34d399", raw: (v) => `₩${v.toFixed(1)}` },
   { id: "usdjpy", label: "USD/JPY", color: "#a3e635", raw: (v) => `¥${v.toFixed(2)}` },
   { id: "usdcny", label: "USD/CNY", color: "#facc15", raw: (v) => `¥${v.toFixed(3)}` },
@@ -826,7 +832,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                   ? "bg-pink-600 text-white border-pink-500"
                   : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
               }`}
-              title="S&P500/NDX/DOW/KOSPI에 HP 장기추세(τ)와 추세 대비 이탈(지수/추세×100) 표시"
+              title="S&P500/NDX/DOW/KOSPI/SOX에 HP 장기추세(τ)와 추세 대비 이탈(지수/추세×100) 표시"
             >
               {hpEnabled ? "HP ON" : "HP OFF"}
             </button>

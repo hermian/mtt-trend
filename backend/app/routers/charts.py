@@ -238,7 +238,7 @@ async def get_macro_chart_data(
     if not os.path.exists(db_path):
         return MacroDataResponse(data=[])
 
-    effective_start_date = start_date if start_date is not None else "2010-01-01"
+    effective_start_date = start_date if start_date is not None else "1980-01-01"
 
     # (테이블, 컬럼, 조건절) — 조건절은 시리즈 행을 좁히는 SQL, None이면 전체.
     # 원유: Yahoo 선물(wti/brent)과 FRED 스팟(wti_fred/brent_fred)은 혼용하지 않음.

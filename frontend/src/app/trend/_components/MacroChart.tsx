@@ -459,12 +459,18 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   }, [selectedCategory]);
 
   const scrollToLatest = () => {
-    if (!chartDataRef.current?.length || !chartRef.current) return;
+    if (!chartRef.current) return;
     try {
       chartRef.current.timeScale().fitContent();
     } catch {
       /* empty */
     }
+  };
+
+  const handlePeriodChange = (p: Period) => {
+    setPeriod(p);
+    setTimeout(() => scrollToLatest(), 50);
+    setTimeout(() => scrollToLatest(), 300);
   };
 
   /* 차트 + 시리즈 재구성 (지표/정규화/폭 변경 시 재생성 → 폭 불일치 원천 제거) */
@@ -760,6 +766,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
       });
     }
 
+    setTimeout(() => scrollToLatest(), 100);
     setTimeout(() => scrollToLatest(), 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formattedData, fullFormattedData, displayStart]);
@@ -801,7 +808,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                 <button
                   key={p}
                   type="button"
-                  onClick={() => setPeriod(p)}
+                  onClick={() => handlePeriodChange(p)}
                   className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter uppercase transition-all ${
                     period === p
                       ? "bg-blue-600 text-white border-blue-500"

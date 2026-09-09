@@ -99,6 +99,15 @@ PRESET_ANCHORS: Dict[str, Dict[str, List[str]]] = {
         "1M": ["2018-12-24", "2020-03-23", "2022-01-05", "2022-10-13", "2023-10-27", "2025-04-07"],
         "1Y": ["2020-03-23", "2022-01-05"],
     },
+    "sox": {
+        "1D": [
+            "2018-12-24", "2020-03-23", "2022-01-04", "2022-10-13",
+            "2023-10-27", "2024-08-05", "2024-11-05", "2025-04-07"
+        ],
+        "1W": ["2018-12-24", "2020-03-23", "2022-01-04", "2022-10-13", "2023-10-27", "2024-08-05", "2025-04-07"],
+        "1M": ["2018-12-24", "2020-03-23", "2022-01-04", "2022-10-13", "2023-10-27", "2025-04-07"],
+        "1Y": ["2020-03-23", "2022-01-04"],
+    },
 }
 
 INDEX_MARKET_MAP: Dict[str, str] = {
@@ -114,6 +123,8 @@ INDEX_MARKET_MAP: Dict[str, str] = {
     "dow": "dow30",
     "dow30": "dow30",
     "dji": "dow30",
+    "sox": "sox",
+    "^sox": "sox",
 }
 
 INDEX_DISPLAY_NAMES: Dict[str, str] = {
@@ -122,6 +133,7 @@ INDEX_DISPLAY_NAMES: Dict[str, str] = {
     "sp500": "S&P 500 지수",
     "nasdaq100": "NDX 지수",
     "dow30": "DOW 지수",
+    "sox": "SOX 지수",
 }
 
 INDEX_AMOUNT_UNITS: Dict[str, str] = {
@@ -130,6 +142,7 @@ INDEX_AMOUNT_UNITS: Dict[str, str] = {
     "sp500": "조$",
     "nasdaq100": "조$",
     "dow30": "조$",
+    "sox": "조$",
 }
 
 ANCHOR_COLORS = [
@@ -190,7 +203,7 @@ def _get_etf_us_price_path() -> Path:
 
 def _load_index_raw_df(market_key: str) -> Optional[Tuple[pd.DataFrame, float]]:
     """
-    KOSPI, KOSDAQ, S&P500, NASDAQ100, DOW30 지수의 raw OHLCV 데이터를 반환합니다.
+    KOSPI, KOSDAQ, S&P500, NASDAQ100, DOW30, SOX 지수의 raw OHLCV 데이터를 반환합니다.
     1. CSV 파일 존재 시 CSV 우선 로드 (kospi, kosdaq 등)
     2. macro.db (index_ohlcv 테이블)에서 로드
     반환값: (DataFrame, last_mtime)
@@ -269,6 +282,8 @@ def _calculate_vwap_series(df: pd.DataFrame, start_idx: Optional[int] = None) ->
     
     tp = (sub["High"] + sub["Low"] + sub["Close"] + sub["Open"]) / 4.0
     vol = sub["Volume"]
+    if "Volume" not in sub.columns or vol.fillna(0).sum() == 0:
+        vol = pd.Series(1.0, index=sub.index)
     cum_vol = vol.cumsum().replace(0, np.nan)
     vwap_sub = (tp * vol).cumsum() / cum_vol
     

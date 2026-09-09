@@ -73,6 +73,8 @@ TARGET_ALIAS_GROUPS = {
     "snp500": ["sp500", "s&p500", "spx", "snp500"],
     "kospi": ["kospi"],
     "kosdaq": ["kosdaq"],
+    "sox": ["sox", "^sox"],
+    "^sox": ["sox", "^sox"],
 }
 
 

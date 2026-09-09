@@ -186,7 +186,7 @@ def test_avwap_etf_by_code_and_name():
 
 
 def test_avwap_us_indices():
-    for market in ["sp500", "nasdaq100", "dow"]:
+    for market in ["sp500", "nasdaq100", "dow", "sox"]:
         for interval in ["1D", "1W", "1M", "1Y"]:
             res = client.get(f"/api/charts/avwap?market={market}&interval={interval}")
             assert res.status_code == 200
@@ -206,8 +206,11 @@ def test_avwap_us_indices():
             assert "vix_fix" in last_pt
             assert "amount" in last_pt
             assert "amount_sma50" in last_pt
-            assert last_pt["amount"] is not None and last_pt["amount"] > 0
-            assert last_pt["amount_sma50"] is not None and last_pt["amount_sma50"] > 0
+            if market != "sox":
+                assert last_pt["amount"] is not None and last_pt["amount"] > 0
+                assert last_pt["amount_sma50"] is not None and last_pt["amount_sma50"] > 0
+            else:
+                assert last_pt["amount"] is not None
             # Verify no 0 amount points in the 2024-08-12 ~ 2026-08-04 range
             if interval == "1D" and market in ("sp500", "nasdaq100"):
                 sub_pts = [p for p in data["points"] if "2024-08-12" <= p["date"] <= "2026-08-04"]

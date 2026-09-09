@@ -6,6 +6,32 @@
 
 ### 추가된 기능
 
+#### 코스피 AVWAP 차트에 '강환국선' 지표 추가 (#49)
+- **수식 및 계산**:
+  - 2025-04-07 기점 코스피 저점($V_0 \approx 2,325.68\text{ pt}$)에서 2027년 1분기(10,000pt)까지 분기당 20% 복리 성장 추세선 산출
+  - 일별 복리 계수: $1.0020194255856663$
+- **프론트엔드 연동**:
+  - `market === "kospi" && !symbol` 조건에서만 렌더링 (코발트 블루 실선)
+  - 상단 툴바에 `강환국선` 토글 버튼 추가 (`mtt_khk_line_enabled` 로컬 스토리지 연동, 기본 ON)
+  - 상단 HUD 헤더 바 및 크로스헤어 호버 시 우측 Y축 눈금자 배지에 수치와 주가 괴리율(%) 실시간 표기
+  - 차트 캔버스 텍스트 오버레이 금지(`title: ""` 원칙) 준수
+
+#### SOX (필라델피아 반도체 지수) 매크로 주가지수 추가
+- **데이터 확인**:
+  - `~/.cache/db/macro.db` 의 `index_ohlcv` 테이블(`index_name = 'sox'`)에 1994-05-04부터 2026-09-04까지 8,140개 거래일 백필 완료 상태 확인
+- **백엔드 변경**:
+  - `backend/app/schemas.py`: `MacroDataPoint` 스키마에 `sox: Optional[float] = None` 필드 추가
+  - `backend/app/routers/charts.py`: `series_defs`에 `"sox"` 등록 및 `MacroDataPoint` 반환 매핑
+- **프론트엔드 변경**:
+  - `frontend/src/lib/api.ts`: `MacroDataPoint` 인터페이스에 `sox?: number;` 추가
+  - `frontend/src/app/trend/_components/MacroChart.tsx`: `INDICATOR_CATEGORIES` (`indices`), `INDEX_HP_IDS`, `INDICATORS` 배열에 SOX 추가
+- **AVWAP 차트 연동**:
+  - `backend/app/utils/avwap_utils.py`: `PRESET_ANCHORS['sox']`, `INDEX_MARKET_MAP['sox']`, `INDEX_DISPLAY_NAMES['sox']`, `INDEX_AMOUNT_UNITS['sox']` 등록
+  - 거래량 미제공 지수에 대한 `_calculate_vwap_series` fallback (동일 가중 평균) 처리
+  - `backend/app/utils/custom_anchor_utils.py`: `TARGET_ALIAS_GROUPS['sox']` 등록
+  - `frontend/src/app/trend/_components/AvwapChart.tsx`: DOW 다음에 `SOX` 마켓 버튼(`MARKET_BUTTONS`) 추가
+  - `backend/tests/test_avwap_chart.py` 및 `frontend/src/app/trend/_components/__tests__/AvwapChart.test.tsx` 테스트 추가 및 통과
+
 #### VXSMH 및 VXN (반도체 & 나스닥 100 변동성 지수) 매크로 지표 추가
 - **데이터 수집 및 백필**:
   - `VXSMH`: Cboe 공식 CDN(`https://cdn.cboe.com/api/global/us_indices/daily_prices/VXSMH_History.csv`) 기반 백필(226개일) 완료 및 `screener/mmt/macro_collector/indices.py` 수집기 등록

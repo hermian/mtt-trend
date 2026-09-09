@@ -304,7 +304,7 @@ describe("AvwapChart Component", () => {
     expect(screen.getAllByText("ETF").length).toBeGreaterThan(0);
   });
 
-  it("allows switching to S&P500, NDX, and DOW markets", () => {
+  it("allows switching to S&P500, NDX, DOW, and SOX markets", () => {
     const useAvwapSpy = vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,
       isLoading: false,
@@ -320,6 +320,7 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("S&P500")).toBeInTheDocument();
     expect(screen.getByText("NDX")).toBeInTheDocument();
     expect(screen.getByText("DOW")).toBeInTheDocument();
+    expect(screen.getByText("SOX")).toBeInTheDocument();
 
     // Click S&P500
     fireEvent.click(screen.getByText("S&P500"));
@@ -332,6 +333,10 @@ describe("AvwapChart Component", () => {
     // Click DOW
     fireEvent.click(screen.getByText("DOW"));
     expect(useAvwapSpy).toHaveBeenCalledWith("dow", "1D", null);
+
+    // Click SOX
+    fireEvent.click(screen.getByText("SOX"));
+    expect(useAvwapSpy).toHaveBeenCalledWith("sox", "1D", null);
   });
 
   it("opens quick anchor popover and anchor manager modal", () => {

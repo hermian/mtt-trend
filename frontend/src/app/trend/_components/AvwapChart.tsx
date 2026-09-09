@@ -57,7 +57,7 @@ const MA_COLORS: Record<string, string> = {
   SMA_5: "#3b82f6",
 };
 
-export type AvwapMarket = "kospi" | "kosdaq" | "sp500" | "nasdaq100" | "dow";
+export type AvwapMarket = "kospi" | "kosdaq" | "sp500" | "nasdaq100" | "dow" | "sox";
 
 export const MARKET_BUTTONS: { id: AvwapMarket; label: string }[] = [
   { id: "kospi", label: "KOSPI" },
@@ -65,6 +65,7 @@ export const MARKET_BUTTONS: { id: AvwapMarket; label: string }[] = [
   { id: "sp500", label: "S&P500" },
   { id: "nasdaq100", label: "NDX" },
   { id: "dow", label: "DOW" },
+  { id: "sox", label: "SOX" },
 ];
 
 function toDimColor(hexOrRgb: string, alpha: number = 0.5): string {
@@ -176,6 +177,16 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [showHp, setShowHp] = useState(true);
+  const isKospi = market === "kospi" && !symbol;
+  const [showKhkLine, setShowKhkLine] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_khk_line_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
   const [showSupertrend, setShowSupertrend] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -204,6 +215,7 @@ export function AvwapChart() {
     lvwap: showLvwap,
     bb: showBbUpper,
     hp: showHp,
+    khk: showKhkLine,
     supertrend: showSupertrend,
   });
 
@@ -218,9 +230,10 @@ export function AvwapChart() {
       lvwap: showLvwap,
       bb: showBbUpper,
       hp: showHp,
+      khk: showKhkLine,
       supertrend: showSupertrend,
     };
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showKhkLine, showSupertrend]);
 
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -443,6 +456,41 @@ export function AvwapChart() {
     return lastPt ? { value: lastPt.value, trend: lastPt.trend } : null;
   }, [supertrendSeries]);
 
+  // 강환국선: 2025-04-07 기점 분기 20% 복리 성장 추세선 (KOSPI 전용)
+  const khkLineData = useMemo(() => {
+    if (!isKospi || !chartData?.points) return [];
+    const START_DATE = "2025-04-07";
+    const V_START = 2325.68;
+    const DAILY_RATE = 1.0020194255856663;
+    const startMs = new Date("2025-04-07T00:00:00Z").getTime();
+    const ONE_DAY_MS = 86400000;
+
+    return chartData.points
+      .filter((p) => p.date >= START_DATE)
+      .map((p) => {
+        const curMs = new Date(`${p.date}T00:00:00Z`).getTime();
+        const diffDays = Math.round((curMs - startMs) / ONE_DAY_MS);
+        const val = Math.round(V_START * Math.pow(DAILY_RATE, diffDays) * 10) / 10;
+        return {
+          time: (toChartTime(p.date) || p.date) as any,
+          value: val,
+        };
+      });
+  }, [isKospi, chartData?.points]);
+
+  const khkMap = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let i = 0; i < khkLineData.length; i++) {
+      map.set(khkLineData[i].time as string, khkLineData[i].value);
+    }
+    return map;
+  }, [khkLineData]);
+
+  const latestKhkInfo = useMemo(() => {
+    if (!khkLineData || khkLineData.length === 0) return null;
+    return khkLineData[khkLineData.length - 1]?.value ?? null;
+  }, [khkLineData]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -461,6 +509,7 @@ export function AvwapChart() {
     hpTrend?: number | null;
     hpDev?: number | null;
     supertrend?: { value: number; trend: 1 | -1 } | null;
+    khkLine?: number | null;
   } | null>(null);
 
   // Select stock from search
@@ -827,6 +876,21 @@ export function AvwapChart() {
           });
         } else {
           stPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
+
+      // 강환국선
+      const khkPl = plMap.get("khk_line");
+      const khkVal = khkMap.get(toChartTime(pt.date) || pt.date);
+      if (khkPl) {
+        if (isKospi && showLinesRef.current.khk && khkVal != null && Number.isFinite(khkVal)) {
+          khkPl.applyOptions({
+            price: khkVal,
+            axisLabelVisible: true,
+            title: "",
+          });
+        } else {
+          khkPl.applyOptions({ axisLabelVisible: false });
         }
       }
 
@@ -1385,6 +1449,33 @@ export function AvwapChart() {
           });
           crosshairPriceLinesRef.current.set("supertrend", stHoverLine);
 
+          // 강환국선 (KOSPI 2025-04-07 기점 분기 20% 복리 성장 추세선)
+          const khkSeries = chart.addSeries(LineSeries, {
+            color: "#2563eb",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
+          activeSeries.push(khkSeries);
+          mainLinesMapRef.current.set("khk_line", {
+            id: "khk_line",
+            name: "강환국선",
+            series: khkSeries,
+            color: "#2563eb",
+            defaultWidth: 2,
+          });
+          const khkHoverLine = khkSeries.createPriceLine({
+            price: 0,
+            color: "#2563eb",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("khk_line", khkHoverLine);
+
           // Preset / Dynamic AVWAP Anchors
           if (chartData.anchors) {
             chartData.anchors.forEach((anc) => {
@@ -1712,6 +1803,7 @@ export function AvwapChart() {
           const prevPoint = ptIdx > 0 ? chartData.points[ptIdx - 1] : undefined;
           const hpInfo = matchedPoint ? hpMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           const stInfo = matchedPoint ? supertrendMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
+          const khkVal = matchedPoint ? khkMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) ?? null : null;
           if (matchedPoint) {
             updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
@@ -1739,6 +1831,7 @@ export function AvwapChart() {
               hpTrend: hpInfo?.trend,
               hpDev: hpInfo?.deviation,
               supertrend: stInfo || null,
+              khkLine: khkVal,
             });
           } else {
             setHoveredData(null);
@@ -1864,6 +1957,16 @@ export function AvwapChart() {
           if (mainSeriesList[seriesIdx]) {
             if (showSupertrend && supertrendSeries) {
               mainSeriesList[seriesIdx].setData(supertrendSeries.dnLineData as any);
+            } else {
+              mainSeriesList[seriesIdx].setData([]);
+            }
+            seriesIdx++;
+          }
+
+          // 강환국선
+          if (mainSeriesList[seriesIdx]) {
+            if (isKospi && showKhkLine && khkLineData.length > 0) {
+              mainSeriesList[seriesIdx].setData(khkLineData);
             } else {
               mainSeriesList[seriesIdx].setData([]);
             }
@@ -2012,6 +2115,7 @@ export function AvwapChart() {
       const hpIdx = bbIdx + 4;
       const supertrendUpIdx = bbIdx + 5;
       const supertrendDnIdx = bbIdx + 6;
+      const khkIdx = bbIdx + 7;
 
       if (mainSeriesList[bbIdx]) {
         mainSeriesList[bbIdx].setData(showBbUpper ? linePoints((p) => p.bb_upper) : []);
@@ -2045,6 +2149,9 @@ export function AvwapChart() {
         } else {
           mainSeriesList[supertrendDnIdx].setData([]);
         }
+      }
+      if (mainSeriesList[khkIdx]) {
+        mainSeriesList[khkIdx].setData(isKospi && showKhkLine && khkLineData.length > 0 ? khkLineData : []);
       }
 
       // Supertrend Band Highlighting
@@ -2081,7 +2188,7 @@ export function AvwapChart() {
         }
       });
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, enabledAnchors, chartData, hpResult, supertrendSeries]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, enabledAnchors, chartData, hpResult, supertrendSeries, isKospi, showKhkLine, khkLineData]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -2158,6 +2265,7 @@ export function AvwapChart() {
     hpTrend: latestHpInfo?.trend,
     hpDev: latestHpInfo?.deviation,
     supertrend: latestSupertrendInfo,
+    khkLine: latestKhkInfo,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -2615,6 +2723,33 @@ export function AvwapChart() {
               }}
             />
           </div>
+          {isKospi && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowKhkLine((prev) => {
+                  const next = !prev;
+                  if (prev && selectedLineId === "khk_line") {
+                    setSelectedLineId(null);
+                  }
+                  try {
+                    localStorage.setItem("mtt_khk_line_enabled", JSON.stringify(next));
+                  } catch {}
+                  return next;
+                });
+              }}
+              className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+                selectedLineId === "khk_line"
+                  ? "ring-2 ring-blue-400 border-blue-400 bg-blue-500/40 text-blue-200 font-bold shadow-md"
+                  : showKhkLine
+                  ? "bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-sm"
+                  : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+              }`}
+              title="클릭하여 강환국선(2025.04.07 기점 분기 20% 복리 성장 추세선) 표시 ON/OFF"
+            >
+              강환국선
+            </button>
+          )}
           <div className="h-4 w-px bg-gray-700 mx-1" />
           <button
             onClick={() => toggleAllAnchors(enabledAnchors.size === 0)}
@@ -2897,6 +3032,19 @@ export function AvwapChart() {
                 </span>
               </span>
             )}
+            {isKospi && showKhkLine && activeDisplay.khkLine != null && (
+              <span>
+                강환국선:{" "}
+                <span className="text-blue-400 font-bold">
+                  {activeDisplay.khkLine.toLocaleString(undefined, { maximumFractionDigits: 1 })}
+                </span>
+                {activeDisplay.ohlc && (
+                  <span className="text-gray-400 text-[10px] ml-0.5">
+                    ({(((activeDisplay.ohlc.close - activeDisplay.khkLine) / activeDisplay.khkLine) * 100).toFixed(1)}%)
+                  </span>
+                )}
+              </span>
+            )}
           </>
         )}
       </div>
@@ -3059,7 +3207,7 @@ export function AvwapChart() {
               <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
               {Boolean(
                 chartData?.amount_unit === "조$" ||
-                (!symbol && ["sp500", "nasdaq100", "dow", "dow30"].includes(market.toLowerCase()))
+                (!symbol && ["sp500", "nasdaq100", "dow", "dow30", "sox"].includes(market.toLowerCase()))
               ) && (
                 <span className="text-[10px] font-normal text-amber-300 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-800/60 font-mono">
                   [추정식: 종가(Close) × 거래량(Volume)]

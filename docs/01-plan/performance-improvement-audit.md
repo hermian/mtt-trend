@@ -449,8 +449,8 @@ curl -4 -s -o /dev/null -w "ttfb=%{time_starttransfer}s total=%{time_total}s\n" 
 > cd backend && TMPDIR="$PWD/.pytest-tmp" .venv/bin/pytest tests/ -q
 > ```
 
-**다음 후보**: P1 `wics-rankings`(기본 구간 제한 + mtime 캐시) → P1 `macro`(mtime 캐시 + 구간 제한)
-→ P2 `trend-up-breadth` 파켓 캐시.
+**진행 상황**: P1 `wics-rankings` ✅ (아래, 프론트 가드) → P1 `macro` ✅ (아래, mtime 캐시)
+→ **다음: P2 `trend-up-breadth` 파켓 캐시** → P3 소항목.
 
 ### ⚠️ P2 배포 후 발견 — 대용량 엔드포인트의 동시성 역효과
 
@@ -503,6 +503,48 @@ P2 배포(2026-09-12 21:21) 후 8개 **독립 curl 프로세스**로 측정했�
 > ⚠️ **대용량 엔드포인트의 지연은 계산보다 직렬화·전송이 지배적이다.** 캐시로 241ms 를
 > 제거해도 15MB 직렬화 ~50ms 는 남는다. 지연을 더 줄이려면 **페이로드 축소**(기본 구간 제한)가
 > 함께 필요하다. 캐시의 진짜 가치는 지연보다 **동시 요청 시 메모리 피크 제거**다.
+
+### ✅ P1 — `/wics-rankings` 마운트 시 전체 이력 호출 제거
+
+**발견**: 페이지 로드마다 `/api/charts/wics-rankings` 가 **파라미터 없이 한 번**,
+정상 구간으로 또 한 번 — 총 2회 호출되고 있었다. 백엔드 access log 에서 동일 페이지
+로드로 보이는 4건이 함께 관측됐다.
+
+```
+GET /api/charts/wics-rankings?start_month=2025-10&end_month=2026-09   ← 정상
+GET /api/charts/wics-rankings/weekly                                  ← 무파라미터
+GET /api/charts/wics-rankings/weekly?start_week=...&end_week=...       ← 정상
+GET /api/charts/wics-rankings                                         ← 무파라미터(전체 이력)
+```
+
+| 호출 | 응답 크기 | 지연(warm, `127.0.0.1`) |
+|---|---|---|
+| `wics-rankings` (무파라미터, 전체 기간) | **16,400,715 B (15.64 MB)** | 0.317s |
+| `wics-rankings?start_month=2025-09&end_month=2026-09` | 608,801 B (0.58 MB) | 0.010s |
+| `wics-rankings/weekly` (무파라미터) | 1,218,648 B (1.16 MB) | 0.024s |
+| `wics-rankings/weekly?start_week=...&end_week=...` | 1,125,088 B (1.07 MB) | 0.018s |
+
+→ **월간만 27배 차이(15.64MB vs 0.58MB).** 주간은 구간과 무관하게 ~1.1MB 라 영향이 작다.
+즉 매 페이지 로드마다 **15.64MB 를 받아서 버리고 있었다.**
+
+**원인**: `useWicsRankings` / `useWicsWeeklyRankings` 에 `enabled` 가드가 없었다.
+`WicsRankingPanel` 의 `startMonth`/`endMonth` 는 `""` 로 초기화되고 `months` 로딩 후에
+설정되므로, 마운트 시점에 `"" || undefined` → `undefined` 두 개가 훅에 전달되어
+**파라미터 없는 요청이 즉시 발사**된다. 같은 파일의 `useWicsIndex`(`enabled: !!wics`)와
+`useWicsIndexAll` 에는 이미 가드가 있었다 — 랭킹 훅 2개만 누락돼 있었다.
+
+**수정**: `enabled: !!startMonth && !!endMonth`, `enabled: !!startWeek && !!endWeek` 추가.
+구간 상태는 드롭다운에서만 설정되고 `""` 로 되돌아가지 않으므로 "전체 기간" 모드를
+깨뜨리지 않는다.
+
+**검증**: `frontend/src/hooks/__tests__/useWicsData.test.ts` 신규(5건) — 무구간·단일구간에서
+미호출, 양구간에서 호출을 고정. **가드를 제거하면 해당 2건이 실제로 실패**하는 것까지 확인해
+테스트가 회귀를 잡는다는 걸 증명했다. `WicsRankingPanel.test.tsx` 5건 포함 **10건 통과**,
+`tsc --noEmit` 에서 변경 파일 오류 **0건**.
+
+> **백엔드 기본 구간 제한은 불필요해졌다.** 원래 계획은 "기본 구간 제한 + mtime 캐시" 였으나,
+> 무파라미터 호출 자체가 사라져 구간 호출(0.010s / 0.58MB)만 남는다. 캐시를 넣을 실익이 없다.
+> 단 다른 클라이언트가 무파라미터로 호출하면 여전히 15.64MB 가 나가므로, 필요하면 후속으로 캡을 검토한다.
 
 ### 운영 규칙 (확정)
 

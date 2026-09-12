@@ -708,6 +708,36 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/MACD:/)).toBeInTheDocument();
   });
 
+  it("toggles Stoc panel on and off", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // Stoc panel is enabled by default
+    const stocBtn = screen.getByText("Stoc");
+    expect(stocBtn).toBeInTheDocument();
+    expect(screen.getByText("Stochastic Slow")).toBeInTheDocument();
+    expect(screen.getByText(/Stoc:/)).toBeInTheDocument();
+
+    // Toggle off
+    fireEvent.click(stocBtn);
+    expect(screen.queryByText("Stochastic Slow")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Stoc:/)).not.toBeInTheDocument();
+
+    // Toggle back on
+    fireEvent.click(stocBtn);
+    expect(screen.getByText("Stochastic Slow")).toBeInTheDocument();
+    expect(screen.getByText(/Stoc:/)).toBeInTheDocument();
+  });
+
   it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
     vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,

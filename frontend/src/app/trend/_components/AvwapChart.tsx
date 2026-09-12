@@ -31,6 +31,7 @@ import {
 } from "./_lib/avwapCalc";
 import { hpFilterSeries, getHpLambdaForInterval } from "@/lib/hpFilter";
 import { calculateMacd, type MacdResult } from "@/lib/macd";
+import { calculateMultiStochasticSlow, type MultiStochResult } from "@/lib/stochastic";
 import {
   calculateSupertrend,
   DEFAULT_SUPERTREND_CONFIG,
@@ -180,6 +181,7 @@ export function AvwapChart() {
   const [showHp, setShowHp] = useState(true);
   const [showAmount, setShowAmount] = useState(false);
   const [showMacd, setShowMacd] = useState(true);
+  const [showStoc, setShowStoc] = useState(true);
   const isKospi = market === "kospi" && !symbol;
   const [showKhkLine, setShowKhkLine] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -523,6 +525,44 @@ export function AvwapChart() {
     return macdMap.get(time) ?? null;
   }, [chartData?.points, macdMap]);
 
+  // Stochastic Slow calculation (5,3,3 / 10,6,6 / 20,12,12)
+  const stochResult = useMemo<MultiStochResult | null>(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const bars = chartData.points
+      .map((p) => {
+        const time = toChartTime(p.date);
+        const close = toFiniteNumber(p.close);
+        if (!time || close == null) return null;
+        const high = toFiniteNumber(p.high) ?? close;
+        const low = toFiniteNumber(p.low) ?? close;
+        return { time, high, low, close };
+      })
+      .filter((b): b is NonNullable<typeof b> => b !== null);
+    return calculateMultiStochasticSlow(bars);
+  }, [chartData?.points]);
+
+  const stochMap = useMemo(() => {
+    const map = new Map<string, { short: number; mid: number; long: number }>();
+    if (!stochResult) return map;
+    const len = stochResult.short.length;
+    for (let i = 0; i < len; i++) {
+      const time = stochResult.short[i].time;
+      map.set(time, {
+        short: stochResult.short[i].k,
+        mid: stochResult.mid[i]?.k ?? 50,
+        long: stochResult.long[i]?.k ?? 50,
+      });
+    }
+    return map;
+  }, [stochResult]);
+
+  const latestStochInfo = useMemo(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const lastPt = chartData.points[chartData.points.length - 1];
+    const time = toChartTime(lastPt.date) || lastPt.date;
+    return stochMap.get(time) ?? null;
+  }, [chartData?.points, stochMap]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -543,6 +583,7 @@ export function AvwapChart() {
     supertrend?: { value: number; trend: 1 | -1 } | null;
     khkLine?: number | null;
     macd?: { macd: number; signal: number; histogram: number; color: string } | null;
+    stoch?: { short: number; mid: number; long: number } | null;
   } | null>(null);
 
   // Select stock from search
@@ -1059,6 +1100,46 @@ export function AvwapChart() {
           if (sigPl) sigPl.applyOptions({ axisLabelVisible: false });
         }
       }
+
+      // 6. Stochastic Slow Panel
+      if (showStoc) {
+        const timeStr = toChartTime(pt.date);
+        const sInfo = timeStr ? stochMap.get(timeStr) : undefined;
+        const shortPl = plMap.get("stoch_short");
+        const midPl = plMap.get("stoch_mid");
+        const longPl = plMap.get("stoch_long");
+
+        if (sInfo) {
+          if (shortPl) {
+            shortPl.applyOptions({
+              price: sInfo.short,
+              color: "#38bdf8",
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+          if (midPl) {
+            midPl.applyOptions({
+              price: sInfo.mid,
+              color: "#fb923c",
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+          if (longPl) {
+            longPl.applyOptions({
+              price: sInfo.long,
+              color: "#f43f5e",
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+        } else {
+          if (shortPl) shortPl.applyOptions({ axisLabelVisible: false });
+          if (midPl) midPl.applyOptions({ axisLabelVisible: false });
+          if (longPl) longPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
     };
 
     try {
@@ -1146,6 +1227,9 @@ export function AvwapChart() {
         ...(showMacd
           ? [{ id: "macd", name: "MACD (12, 26, 9)", height: 110 }]
           : []),
+        ...(showStoc
+          ? [{ id: "stoch", name: "Stochastic Slow (단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12)", height: 110 }]
+          : []),
       ];
 
       panels.forEach((panel, index) => {
@@ -1182,7 +1266,9 @@ export function AvwapChart() {
                     ? { top: 0.08, bottom: 0.08 }
                     : panel.id === "macd"
                       ? { top: 0.1, bottom: 0.1 }
-                      : { top: 0.05, bottom: 0.05 },
+                      : panel.id === "stoch"
+                        ? { top: 0.08, bottom: 0.08 }
+                        : { top: 0.05, bottom: 0.05 },
             autoScale: true,
             minimumWidth: 95,
             mode: panel.id === "main"
@@ -1917,6 +2003,101 @@ export function AvwapChart() {
           crosshairPriceLinesRef.current.set("macd_sig", sigHoverLine);
         }
 
+        // 6. Panel: Stochastic Slow (단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12)
+        else if (panel.id === "stoch") {
+          const stochFormat = {
+            type: "custom" as const,
+            formatter: (price: number) => price.toFixed(1),
+            minMove: 0.1,
+          };
+
+          // 1) 단기 (5, 3, 3) - Skyblue Solid
+          const shortSeries = chart.addSeries(LineSeries, {
+            color: "#38bdf8",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceFormat: stochFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(shortSeries);
+
+          // Overbought (80) & Oversold (20) guide lines
+          shortSeries.createPriceLine({
+            price: 80,
+            color: "rgba(244, 63, 94, 0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+          shortSeries.createPriceLine({
+            price: 20,
+            color: "rgba(56, 189, 248, 0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          const shortHoverLine = shortSeries.createPriceLine({
+            price: 0,
+            color: "#38bdf8",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("stoch_short", shortHoverLine);
+
+          // 2) 중기 (10, 6, 6) - Orange Solid
+          const midSeries = chart.addSeries(LineSeries, {
+            color: "#fb923c",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceFormat: stochFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(midSeries);
+
+          const midHoverLine = midSeries.createPriceLine({
+            price: 0,
+            color: "#fb923c",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("stoch_mid", midHoverLine);
+
+          // 3) 장기 (20, 12, 12) - Rose Dashed (점선)
+          const longSeries = chart.addSeries(LineSeries, {
+            color: "#f43f5e",
+            lineWidth: 2,
+            lineStyle: LineStyle.Dashed,
+            priceFormat: stochFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(longSeries);
+
+          const longHoverLine = longSeries.createPriceLine({
+            price: 0,
+            color: "#f43f5e",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("stoch_long", longHoverLine);
+        }
+
         seriesRef.current.set(panel.id, activeSeries);
 
         // TimeScale sync & dynamic vertical autoScale on scroll/pan
@@ -1969,6 +2150,7 @@ export function AvwapChart() {
           const stInfo = matchedPoint ? supertrendMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           const khkVal = matchedPoint ? khkMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) ?? null : null;
           const macdInfo = matchedPoint ? macdMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
+          const stochInfo = matchedPoint ? stochMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
             updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
@@ -1998,6 +2180,7 @@ export function AvwapChart() {
               supertrend: stInfo || null,
               khkLine: khkVal,
               macd: macdInfo || null,
+              stoch: stochInfo || null,
             });
           } else {
             setHoveredData(null);
@@ -2241,6 +2424,16 @@ export function AvwapChart() {
           }
         }
 
+        // 6. Stochastic Slow (단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12)
+        if (showStoc && stochResult) {
+          const stochSeriesList = seriesRef.current.get("stoch") || [];
+          if (stochSeriesList.length >= 3) {
+            stochSeriesList[0].setData(stochResult.shortSeries);
+            stochSeriesList[1].setData(stochResult.midSeries);
+            stochSeriesList[2].setData(stochResult.longSeries);
+          }
+        }
+
         // Initial visible range (show last 250 bars for 1D/1W, or all for 1M/1Y)
         const firstChart = chartsRef.current.values().next().value;
         if (firstChart) {
@@ -2262,7 +2455,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult, showStoc, stochResult]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -2443,6 +2636,7 @@ export function AvwapChart() {
     supertrend: latestSupertrendInfo,
     khkLine: latestKhkInfo,
     macd: latestMacdInfo,
+    stoch: latestStochInfo,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -2865,6 +3059,17 @@ export function AvwapChart() {
           >
             MACD
           </button>
+          <button
+            onClick={() => setShowStoc((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              showStoc
+                ? "bg-cyan-500/20 text-cyan-400 border-cyan-500/40 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title="클릭하여 Stochastic Slow(단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12) 패널 표시 ON/OFF"
+          >
+            Stoc
+          </button>
           {/* Supertrend Toggle & Settings Popover */}
           <div className="relative inline-flex items-center">
             <button
@@ -3256,6 +3461,20 @@ export function AvwapChart() {
                 </span>
               </span>
             )}
+            {showStoc && activeDisplay.stoch && (
+              <span>
+                Stoc:{" "}
+                <span className="text-sky-400 font-bold">
+                  단기 {activeDisplay.stoch.short.toFixed(1)}
+                </span>{" "}
+                <span className="text-orange-400 font-semibold">
+                  (중기 {activeDisplay.stoch.mid.toFixed(1)})
+                </span>{" "}
+                <span className="text-rose-400 font-semibold">
+                  (장기 {activeDisplay.stoch.long.toFixed(1)})
+                </span>
+              </span>
+            )}
           </>
         )}
       </div>
@@ -3405,7 +3624,7 @@ export function AvwapChart() {
           )}
 
           {/* Panel 3: Volume & VIX Fix */}
-          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd ? "border-b border-gray-800" : ""}`}>
+          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd || showStoc ? "border-b border-gray-800" : ""}`}>
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
               거래량 (막대) & VIX Fix (초록 점선)
             </div>
@@ -3414,7 +3633,7 @@ export function AvwapChart() {
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           {showAmount && (
-            <div className={`w-full relative bg-[#090d16] ${showMacd ? "border-b border-gray-800" : ""}`}>
+            <div className={`w-full relative bg-[#090d16] ${showMacd || showStoc ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
                 {Boolean(
@@ -3433,7 +3652,7 @@ export function AvwapChart() {
 
           {/* Panel 5: MACD (12, 26, 9) */}
           {showMacd && (
-            <div className="w-full relative bg-[#090d16]">
+            <div className={`w-full relative bg-[#090d16] ${showStoc ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span className="text-blue-400 font-bold">MACD (12, 26, 9)</span>
                 <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
@@ -3441,6 +3660,19 @@ export function AvwapChart() {
                 </span>
               </div>
               <div data-chart-id="macd" className="w-full" />
+            </div>
+          )}
+
+          {/* Panel 6: Stochastic Slow (5,3,3 / 10,6,6 / 20,12,12) */}
+          {showStoc && (
+            <div className="w-full relative bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span className="text-cyan-400 font-bold">Stochastic Slow</span>
+                <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
+                  (하늘: 5,3,3 / 주황: 10,6,6 / 로즈점선: 20,12,12)
+                </span>
+              </div>
+              <div data-chart-id="stoch" className="w-full" />
             </div>
           )}
         </div>

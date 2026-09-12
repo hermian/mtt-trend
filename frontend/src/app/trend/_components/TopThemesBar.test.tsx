@@ -119,7 +119,7 @@ describe("TopThemesBar - SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 �
       expect(slider).toHaveAttribute("value", "10");
 
       // 차트 컨테이너가 렌더링되었는지 확인
-      const chartContainer = document.querySelector(".recharts-responsive-container");
+      const chartContainer = screen.getByTestId("top-themes-chart");
       expect(chartContainer).toBeInTheDocument();
     });
   });
@@ -222,7 +222,7 @@ describe("TopThemesBar - SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 �
       expect(screen.queryByText(/에러/)).not.toBeInTheDocument();
 
       // 차트가 정상적으로 렌더링되어야 함
-      const chartContainer = document.querySelector(".recharts-responsive-container");
+      const chartContainer = screen.getByTestId("top-themes-chart");
       expect(chartContainer).toBeInTheDocument();
     });
   });

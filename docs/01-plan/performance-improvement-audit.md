@@ -31,10 +31,10 @@ dates 0.17s→0.004s 등)는 **실제로는 아티팩트가 대부분**이었고
 | 순위 | 대상 | 정정 실측 | 페이로드 | 원인 | 상태 |
 |------|------|-----------|----------|------|------|
 | ~~P0~~ | `GET /api/trend/top30` | **2.19s → 0.043s** | 5.2KB | 종목 30 × 기간 6 = parquet 180회 중복 읽기 | ✅ **해결 (46배)** |
-| **P0** | `/trend` 초기 JS | **1,652KB / 13청크** | — | 탭 24개 전부 정적 import (코드 스플리팅 없음) | 미착수 |
+| ~~P0~~ | `/trend` 초기 JS | **1,652KB → 741KB** | — | 탭 24개 전부 정적 import (코드 스플리팅 없음) | ✅ **해결 (−55.1%)** |
 | **P1** | `GET /api/charts/wics-rankings` | **0.330s** | **16.4MB** | 전체 월 무제한 반환 (페이지네이션 없음) | 미착수 |
 | **P1** | `GET /api/charts/macro` | **0.287s** | **13.7MB** | 요청마다 ~35개 SQL + ffill 재계산, 캐시 없음 | 미착수 |
-| **P1** | recharts 번들 | **811KB** | — | 컴포넌트 3개에서만 사용 | 미착수 |
+| ~~P1~~ | recharts 번들 | **811KB → 초기 번들에서 제거** | — | 컴포넌트 3개에서만 사용 | ✅ **해결** |
 | **P2** | `GET /api/charts/trend-up-breadth` | **0.212s** | 634KB | `etf_krx.parquet`(74MB) 매 요청 재읽기 | 미착수 |
 | **P2** | 블로킹 `async def` 핸들러 다수 | 동시 요청 직렬화 | — | sqlite/duckdb/pandas를 async 핸들러에서 직접 실행 | 미착수 |
 | **P3** | `foreign-flow` / `wics-index/all` / `persistent` / `wics-index/meta` | 0.104 ~ 0.115s | — | 파켓·정적 데이터 캐시 부재 | 미착수 |
@@ -193,13 +193,13 @@ sqlite/pandas를 돌리면 **그 시간 동안 다른 모든 요청이 대기**�
 
 ## 3. 프론트엔드 병목
 
-### 🔴 P0. `/trend` 코드 스플리팅 부재 — 초기 JS 1,652KB
+### ✅ P0 (완료). `/trend` 코드 스플리팅 — 초기 JS 1,652KB → 741KB
 
-**측정**
+**개선 전 측정** (라이브 `:3000` 에서 재확인)
 ```
-GET /trend  →  JS 청크 13개, 합계 1,652KB (gzip 전)
+GET /trend  →  JS 청크 13개, 합계 1,691,655 B = 1,652.0 KB (gzip 전)
 
-  811,804 B  f0547499…  ← recharts + d3
+  811,804 B  f0547499…  ← recharts + d3        (recharts 문자열 83회, ResponsiveContainer/CartesianGrid/BarChart 포함)
   224,632 B  8de41627…  ← trend 컴포넌트
   188,349 B  235fbcb7…  ← lightweight-charts
   156,337 B  092d9d2f…  ← trend 컴포넌트
@@ -209,33 +209,70 @@ GET /trend  →  JS 청크 13개, 합계 1,652KB (gzip 전)
 ```
 
 **원인** — `src/app/trend/page.tsx`가 **24개 컴포넌트를 전부 정적 import** 합니다.
-`next/dynamic`은 `KospiWeatherChart` **단 1개**에만 적용되어 있습니다.
+`next/dynamic`은 `KospiWeatherChart` **단 1개**에만 적용되어 있었습니다.
 
 페이지는 15개 탭을 `activeTab` 조건부 렌더링하므로 **한 번에 하나만 마운트**되지만,
 **코드는 전부 초기 번들에 포함**됩니다. 사용자는 탭 하나를 보기 위해 15개 탭 분량의 JS를
 모두 다운로드·파싱·실행합니다.
 
-**개선안** — 탭별 패널을 `next/dynamic`으로 전환:
+**적용한 변경** — 탭 전용 컴포넌트 **15개**를 `next/dynamic` + **`ssr: false`** 로 전환:
 
 ```tsx
-const AvwapChart = dynamic(() => import("./_components/AvwapChart").then(m => m.AvwapChart), { ssr: false });
-const MarketCapTop30Panel = dynamic(() => import("./_components/MarketCapTop30Panel").then(m => m.MarketCapTop30Panel), { ssr: false });
-// … 탭 진입 시점에만 로드
+const ThemeTrendChart = dynamic(
+  () => import("./_components/ThemeTrendChart").then((m) => m.ThemeTrendChart),
+  { ssr: false, loading: () => <TabLoading label="테마 RS 추이 차트" /> }
+);
 ```
 
-### 🟠 P1. recharts 811KB — 사용처는 3개뿐
+> ⚠️ **`ssr: false` 는 필수입니다.** 기본값(`ssr: true`)으로 두면 해당 청크가 여전히
+> 초기 페이로드에 포함되어 **분할 효과가 0** 입니다. `ssr: false` 일 때만 클라이언트
+> 지연 로드로 빠집니다. (→ `Directive:` 참조)
 
-`recharts` + `d3` 번들 811KB (전체 JS의 **49%**)
+기본 탭(overview)에서 즉시 보이는 `TopThemesBar`, `SurgingThemesCard`,
+`StockAnalysisTabs`, `ThemeStocksPanel` 은 **정적으로 유지**했습니다(지연 로드 시 LCP 악화).
+`InteractiveChart` 는 `import type` 만 남겨 타입 전용 import 로 모듈이 되돌아오지 않게 했습니다.
 
-| 파일 | 용도 |
-|------|------|
-| `TopThemesBar.tsx` | 테마별 RS 가로 막대 (overview 탭) |
-| `ThemeTrendChart.tsx` | 테마 RS 추이 (overview 탭) |
-| `MarketCapTop30Panel.tsx` | TOP30 스파크라인 (top30 탭) |
+**결과**
 
-반면 `lightweight-charts`(188KB)는 20개 컴포넌트에서 사용 중입니다.
-위 3개를 `dynamic`으로 분리하면 recharts를 초기 번들에서 제거할 수 있습니다.
-중장기적으로 `lightweight-charts`로 이관하면 **약 811KB 제거** (구현 비용 큼).
+| 단계 | 초기 JS | 감소 |
+|------|---------|------|
+| 개선 전 | 1,652.0 KB | — |
+| ① `dynamic` + `ssr:false` 15개 | 1,145.4 KB | **−506.6 KB (−30.7%)** |
+| ② + recharts 제거 (아래 P1) | **741.4 KB** | **−910.6 KB (−55.1%)** |
+
+런타임 교차검증: 새 빌드가 서빙하는 13개 스크립트 합계 **759,225 B = 741.4 KB** (계산값과 일치),
+13개 청크 및 6개 탭 라우트 전부 HTTP 200.
+
+> **배포 상태** — 위 수치는 **측정용 빌드**(별도 `distDir`)로 검증한 값입니다.
+> 라이브 `:3000` 은 아직 개선 전 빌드를 서빙 중이며(초기 JS **1,652.0 KB** 로 실측 일치),
+> 실제 반영은 커밋 후 `./deploy.sh` 또는 프론트 재빌드·`pm2 reload mtt-frontend` 시점입니다.
+> 검증 절차는 §6 참조.
+
+### ✅ P1 (완료). recharts 초기 번들에서 제거
+
+`recharts` + `d3` 번들 811KB (전체 JS의 **49%**). 사용처는 3개뿐이었습니다.
+
+| 파일 | 용도 | 처리 |
+|------|------|------|
+| `TopThemesBar.tsx` | 테마별 RS 가로 막대 (overview 탭) | **recharts 제거 — CSS/flexbox 로 재작성** |
+| `ThemeTrendChart.tsx` | 테마 RS 추이 (overview 탭) | `dynamic` 지연 로드로 전환 |
+| `MarketCapTop30Panel.tsx` | TOP30 스파크라인 (top30 탭) | `dynamic` 지연 로드로 전환 |
+
+`TopThemesBar` 는 단일 시리즈 가로 막대라 recharts가 과했습니다. 슬라이더(5~30, 기본 10),
+`EXCLUDED_THEMES` 필터, RS 기준 색상, 클릭→`onThemeClick`, 호버 툴팁, `stock_count` 라벨,
+로딩/에러/빈 상태를 **모두 보존**하고 렌더링만 CSS 로 바꿨습니다.
+
+> **정정** — 초판의 "recharts 811KB" 는 부정확했습니다. 811,804 B 청크는
+> **recharts + d3 + 공유 앱 코드**였고, 순수 recharts 는 약 **406KB** 입니다.
+> 다만 나머지 공유 코드도 지연 로드 경로로 옮겨가므로 **초기 페이로드에서 811KB 청크가
+> 통째로 사라지는 것**은 사실입니다.
+
+**동작 변경 1건 (의도적)** — 막대 순서. 기존 코드는 `sort desc → slice → reverse()` 로
+오름차순 배열을 만든 뒤 recharts vertical 레이아웃에 넘겼고, recharts는 첫 항목을 **아래**에
+그렸습니다. 결과적으로 **RS가 가장 낮은 테마가 맨 위**에 표시되어 코드 주석
+("Reverse so highest is at top") 과 **정반대**로 동작하고 있었습니다.
+새 구현은 **RS 높은 순서로 위→아래** 렌더합니다(주석·의도와 일치).
+Playwright DOM 실측으로 기존/신규 순서 차이를 확인했습니다.
 
 ### 🟡 P2. `React.memo` / `useCallback` 부재
 
@@ -271,14 +308,15 @@ PWA 설치 요건 충족용이며 캐싱 이득이 없습니다.
 | 단계 | 작업 | 난이도 | 효과 | 상태 |
 |------|------|--------|------|------|
 | ~~1~~ | ~~`compute_top30()` 파켓 읽기 통합~~ | 낮음 | top30 **2.19s → 0.047s** | ✅ **완료** |
-| **1** | `page.tsx` 탭 컴포넌트 `dynamic` 전환 | 낮음 | 초기 JS **1,652KB → ~600KB** | 대기 |
-| **2** | 블로킹 `async def` → `def` 일괄 전환 | 낮음 | 동시 요청 직렬화 해소 | 대기 |
-| **3** | wics-rankings 기본 구간 제한 | 낮음 | 16.4MB → 수 MB | 대기 |
-| **4** | macro mtime 캐시 + 구간 제한 | 낮음 | 0.287s → ~0.01s, 13.7MB → 감소 | 대기 |
-| **5** | trend-up-breadth / foreign-flow 파켓 캐시 | 중간 | 0.212s / 0.115s → 수십 ms | 대기 |
-| **6** | `useCallback` + `React.memo` 적용 | 중간 | 리렌더 비용 감소 | 대기 |
-| **7** | SW 정적/API 캐시 전략 | 중간 | 재방문 체감 속도 | 대기 |
-| **8** | recharts → lightweight-charts 이관 | 높음 | 번들 811KB 제거 | 대기 |
+| ~~1~~ | ~~`page.tsx` 탭 컴포넌트 `dynamic` 전환~~ | 낮음 | 초기 JS **1,652KB → 1,145KB** | ✅ **완료** |
+| ~~8~~ | ~~recharts 초기 번들 제거~~ | 높음 | 초기 JS **→ 741KB**, recharts 제거 | ✅ **완료** |
+| **1** | 블로킹 `async def` → `def` 일괄 전환 | 낮음 | 동시 요청 직렬화 해소 | 대기 |
+| **2** | wics-rankings 기본 구간 제한 | 낮음 | 16.4MB → 수 MB | 대기 |
+| **3** | macro mtime 캐시 + 구간 제한 | 낮음 | 0.287s → ~0.01s, 13.7MB → 감소 | 대기 |
+| **4** | trend-up-breadth / foreign-flow 파켓 캐시 | 중간 | 0.212s / 0.115s → 수십 ms | 대기 |
+| **5** | `useCallback` + `React.memo` 적용 | 중간 | 리렌더 비용 감소 | 대기 |
+| **6** | SW 정적/API 캐시 전략 | 중간 | 재방문 체감 속도 | 대기 |
+| **7** | `ThemeTrendChart` → lightweight-charts 이관 | 높음 | 잔여 recharts 의존 완전 제거 | 대기 |
 | (선택) | top30 `compare_days=60` 단일 쿼리화 | 중간 | 0.713s → ~0.05s | 대기 |
 
 ---

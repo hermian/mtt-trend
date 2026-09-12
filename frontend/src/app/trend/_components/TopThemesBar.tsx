@@ -1,22 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Cell,
-  ResponsiveContainer,
-  LabelList,
-} from "recharts";
 import { useThemesDaily } from "@/hooks/useThemes";
 import { ThemeDaily, DataSource } from "@/lib/api";
 
 // @MX:ANCHOR: 테마별 RS 점수 시각화 컴포넌트 (fan_in: trend/page.tsx)
 // @MX:REASON: 이 컴포넌트는 상위 테마 데이터를 시각화하는 주요 UI 진입점입니다.
+//
+// @MX:NOTE: P0-2 후속 — recharts 의존을 제거하고 CSS/flexbox 로 직접 렌더링한다.
+// @MX:REASON: 이 컴포넌트는 /trend 오버뷰 탭의 첫 섹션(접힘선 위)이라 next/dynamic
+//   으로 지연시킬 수 없었고, 그 결과 recharts 청크(약 406KB)가 초기 페이로드에
+//   남아 있었다. 가로 막대 차트는 recharts 없이도 동일하게 표현 가능하므로
+//   여기서 recharts 를 걷어내면 해당 청크가 초기 로드에서 완전히 빠진다.
+// @MX:WARN: 막대 순서는 `topThemes` 를 다시 reverse 한 순서로 위→아래 렌더한다.
+//   recharts vertical BarChart 는 첫 항목을 **아래**에 그렸기 때문에, 기존 동작
+//   (높은 RS 가 위)을 유지하려면 이 재역순이 필수다.
 
 // SPEC-MTT-004 F-01: 테마 개수 설정 상수
 const MIN_THEME_COUNT = 5;
@@ -26,6 +24,14 @@ const DEFAULT_THEME_COUNT = 10;
 // @MX:NOTE: SPEC-MTT-013 선택된 테마 강조 투명도
 const SELECTED_BAR_OPACITY = 1.0;
 const UNSELECTED_BAR_OPACITY = 0.4;
+
+// X축 눈금 (RS 점수 도메인 0-100)
+const AXIS_TICKS = [0, 25, 50, 75, 100];
+
+const Y_LABEL_WIDTH = 110;
+const RIGHT_GUTTER = 80;
+const ROW_HEIGHT = 40;
+const AXIS_HEIGHT = 28;
 
 interface TopThemesBarProps {
   date: string;
@@ -46,47 +52,29 @@ function getBarColor(rsScore: number): string {
   return "#3B82F6";
 }
 
-interface CustomTooltipProps {
-  active?: boolean;
-  payload?: Array<{ payload: ThemeDaily }>;
-}
-
-function CustomTooltip({ active, payload }: CustomTooltipProps) {
-  if (active && payload && payload.length) {
-    const data = payload[0].payload;
-    return (
-      <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl">
-        <p className="text-white font-semibold mb-1">{data.theme_name}</p>
-        <p className="text-blue-400 text-sm">
-          RS 점수: <span className="text-white">{(data.avg_rs ?? 0).toFixed(1)}</span>
-        </p>
+function ThemeTooltip({ theme }: { theme: ThemeDaily }) {
+  return (
+    <div className="bg-gray-800 border border-gray-600 rounded-lg p-3 shadow-xl">
+      <p className="text-white font-semibold mb-1">{theme.theme_name}</p>
+      <p className="text-blue-400 text-sm">
+        RS 점수: <span className="text-white">{(theme.avg_rs ?? 0).toFixed(1)}</span>
+      </p>
+      <p className="text-gray-400 text-sm">
+        종목 수: <span className="text-white">{theme.stock_count}개</span>
+      </p>
+      {theme.change_sum !== undefined && (
         <p className="text-gray-400 text-sm">
-          종목 수: <span className="text-white">{data.stock_count}개</span>
+          등락합:{" "}
+          <span
+            className={(theme.change_sum ?? 0) >= 0 ? "text-green-400" : "text-red-400"}
+          >
+            {(theme.change_sum ?? 0) >= 0 ? "+" : ""}
+            {(theme.change_sum ?? 0).toFixed(2)}%
+          </span>
         </p>
-        {data.change_sum !== undefined && (
-          <p className="text-gray-400 text-sm">
-            등락합:{" "}
-            <span
-              className={
-                (data.change_sum ?? 0) >= 0 ? "text-green-400" : "text-red-400"
-              }
-            >
-              {(data.change_sum ?? 0) >= 0 ? "+" : ""}
-              {(data.change_sum ?? 0).toFixed(2)}%
-            </span>
-          </p>
-        )}
-      </div>
-    );
-  }
-  return null;
-}
-
-// @MX:NOTE: SPEC-MTT-013 테마 바 클릭 핸들러
-function handleBarClick(data: ThemeDaily, onThemeClick?: (themeName: string) => void) {
-  if (onThemeClick) {
-    onThemeClick(data.theme_name);
-  }
+      )}
+    </div>
+  );
 }
 
 export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme }: TopThemesBarProps) {
@@ -95,6 +83,9 @@ export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme
   // SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 설정
   // 범위: 5-30, 기본값: 10
   const [themeCount, setThemeCount] = useState(DEFAULT_THEME_COUNT);
+
+  // @MX:NOTE: SPEC-MTT-013 호버 툴팁 대상 테마
+  const [hoveredTheme, setHoveredTheme] = useState<ThemeDaily | null>(null);
 
   if (isLoading) {
     return (
@@ -139,7 +130,10 @@ export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme
     .slice(0, themeCount)
     .reverse(); // Reverse so highest is at top of horizontal bar chart
 
-  const chartHeight = Math.max(topThemes.length * 40, 300);
+  const chartHeight = Math.max(topThemes.length * ROW_HEIGHT, 300);
+  // recharts vertical 레이아웃은 첫 항목을 아래에 그리므로, 위→아래 렌더를 위해 재역순
+  const rowsTopDown = [...topThemes].reverse();
+  const rowHeight = rowsTopDown.length > 0 ? chartHeight / rowsTopDown.length : ROW_HEIGHT;
 
   return (
     <div className="bg-gray-800 rounded-xl p-6">
@@ -160,66 +154,108 @@ export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme
         />
       </div>
 
-      <ResponsiveContainer width="100%" height={chartHeight}>
-        <BarChart
-          data={topThemes}
-          layout="vertical"
-          margin={{ top: 5, right: 80, left: 10, bottom: 5 }}
-        >
-          <CartesianGrid
-            strokeDasharray="3 3"
-            stroke="#374151"
-            horizontal={false}
-          />
-          <XAxis
-            type="number"
-            domain={[0, 100]}
-            tick={{ fill: "#9CA3AF", fontSize: 12 }}
-            axisLine={{ stroke: "#4B5563" }}
-            tickLine={{ stroke: "#4B5563" }}
-            label={{
-              value: "RS 점수",
-              position: "insideBottom",
-              fill: "#9CA3AF",
-              fontSize: 12,
-              offset: -5,
-            }}
-          />
-          <YAxis
-            type="category"
-            dataKey="theme_name"
-            width={110}
-            tick={{ fill: "#D1D5DB", fontSize: 11 }}
-            axisLine={{ stroke: "#4B5563" }}
-            tickLine={false}
-          />
-          <Tooltip
-            content={<CustomTooltip />}
-            cursor={{ fill: "rgba(255,255,255,0.05)" }}
-          />
-          <Bar
-            dataKey="avg_rs"
-            radius={[0, 4, 4, 0]}
-            onClick={(data) => handleBarClick(data, onThemeClick)}
-            cursor="pointer"
-          >
-            {topThemes.map((entry, index) => (
-              <Cell
-                key={`cell-${index}`}
-                fill={getBarColor(entry.avg_rs ?? 0)}
-                // @MX:NOTE: SPEC-MTT-013 선택된 바 강조 표시
-                opacity={selectedTheme === entry.theme_name ? SELECTED_BAR_OPACITY : UNSELECTED_BAR_OPACITY}
+      {/* @MX:NOTE: P0-2 후속 — recharts 대체 CSS 가로 막대 차트 */}
+      <div
+        data-testid="top-themes-chart"
+        className="relative"
+        style={{ height: chartHeight + AXIS_HEIGHT }}
+      >
+        {/* 플롯 영역 */}
+        <div className="flex" style={{ height: chartHeight }}>
+          {/* Y축: 테마명 */}
+          <div className="shrink-0 flex flex-col" style={{ width: Y_LABEL_WIDTH }}>
+            {rowsTopDown.map((theme) => (
+              <div
+                key={`ylab-${theme.theme_name}`}
+                className="flex items-center justify-end pr-2"
+                style={{ height: rowHeight }}
+                title={theme.theme_name}
+              >
+                <span className="text-[11px] text-gray-300 truncate">{theme.theme_name}</span>
+              </div>
+            ))}
+          </div>
+
+          {/* 플롯 본체 (오른쪽 80px 는 종목 수 라벨용 여백) */}
+          <div className="flex-1 relative" style={{ paddingRight: RIGHT_GUTTER }}>
+            {/* 세로 그리드 라인 */}
+            {AXIS_TICKS.map((t) => (
+              <div
+                key={`grid-${t}`}
+                className="absolute inset-y-0 border-l border-dashed border-gray-700"
+                style={{ left: `${t}%` }}
+                aria-hidden="true"
               />
             ))}
-            <LabelList
-              dataKey="stock_count"
-              position="right"
-              formatter={(value: number) => `${value}종`}
-              style={{ fill: "#9CA3AF", fontSize: 11 }}
-            />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
+
+            {/* 막대 행 */}
+            {rowsTopDown.map((theme) => {
+              const rs = Math.max(0, Math.min(100, theme.avg_rs ?? 0));
+              const isSelected = selectedTheme === theme.theme_name;
+              return (
+                <div
+                  key={`row-${theme.theme_name}`}
+                  className="relative"
+                  style={{ height: rowHeight }}
+                  onMouseEnter={() => setHoveredTheme(theme)}
+                  onMouseLeave={() => setHoveredTheme(null)}
+                >
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`${theme.theme_name} RS ${rs.toFixed(1)}`}
+                    onClick={() => onThemeClick?.(theme.theme_name)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onThemeClick?.(theme.theme_name);
+                      }
+                    }}
+                    className="absolute left-0 top-1/2 -translate-y-1/2 h-6 rounded-r cursor-pointer transition-opacity"
+                    style={{
+                      width: `${rs}%`,
+                      backgroundColor: getBarColor(rs),
+                      opacity: isSelected ? SELECTED_BAR_OPACITY : UNSELECTED_BAR_OPACITY,
+                    }}
+                  />
+                  <span
+                    className="absolute top-1/2 -translate-y-1/2 text-[11px] text-gray-400 whitespace-nowrap pointer-events-none"
+                    style={{ left: `calc(${rs}% + 8px)` }}
+                  >
+                    {theme.stock_count}종
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* X축 눈금 */}
+        <div className="flex" style={{ height: AXIS_HEIGHT }}>
+          <div className="shrink-0" style={{ width: Y_LABEL_WIDTH }} />
+          <div className="flex-1 relative" style={{ paddingRight: RIGHT_GUTTER }}>
+            {AXIS_TICKS.map((t) => (
+              <span
+                key={`tick-${t}`}
+                className="absolute top-1 -translate-x-1/2 text-[11px] text-gray-500"
+                style={{ left: `${t}%` }}
+              >
+                {t}
+              </span>
+            ))}
+            <span className="absolute inset-x-0 top-5 text-center text-[11px] text-gray-500">
+              RS 점수
+            </span>
+          </div>
+        </div>
+
+        {/* 툴팁 */}
+        {hoveredTheme && (
+          <div className="absolute right-2 top-2 z-20 pointer-events-none">
+            <ThemeTooltip theme={hoveredTheme} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }

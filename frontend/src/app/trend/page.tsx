@@ -3,13 +3,39 @@
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useDates } from "@/hooks/useThemes";
+import dynamic from "next/dynamic";
 import { TopThemesBar } from "./_components/TopThemesBar";
 import { SurgingThemesCard } from "./_components/SurgingThemesCard";
-import { ThemeTrendChart } from "./_components/ThemeTrendChart";
 import { StockAnalysisTabs } from "./_components/StockAnalysisTabs";
 import { ThemeStocksPanel } from "./_components/ThemeStocksPanel";
-import dynamic from "next/dynamic";
-import InteractiveChart, { IndicatorConfig } from "./_components/InteractiveChart";
+import type { IndicatorConfig } from "./_components/InteractiveChart";
+import type { DataSource } from "@/lib/api";
+
+// ───────────────────────────────────────────────────────────────────────────
+// P0-2 코드 스플리팅 — 탭 전용 컴포넌트는 next/dynamic 으로 분리한다.
+//
+// @MX:NOTE: 활성 탭은 URL(?tab=) 로 항상 1개만 렌더되지만, 정적 import 상태에서는
+//   컴포넌트 모듈 그래프 전체가 /trend 첫 로드에 함께 실린다 (실측 1,652KB).
+//   탭 전용 컴포넌트를 분리하면 그 탭에 진입할 때만 청크를 내려받는다.
+// @MX:REASON: `ssr: false` 가 필수다. 기본값(ssr: true)이면 청크가 초기 페이로드에
+//   포함되어 분할 효과가 사라진다. 차트 컴포넌트는 canvas/DOM 전용이라 SSR 로 얻을
+//   것이 없으며, 기존 KospiWeatherChart 도 같은 이유로 ssr:false 였다.
+// @MX:WARN: 오버뷰 탭 컴포넌트 중 TopThemesBar·SurgingThemesCard·StockAnalysisTabs·
+//   ThemeStocksPanel 은 기본 진입 탭의 접힘선 위 콘텐츠라 의도적으로 정적 import 로
+//   남긴다. ThemeTrendChart 는 같은 탭이지만 3번째 섹션(접힘선 아래)이라 지연 로드한다.
+// @MX:NOTE: P0-2 후속 — TopThemesBar 의 recharts 의존을 제거했고 ThemeTrendChart 를
+//   지연시켰으므로, recharts 청크(약 406KB)는 더 이상 /trend 초기 페이로드에 포함되지
+//   않는다 (top30 탭의 MarketCapTop30Panel 에서만 지연 로드된다).
+// ───────────────────────────────────────────────────────────────────────────
+
+function TabLoading({ label }: { label: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center h-full min-h-[240px] gap-3 text-emerald-400 font-mono text-xs animate-pulse">
+      <div className="w-6 h-6 border-2 border-emerald-500/30 border-t-emerald-400 rounded-full animate-spin" />
+      <span>{label} 로딩 중...</span>
+    </div>
+  );
+}
 
 const KospiWeatherChart = dynamic(
   () => import("./_components/KospiWeatherChart"),
@@ -22,20 +48,83 @@ const KospiWeatherChart = dynamic(
     ),
   }
 );
-import { AboveMaChart } from "./_components/AboveMaChart";
-import { MacroChart } from "./_components/MacroChart";
-import { ValuationBandChart } from "./_components/ValuationBandChart";
-import { WicsRankingPanel } from "./_components/WicsRankingPanel";
-import { WicsIndexExplorer } from "./_components/WicsIndexExplorer";
-import { MarketFlowChart } from "./_components/MarketFlowChart";
-import { ForeignFlowChart } from "./_components/ForeignFlowChart";
-import { StockbeeMmPanel } from "./_components/StockbeeMmPanel";
-import { MarketCapTop30Panel } from "./_components/MarketCapTop30Panel";
-import { AvwapChart } from "./_components/AvwapChart";
-import { AvwapSugeubChart } from "./_components/AvwapSugeubChart";
-import { ReturnComparisonPanel } from "./_components/ReturnComparisonPanel";
-import { TrendUpBreadthPanel } from "./_components/TrendUpBreadthPanel";
-import type { DataSource } from "@/lib/api";
+
+const InteractiveChart = dynamic(() => import("./_components/InteractiveChart"), {
+  ssr: false,
+  loading: () => <TabLoading label="기술적 지표 차트" />,
+});
+
+const AvwapChart = dynamic(
+  () => import("./_components/AvwapChart").then((m) => m.AvwapChart),
+  { ssr: false, loading: () => <TabLoading label="AVWAP 차트" /> }
+);
+
+const AvwapSugeubChart = dynamic(
+  () => import("./_components/AvwapSugeubChart").then((m) => m.AvwapSugeubChart),
+  { ssr: false, loading: () => <TabLoading label="AVWAP 수급 차트" /> }
+);
+
+const AboveMaChart = dynamic(
+  () => import("./_components/AboveMaChart").then((m) => m.AboveMaChart),
+  { ssr: false, loading: () => <TabLoading label="Above MA 차트" /> }
+);
+
+const MarketFlowChart = dynamic(
+  () => import("./_components/MarketFlowChart").then((m) => m.MarketFlowChart),
+  { ssr: false, loading: () => <TabLoading label="수급 차트" /> }
+);
+
+const MacroChart = dynamic(
+  () => import("./_components/MacroChart").then((m) => m.MacroChart),
+  { ssr: false, loading: () => <TabLoading label="매크로 차트" /> }
+);
+
+const ValuationBandChart = dynamic(
+  () => import("./_components/ValuationBandChart").then((m) => m.ValuationBandChart),
+  { ssr: false, loading: () => <TabLoading label="밸류에이션 차트" /> }
+);
+
+const ForeignFlowChart = dynamic(
+  () => import("./_components/ForeignFlowChart").then((m) => m.ForeignFlowChart),
+  { ssr: false, loading: () => <TabLoading label="외인 수급 차트" /> }
+);
+
+const WicsRankingPanel = dynamic(
+  () => import("./_components/WicsRankingPanel").then((m) => m.WicsRankingPanel),
+  { ssr: false, loading: () => <TabLoading label="WICS 랭킹" /> }
+);
+
+const WicsIndexExplorer = dynamic(
+  () => import("./_components/WicsIndexExplorer").then((m) => m.WicsIndexExplorer),
+  { ssr: false, loading: () => <TabLoading label="WICS 인덱스 탐색기" /> }
+);
+
+const StockbeeMmPanel = dynamic(
+  () => import("./_components/StockbeeMmPanel").then((m) => m.StockbeeMmPanel),
+  { ssr: false, loading: () => <TabLoading label="Stockbee MM" /> }
+);
+
+const MarketCapTop30Panel = dynamic(
+  () => import("./_components/MarketCapTop30Panel").then((m) => m.MarketCapTop30Panel),
+  { ssr: false, loading: () => <TabLoading label="시가총액 TOP 30" /> }
+);
+
+const ReturnComparisonPanel = dynamic(
+  () => import("./_components/ReturnComparisonPanel").then((m) => m.ReturnComparisonPanel),
+  { ssr: false, loading: () => <TabLoading label="수익률 비교" /> }
+);
+
+const TrendUpBreadthPanel = dynamic(
+  () => import("./_components/TrendUpBreadthPanel").then((m) => m.TrendUpBreadthPanel),
+  { ssr: false, loading: () => <TabLoading label="Trend Up Breadth" /> }
+);
+
+// @MX:NOTE: 오버뷰 탭 3번째 섹션이라 접힘선 아래 — 지연 로드해 recharts 를 초기
+//   페이로드에서 제거한다. 자체 테스트는 컴포넌트를 직접 렌더하므로 영향 없다.
+const ThemeTrendChart = dynamic(
+  () => import("./_components/ThemeTrendChart").then((m) => m.ThemeTrendChart),
+  { ssr: false, loading: () => <TabLoading label="테마 RS 추이 차트" /> }
+);
 
 const SOURCE_LABELS: Record<DataSource, string> = {
   "52w_high": "52주 신고가",

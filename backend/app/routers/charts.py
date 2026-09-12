@@ -174,6 +174,15 @@ async def get_trend_up_breadth_endpoint(
     return load_trend_up_breadth_data(universe=universe, start_date=start_date, end_date=end_date)
 
 
+# /macro 응답 캐시.
+# macro.db 는 평일 18:27 KST 수집 후 1회 갱신되므로 mtime 무효화로 충분하다
+# (_CHART_CACHE / _AVWAP_CACHE 와 동일한 프로젝트 표준 패턴).
+# 응답이 ~13MB 로 크고, 동시 요청 시 재계산이 메모리를 크게 압박하므로
+# 최근 _MACRO_CACHE_MAX 개만 유지해 무한 증가를 막는다.
+_MACRO_CACHE: dict[tuple, tuple[float, MacroDataResponse]] = {}
+_MACRO_CACHE_MAX = 4
+
+
 @router.get("/macro", response_model=MacroDataResponse)
 def get_macro_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
@@ -237,6 +246,15 @@ def get_macro_chart_data(
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
         return MacroDataResponse(data=[])
+
+    try:
+        db_mtime = os.path.getmtime(db_path)
+    except OSError:
+        db_mtime = 0.0
+    cache_key = (start_date, end_date)
+    cached = _MACRO_CACHE.get(cache_key)
+    if cached is not None and cached[0] == db_mtime:
+        return cached[1]
 
     effective_start_date = start_date if start_date is not None else "1980-01-01"
 
@@ -527,7 +545,11 @@ def get_macro_chart_data(
         )
         for d, p in sorted(merged.items())
     ]
-    return MacroDataResponse(data=result)
+    response = MacroDataResponse(data=result)
+    if len(_MACRO_CACHE) >= _MACRO_CACHE_MAX:
+        _MACRO_CACHE.pop(next(iter(_MACRO_CACHE)))
+    _MACRO_CACHE[cache_key] = (db_mtime, response)
+    return response
 
 
 @router.get("/valuation-bands", response_model=ValuationBandsResponse)

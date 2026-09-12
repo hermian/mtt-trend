@@ -175,7 +175,7 @@ async def get_trend_up_breadth_endpoint(
 
 
 @router.get("/macro", response_model=MacroDataResponse)
-async def get_macro_chart_data(
+def get_macro_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)")
 ):
@@ -531,7 +531,7 @@ async def get_macro_chart_data(
 
 
 @router.get("/valuation-bands", response_model=ValuationBandsResponse)
-async def get_valuation_bands(
+def get_valuation_bands(
     index: str = Query("kospi", description="kospi | kospi200 | kosdaq | kosdaq150"),
     mode: str = Query("pbr", description="pbr | per"),
     multiples: Optional[str] = Query(
@@ -613,7 +613,7 @@ async def get_valuation_bands(
 
 
 @router.get("/foreign-flow", response_model=ForeignFlowResponse)
-async def get_foreign_flow_chart_data(
+def get_foreign_flow_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
     etf: bool = Query(False, description="True면 KOSPI 현물+ETF 수급 캐시 사용"),
@@ -631,7 +631,7 @@ async def get_foreign_flow_chart_data(
 
 
 @router.get("/market-flow", response_model=MarketFlowResponse)
-async def get_market_flow_chart_data(
+def get_market_flow_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)")
 ):
@@ -691,7 +691,7 @@ async def get_market_flow_chart_data(
         conn.close()
 
 @router.get("/market-flow/dates", response_model=list[str])
-async def get_market_flow_dates():
+def get_market_flow_dates():
     """market_flow 테이블의 모든 고유 날짜 목록을 반환합니다."""
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
@@ -715,7 +715,7 @@ def get_stock_master_db_path() -> str:
     return os.path.expanduser("~/.cache/db/stock_master.db")
 
 @router.get("/wics-months", response_model=WicsMonthResponse)
-async def get_wics_months():
+def get_wics_months():
     """
     wics_monthly_rankings 테이블에서 고유한 YearMonth 목록을 시간 오름차순으로 반환합니다.
     """
@@ -737,7 +737,7 @@ async def get_wics_months():
         conn.close()
 
 @router.get("/wics-rankings", response_model=WicsRankingsResponse)
-async def get_wics_rankings(
+def get_wics_rankings(
     start_month: Optional[str] = Query(None, description="시작월 (YYYY-MM)"),
     end_month: Optional[str] = Query(None, description="종료월 (YYYY-MM)")
 ):
@@ -843,7 +843,7 @@ async def get_wics_rankings(
         conn.close()
 
 @router.get("/wics-weeks", response_model=WicsWeekResponse)
-async def get_wics_weeks():
+def get_wics_weeks():
     """
     wics_weekly_rankings 테이블에서 고유한 YearWeek 목록을 시간 오름차순으로 반환합니다.
     """
@@ -866,7 +866,7 @@ async def get_wics_weeks():
 
 
 @router.get("/wics-rankings/weekly", response_model=WicsRankingsResponse)
-async def get_wics_weekly_rankings(
+def get_wics_weekly_rankings(
     start_week: Optional[str] = Query(None, description="시작주차 (YYYY-Www)"),
     end_week: Optional[str] = Query(None, description="종료주차 (YYYY-Www)")
 ):
@@ -981,7 +981,7 @@ async def get_wics_weekly_rankings(
 
 
 @router.get("/wics-index", response_model=WicsIndexResponse)
-async def get_wics_index(
+def get_wics_index(
     wics: str = Query(..., description="WICS 섹터명"),
     start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
@@ -1040,7 +1040,7 @@ async def get_wics_index(
 
 
 @router.get("/wics-index/meta", response_model=WicsIndexMetaResponse)
-async def get_wics_index_meta():
+def get_wics_index_meta():
     """wics_daily_index 섹터 목록 및 날짜 범위."""
     db_path = get_stock_master_db_path()
     if not os.path.exists(db_path):
@@ -1070,7 +1070,7 @@ async def get_wics_index_meta():
 
 
 @router.get("/wics-index/all", response_model=WicsIndexAllResponse)
-async def get_wics_index_all(
+def get_wics_index_all(
     start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
     end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
     tf: str = Query("D", description="D | W | M"),

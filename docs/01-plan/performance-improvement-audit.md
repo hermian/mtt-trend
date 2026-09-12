@@ -243,10 +243,12 @@ const ThemeTrendChart = dynamic(
 런타임 교차검증: 새 빌드가 서빙하는 13개 스크립트 합계 **759,225 B = 741.4 KB** (계산값과 일치),
 13개 청크 및 6개 탭 라우트 전부 HTTP 200.
 
-> **배포 상태** — 위 수치는 **측정용 빌드**(별도 `distDir`)로 검증한 값입니다.
-> 라이브 `:3000` 은 아직 개선 전 빌드를 서빙 중이며(초기 JS **1,652.0 KB** 로 실측 일치),
-> 실제 반영은 커밋 후 `./deploy.sh` 또는 프론트 재빌드·`pm2 reload mtt-frontend` 시점입니다.
-> 검증 절차는 §6 참조.
+> **배포 완료** — 2026-09-12 20:59 사용자가 `./deploy.sh` 를 직접 실행해 **라이브 반영 완료**.
+> 라이브 `:3000` 실측 초기 JS **759,225 B = 741.4 KB** (측정용 빌드 값과 **바이트 단위 일치**).
+> 811KB recharts 청크가 초기 페이로드에서 사라졌고 최대 청크는 224,632 B 로 내려갔다.
+> 검증: `/trend` 청크 13/13 = 200, `/` 307, `/trend`·`/heatmap` 200,
+> 프록시 경유 API 전부 200. (에이전트는 샌드박스 대량삭제 가드 때문에 빌드를 완주할 수 없어,
+> **빌드·배포는 사용자가 수행**하는 것으로 운영 규칙을 확정했다.)
 
 ### ✅ P1 (완료). recharts 초기 번들에서 제거
 
@@ -376,3 +378,82 @@ backend/.venv/bin/python /tmp/verify_top30.py
 curl -4 -s -o /dev/null -w "ttfb=%{time_starttransfer}s total=%{time_total}s\n" \
   "http://127.0.0.1:8000/api/trend/top30"
 ```
+
+---
+
+## 7. 진행 상황 및 다음 단계 (2026-09-12 21:30 기준)
+
+### 완료
+
+| # | 항목 | 결과 | 커밋 |
+|---|------|------|------|
+| 1 | `compute_top30()` N+1 파켓 읽기 | 2.19s → **0.047s** (46배), 파켓 읽기 180 → 6회 | `0e89a0a` |
+| 2 | `/trend` 코드 스플리팅 (`dynamic` + `ssr:false` 15개) | 초기 JS 1,652.0 → 1,145.4 KB | `9dae02a` |
+| 3 | recharts 초기 번들 제거 (`TopThemesBar` 재작성 + 2개 지연 로드) | → **741.4 KB** (−55.1%) | `9dae02a` |
+| 4 | **프로덕션 배포** | 라이브 `:3000` 실측 **759,225 B = 741.4 KB** (바이트 단위 일치) | — (사용자 실행) |
+| 5 | **P2** 블로킹 `async def` → `def` **12개** | 이벤트 루프 직렬화 해소 (검증 완료, 배포 대기) | 미커밋 |
+
+- 커밋 2건은 **미푸시** 상태 (`origin/main` 대비 ahead 2).
+- **P2 변경은 워킹트리에 미커밋** — 배포 대기.
+- 이슈 **#50** OPEN (`performance` 라벨).
+
+### 남은 병목 — 2026-09-12 21:00 재측정 (`curl -4 http://127.0.0.1:8000`, 3회 최솟값)
+
+| 순위 | 대상 | 실측 | 페이로드 |
+|------|------|------|----------|
+| **P1** | `GET /api/charts/wics-rankings` | **0.316s** | **15.6MB** |
+| **P1** | `GET /api/charts/macro` | **0.280s** | **13.0MB** |
+| **P2** | `GET /api/charts/trend-up-breadth?universe=krx300` | 0.221s | 619KB |
+| **P3** | `foreign-flow` / `wics-index/all` / `persistent` / `wics-index/meta` | 0.100 ~ 0.113s | — |
+| **P3** | `React.memo` / `useCallback` 부재 | 0건 | — |
+| (선택) | top30 `compare_days=60` 단일 쿼리화 | 0.713s → ~0.05s | — |
+
+### ✅ 완료 — P2: 블로킹 `async def` → `def` **12개** 전환
+
+**전수 조사 정정** — 최초 보고는 11개였으나 스캐너가 **본문에 중첩 `def` 헬퍼를 가진**
+핸들러(`get_macro_chart_data`)를 놓쳤다. 실제 대상은 **12개**다.
+`get_foreign_flow_chart_data` 는 블로킹 IO 를 동기 헬퍼(`load_foreign_flow_data`)에
+위임하므로 휴리스틱에 안 걸렸지만 동일한 문제였다.
+
+```
+라우트 핸들러 41개
+  ├─ async def          28개  →  16개   (12개 전환)
+  └─ def (threadpool)   13개  →  25개
+블로킹 async def (await 0회):  11개 →   0개
+```
+
+- 변경: `backend/app/routers/charts.py` **12줄** — `async def` → `def` 만, 다른 줄 무변경.
+  `git diff` 검증: added 12 / removed 12, 전부 `async def X(` → `def X(` 패턴 일치.
+- 대상: `get_macro_chart_data`, `get_valuation_bands`, `get_foreign_flow_chart_data`,
+  `get_market_flow_chart_data`, `get_market_flow_dates`, `get_wics_months`, `get_wics_rankings`,
+  `get_wics_weeks`, `get_wics_weekly_rankings`, `get_wics_index`, `get_wics_index_meta`,
+  `get_wics_index_all`
+- **효과**: 단일 요청 지연은 그대로지만, 블로킹 IO 가 이벤트 루프를 점유해
+  **다른 모든 요청을 직렬화하던 문제**가 사라진다. 프론트가 탭 전환 시 여러 API 를
+  동시에 호출하는 구조라 체감 효과가 크다.
+- **위험**: 낮음. 시그니처 1단어 변경, 로직·반환값 불변.
+  `async def` → `def` 는 FastAPI 가 threadpool 로 보내는 표준 동작이다.
+
+**검증 (2026-09-12)**
+
+| 검증 | 방법 | 결과 |
+|------|------|------|
+| 응답 동등성 | `httpx.ASGITransport`(lifespan 미기동) 로 변경 전/후 13개 요청 sha256 비교 | **13/13 동일** |
+| macro 동등성 | 라이브 구코드 서버 응답과 sha256 비교 (2개 케이스) | **MATCH** |
+| 백엔드 테스트 | `.venv/bin/pytest tests/ -q` | **226 passed** |
+| 잔여 스캔 | 블로킹 `async def` (await 0회) 전수 조사 | **0개** |
+
+> ⚠️ **pytest 실행 시 `TMPDIR` 를 워크스페이스 안으로 지정할 것.** 기본 temp 경로
+> (`/private/var/folders/...`)는 샌드박스 브로커가 `mkdir` 을 막아 **226건 전부 ERROR** 가 된다.
+> ```bash
+> cd backend && TMPDIR="$PWD/.pytest-tmp" .venv/bin/pytest tests/ -q
+> ```
+
+**다음 후보**: P1 `wics-rankings`(기본 구간 제한 + mtime 캐시) → P1 `macro`(mtime 캐시 + 구간 제한)
+→ P2 `trend-up-breadth` 파켓 캐시.
+
+### 운영 규칙 (확정)
+
+- **빌드·배포는 에이전트가 실행하지 않는다.** 필요 시 사용자에게 실행을 요청한다.
+  (에이전트는 샌드박스 대량삭제 가드 때문에 Next.js 빌드를 완주할 수 없다.)
+- 커밋과 푸시는 **각각 별도의 명시적 지시**가 있을 때만 수행한다.

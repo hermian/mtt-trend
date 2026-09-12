@@ -45,7 +45,7 @@ from app.utils.wics_index_utils import (
 )
 from app.utils.chart_utils import load_chart_data
 from app.utils.above_ma_utils import load_above_ma_data
-from app.utils.foreign_flow_utils import load_foreign_flow_data
+from app.utils.foreign_flow_utils import load_foreign_flow_data, foreign_flow_sources
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
 from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
@@ -106,6 +106,41 @@ def _normalize_ism_observations(
         if prev is None or release_s >= prev[0]:
             by_ref[ref_s] = (release_s, float(value))
     return [(ref, val) for ref, (_rel, val) in sorted(by_ref.items())]
+
+
+# ---------------------------------------------------------------------------
+# mtime 기반 인메모리 응답 캐시 (공용)
+# ---------------------------------------------------------------------------
+# 데이터는 장 마감 후 1회 갱신되므로 원본 파일의 mtime 을 무효화 키로 쓰면 충분하다
+# (_CHART_CACHE / _AVWAP_CACHE / _MACRO_CACHE 와 동일한 프로젝트 표준 패턴).
+# 캐시별 상한을 두어 무한 증가를 막는다.
+
+
+def _file_mtime(path) -> float:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def _newest_mtime(*paths) -> float:
+    """여러 원본 파일 중 가장 최근 mtime. 하나라도 갱신되면 캐시가 무효화된다."""
+    newest = 0.0
+    for p in paths:
+        newest = max(newest, _file_mtime(p))
+    return newest
+
+
+def _cached(cache: dict, cache_max: int, key, mtime: float, compute):
+    """mtime 키 캐시 조회. 미스면 compute() 실행 후 저장하고, 상한을 넘으면 가장 오래된 항목을 버린다."""
+    hit = cache.get(key)
+    if hit is not None and hit[0] == mtime:
+        return hit[1]
+    value = compute()
+    if len(cache) >= cache_max:
+        cache.pop(next(iter(cache)))
+    cache[key] = (mtime, value)
+    return value
 
 
 @router.get("/data", response_model=ChartDataResponse)
@@ -634,6 +669,13 @@ def get_valuation_bands(
     )
 
 
+# /foreign-flow 응답 캐시.
+# 매 요청 kospi_investor(.etf).parquet + kospi200_future.parquet + macro.db 를 다시 읽어
+# ~112ms 가 걸린다(응답 900KB). 원본 파일들은 장 마감 후 1회 갱신되므로 mtime 무효화로 충분하다.
+_FOREIGN_FLOW_CACHE: dict[tuple, tuple[float, ForeignFlowResponse]] = {}
+_FOREIGN_FLOW_CACHE_MAX = 4
+
+
 @router.get("/foreign-flow", response_model=ForeignFlowResponse)
 def get_foreign_flow_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
@@ -645,10 +687,20 @@ def get_foreign_flow_chart_data(
 
     단위: 순매수/MA = 억원, kospi = 지수.
     """
-    rows = load_foreign_flow_data(start_date, end_date, etf=etf)
-    return ForeignFlowResponse(
-        etf=etf,
-        data=[ForeignFlowPoint(**row) for row in rows],
+
+    def _compute() -> ForeignFlowResponse:
+        rows = load_foreign_flow_data(start_date, end_date, etf=etf)
+        return ForeignFlowResponse(
+            etf=etf,
+            data=[ForeignFlowPoint(**row) for row in rows],
+        )
+
+    return _cached(
+        _FOREIGN_FLOW_CACHE,
+        _FOREIGN_FLOW_CACHE_MAX,
+        (start_date, end_date, etf),
+        _newest_mtime(*foreign_flow_sources()),
+        _compute,
     )
 
 
@@ -1061,9 +1113,13 @@ def get_wics_index(
         conn.close()
 
 
-@router.get("/wics-index/meta", response_model=WicsIndexMetaResponse)
-def get_wics_index_meta():
-    """wics_daily_index 섹터 목록 및 날짜 범위."""
+# /wics-index/meta 응답 캐시 (파라미터 없음 → 단일 엔트리).
+# wics_daily_index 약 59만 행에 DISTINCT 스캔을 두 번(섹터 목록 + MIN/MAX) 돌려 ~98ms 를
+# 쓰지만 응답은 1.5KB 이고 사실상 정적이다. stock_master.db 갱신 시에만 무효화한다.
+_WICS_INDEX_META_CACHE: dict[tuple, tuple[float, WicsIndexMetaResponse]] = {}
+
+
+def _load_wics_index_meta() -> WicsIndexMetaResponse:
     db_path = get_stock_master_db_path()
     if not os.path.exists(db_path):
         return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
@@ -1089,6 +1145,18 @@ def get_wics_index_meta():
         return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
     finally:
         conn.close()
+
+
+@router.get("/wics-index/meta", response_model=WicsIndexMetaResponse)
+def get_wics_index_meta():
+    """wics_daily_index 섹터 목록 및 날짜 범위."""
+    return _cached(
+        _WICS_INDEX_META_CACHE,
+        1,
+        (),
+        _file_mtime(get_stock_master_db_path()),
+        _load_wics_index_meta,
+    )
 
 
 @router.get("/wics-index/all", response_model=WicsIndexAllResponse)

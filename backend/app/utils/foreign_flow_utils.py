@@ -24,6 +24,15 @@ _KOSPI_CSV_CANDIDATES = [
 # 하위 호환: 테스트가 _KOSPI_CANDIDATES 를 패치할 수 있음
 _KOSPI_CANDIDATES = _KOSPI_CSV_CANDIDATES
 
+
+def foreign_flow_sources() -> tuple[Path, ...]:
+    """이 모듈이 읽는 데이터 파일들 — 라우터의 mtime 캐시 무효화 키로 쓴다.
+
+    경로를 이 모듈이 소유하므로, 라우터가 경로를 다시 나열하지 않도록 여기서 노출한다.
+    """
+    return (*_SPOT_PATHS.values(), _FUTURE_PATH, _MACRO_DB, *_KOSPI_CSV_CANDIDATES)
+
+
 # KRX 금액(원) → 억원
 _WON_TO_EOK = 1e8
 

@@ -450,7 +450,8 @@ curl -4 -s -o /dev/null -w "ttfb=%{time_starttransfer}s total=%{time_total}s\n" 
 > ```
 
 **진행 상황**: P1 `wics-rankings` ✅ → P1 `macro` ✅ → P2 `trend-up-breadth` ✅
-(+ `async def` 누락 11건 보완) → **다음: P3 소항목.**
+(+ `async def` 누락 11건 보완) → P3 캐시 ✅ 2/4 (`wics-index/meta`, `foreign-flow`)
+→ **다음: P3 나머지(`wics-index/all`, `persistent`) 또는 프론트 P3(`React.memo`).**
 
 ### ⚠️ P2 배포 후 발견 — 대용량 엔드포인트의 동시성 역효과
 
@@ -580,6 +581,29 @@ GET /api/charts/wics-rankings                                         ← 무파
 - 캐시: cold **194ms** → warm **0.098ms** (약 **1,976배**), 캐시 크기 상한 8 유지
 - 잔여 스캔: `await` 없는 `async def` **0건**
 - 백엔드 테스트 **226 passed**
+
+### ✅ P3 — 캐시 부재 4건 중 2건 해결 (`wics-index/meta`, `foreign-flow`)
+
+공용 헬퍼 `_file_mtime` / `_newest_mtime` / `_cached` 를 `charts.py` 에 추가하고,
+비용 대비 페이로드가 극단적으로 나쁜 두 엔드포인트에 mtime 캐시를 적용했다.
+
+| 엔드포인트 | 개선 전 | 캐시 후 | 페이로드 |
+|---|---|---|---|
+| `/api/charts/wics-index/meta` | **149.7ms** | **0.012ms** (12,249배) | **1,580 B** |
+| `/api/charts/foreign-flow` | **234.0ms** | **0.012ms** (19,479배) | 921,855 B |
+
+- `wics-index/meta` 는 파라미터가 없어 **단일 엔트리**(상한 1). `wics_daily_index` 약 59만 행에
+  `DISTINCT WICS` + `MIN/MAX` 스캔을 두 번 돌려 ~150ms 를 쓰고 **1.5KB** 를 반환하던 케이스다.
+- `foreign-flow` 는 매 요청 `kospi_investor(.etf).parquet` + `kospi200_future.parquet` +
+  `macro.db` 를 다시 읽었다. 소스 경로는 `foreign_flow_utils.foreign_flow_sources()` 로 노출해
+  라우터가 경로를 중복 나열하지 않게 했다. 상한 4.
+
+**미착수 2건**:
+- `wics-index/all` (0.108s / 2.58MB) — 핸들러가 약 90행이라 본문 추출 리팩터링이 선행돼야 한다.
+- `/api/stocks/persistent` (0.039s / 955B) — SQLAlchemy `Depends(get_db)` 세션 기반이라 키 설계가 다르다.
+
+**검증**: 응답 4케이스(변경 2개 엔드포인트 3케이스 + 대조군 `wics-index/all`) **sha256·길이 완전 동일**,
+`wics-index/meta` 엔트리 1개 유지, `foreign-flow` 캐시 크기 상한 4 유지, **226 passed**.
 
 ### 운영 규칙 (확정)
 

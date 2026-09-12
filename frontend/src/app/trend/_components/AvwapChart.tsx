@@ -212,6 +212,27 @@ export function AvwapChart() {
   });
   const [showSupertrendPopover, setShowSupertrendPopover] = useState(false);
 
+  // Legend/HUD Header 접힘/늘임 상태 (기본값: false = 1줄로 접힘)
+  const [isLegendExpanded, setIsLegendExpanded] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_avwap_legend_expanded");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return false;
+  });
+
+  const toggleLegendExpanded = useCallback(() => {
+    setIsLegendExpanded((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem("mtt_avwap_legend_expanded", JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
   const enabledAnchorsRef = useRef<Set<string>>(new Set());
   const showLinesRef = useRef({
@@ -3302,9 +3323,20 @@ export function AvwapChart() {
 
 
       {/* ── 3. Realtime Status / HUD Header ── */}
-      <div className="bg-gray-900/30 px-3 sm:px-4 py-1 sm:py-1.5 border-b border-gray-800/40 text-[11px] sm:text-xs font-mono flex flex-wrap items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 text-gray-400 leading-tight sm:leading-normal">
-        {chartData && (
-          <span className="flex items-center gap-1.5">
+      <div
+        data-testid="avwap-hud-container"
+        className={`bg-gray-900/30 px-3 sm:px-4 py-1 sm:py-1.5 border-b border-gray-800/40 text-[11px] sm:text-xs font-mono flex items-start justify-between gap-2 text-gray-400 leading-tight sm:leading-normal transition-all ${
+          isLegendExpanded ? "min-h-[28px]" : "h-[28px] sm:h-[30px] overflow-hidden"
+        }`}
+      >
+        <div
+          data-testid="avwap-hud-content"
+          className={`flex items-center gap-x-2.5 sm:gap-x-4 gap-y-0.5 sm:gap-y-1 min-w-0 ${
+            isLegendExpanded ? "flex-wrap" : "flex-nowrap overflow-hidden whitespace-nowrap"
+          }`}
+        >
+          {chartData && (
+            <span className="flex items-center gap-1.5 shrink-0">
             <span
               className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
                 chartData.market === "ETF"
@@ -3331,13 +3363,17 @@ export function AvwapChart() {
                   title={`${chartData.name} Screener 차트 열기 (새 창)`}
                 >
                   <span>{chartData.name}</span>
-                  {chartData.symbol ? <span className="font-normal text-gray-400">({chartData.symbol})</span> : null}
+                  {chartData.symbol && chartData.symbol.toUpperCase() !== chartData.name.toUpperCase() ? (
+                    <span className="font-normal text-gray-400">({chartData.symbol})</span>
+                  ) : null}
                   <span className="text-[10px] text-gray-500 hover:text-blue-400">↗</span>
                 </StockNameLink>
               ) : (
                 <span className="text-gray-200 font-bold">
                   {chartData.name}
-                  {chartData.symbol ? ` (${chartData.symbol})` : ""}
+                  {chartData.symbol && chartData.symbol.toUpperCase() !== chartData.name.toUpperCase()
+                    ? ` (${chartData.symbol})`
+                    : ""}
                 </span>
               )
             ) : null}
@@ -3346,22 +3382,36 @@ export function AvwapChart() {
 
         {activeDisplay && (
           <>
-            <span className="text-blue-400 font-bold">{activeDisplay.time}</span>
+            <span className="text-blue-400 font-bold shrink-0">{activeDisplay.time}</span>
             {activeDisplay.ohlc && (
-              <span className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                <span>O: <span className="text-gray-200">{activeDisplay.ohlc.open.toLocaleString()}</span></span>
-                <span>H: <span className="text-gray-200">{activeDisplay.ohlc.high.toLocaleString()}</span></span>
-                <span>L: <span className="text-gray-200">{activeDisplay.ohlc.low.toLocaleString()}</span></span>
-                <span>C: <span className={`font-bold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
-                  {activeDisplay.ohlc.close.toLocaleString()}
-                </span></span>
-                {activeDisplay.ohlc.changePct !== null && activeDisplay.ohlc.changePct !== undefined && (
-                  <span className={`font-semibold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
-                    ({activeDisplay.ohlc.changePct >= 0 ? `+${activeDisplay.ohlc.changePct}` : activeDisplay.ohlc.changePct}%)
-                  </span>
-                )}
-                <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
-              </span>
+              isLegendExpanded ? (
+                <span className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span>O: <span className="text-gray-200">{activeDisplay.ohlc.open.toLocaleString()}</span></span>
+                  <span>H: <span className="text-gray-200">{activeDisplay.ohlc.high.toLocaleString()}</span></span>
+                  <span>L: <span className="text-gray-200">{activeDisplay.ohlc.low.toLocaleString()}</span></span>
+                  <span>C: <span className={`font-bold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
+                    {activeDisplay.ohlc.close.toLocaleString()}
+                  </span></span>
+                  {activeDisplay.ohlc.changePct !== null && activeDisplay.ohlc.changePct !== undefined && (
+                    <span className={`font-semibold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
+                      ({activeDisplay.ohlc.changePct >= 0 ? `+${activeDisplay.ohlc.changePct}` : activeDisplay.ohlc.changePct}%)
+                    </span>
+                  )}
+                  <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
+                </span>
+              ) : (
+                <span className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  <span>종가: <span className={`font-bold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
+                    {activeDisplay.ohlc.close.toLocaleString()}
+                  </span></span>
+                  {activeDisplay.ohlc.changePct !== null && activeDisplay.ohlc.changePct !== undefined && (
+                    <span className={`font-semibold ${(activeDisplay.ohlc.changePct || 0) >= 0 ? "text-red-400" : "text-blue-400"}`}>
+                      ({activeDisplay.ohlc.changePct >= 0 ? `+${activeDisplay.ohlc.changePct}` : activeDisplay.ohlc.changePct}%)
+                    </span>
+                  )}
+                  <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
+                </span>
+              )
             )}
             {showAmount && activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
               <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
@@ -3491,6 +3541,15 @@ export function AvwapChart() {
             )}
           </>
         )}
+        </div>
+        <button
+          type="button"
+          onClick={toggleLegendExpanded}
+          className="shrink-0 px-1.5 py-0.5 text-[10px] rounded bg-gray-800/90 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 flex items-center gap-1 transition-colors self-start mt-0.5 cursor-pointer select-none"
+          title={isLegendExpanded ? "범례 한 줄로 접기" : "범례 전체 펼치기 (늘임)"}
+        >
+          <span>{isLegendExpanded ? "접기 ▲" : "더보기 ▼"}</span>
+        </button>
       </div>
 
       {/* ── 4. Main Chart Canvas Area ── */}

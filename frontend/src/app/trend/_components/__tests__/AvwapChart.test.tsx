@@ -627,9 +627,50 @@ describe("AvwapChart Component", () => {
 
     const { container } = renderWithClient(<AvwapChart />);
 
-    const hudEl = container.querySelector(".font-mono.flex.flex-wrap");
+    const hudEl = container.querySelector("[data-testid='avwap-hud-content']");
     expect(hudEl).toHaveClass("gap-y-0.5");
     expect(hudEl).toHaveClass("sm:gap-y-1");
+  });
+
+  it("toggles legend HUD between single-line folded and expanded", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    const { getByTitle, getByTestId } = renderWithClient(<AvwapChart />);
+
+    const hudContainer = getByTestId("avwap-hud-container");
+    const hudContent = getByTestId("avwap-hud-content");
+    const toggleBtn = getByTitle("범례 전체 펼치기 (늘임)");
+
+    // Initial state: folded (overflow-hidden, flex-nowrap, 종가 prioritized)
+    expect(hudContainer).toHaveClass("overflow-hidden");
+    expect(hudContent).toHaveClass("flex-nowrap");
+    expect(toggleBtn).toHaveTextContent("더보기 ▼");
+    expect(hudContent).toHaveTextContent("종가:");
+    expect(hudContent).not.toHaveTextContent("O:");
+
+    // Click toggle button -> expanded (O: H: L: C: all shown)
+    fireEvent.click(toggleBtn);
+    expect(hudContainer).toHaveClass("min-h-[28px]");
+    expect(hudContent).toHaveClass("flex-wrap");
+    expect(toggleBtn).toHaveTextContent("접기 ▲");
+    expect(hudContent).toHaveTextContent("O:");
+    expect(hudContent).toHaveTextContent("C:");
+
+    // Click again -> folded (back to 종가 prioritized)
+    fireEvent.click(toggleBtn);
+    expect(hudContainer).toHaveClass("overflow-hidden");
+    expect(hudContent).toHaveClass("flex-nowrap");
+    expect(toggleBtn).toHaveTextContent("더보기 ▼");
+    expect(hudContent).toHaveTextContent("종가:");
+    expect(hudContent).not.toHaveTextContent("O:");
   });
 
   it("toggles HP filter on and off and updates HUD and deviation panel", () => {

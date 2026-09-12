@@ -23,16 +23,51 @@ from datetime import datetime
 
 PARTITION_NAME = "part-0.parquet"
 
+# 파티션 인덱스 캐시: {rs_dir 경로: (디렉터리 mtime, 날짜 목록, {날짜: parquet 경로})}
+# RS 파티션은 일별 갱신 데이터이므로 디렉터리 mtime 무효화로 충분하다.
+_RS_INDEX_CACHE: dict[str, tuple[float, list[str], dict[str, Path]]] = {}
+
+
+def _rs_index(rs_dir: Path) -> tuple[list[str], dict[str, Path]]:
+    """RS 파티션 인덱스를 1회 디렉터리 스캔으로 구축하고 캐시한다.
+
+    Returns:
+        (모든 `date=YYYY-MM-DD` 디렉터리 날짜의 오름차순 목록,
+         `part-0.parquet` 이 실제 존재하는 날짜 -> parquet 경로)
+
+    @MX:NOTE: 기존 구현은 `available_dates()` 와 `resolve_partition()` 이 각각
+        `iterdir()` 로 413개 디렉터리를 매 호출 재스캔했다.
+    """
+    try:
+        mtime = rs_dir.stat().st_mtime
+    except OSError:
+        return [], {}
+
+    key = str(rs_dir)
+    cached = _RS_INDEX_CACHE.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1], cached[2]
+
+    all_dates: list[str] = []
+    parquet_paths: dict[str, Path] = {}
+    if rs_dir.is_dir():
+        for entry in rs_dir.iterdir():
+            if not entry.is_dir() or not entry.name.startswith("date="):
+                continue
+            d = entry.name[len("date="):]
+            all_dates.append(d)
+            part = entry / PARTITION_NAME
+            if part.is_file():
+                parquet_paths[d] = part
+
+    all_dates.sort()
+    _RS_INDEX_CACHE[key] = (mtime, all_dates, parquet_paths)
+    return all_dates, parquet_paths
+
 
 def available_dates(rs_dir: Path) -> list[str]:
     """date=YYYY-MM-DD 파티션 디렉터리의 오름차순 날짜 목록."""
-    if not rs_dir.is_dir():
-        return []
-    dates: list[str] = []
-    for entry in rs_dir.iterdir():
-        if entry.is_dir() and entry.name.startswith("date="):
-            dates.append(entry.name[len("date="):])
-    return sorted(dates)
+    return _rs_index(rs_dir)[0]
 
 
 def available_periods(rs_dir: Path, timeframe: str = "daily") -> list[str]:
@@ -62,17 +97,11 @@ def available_periods(rs_dir: Path, timeframe: str = "daily") -> list[str]:
 
 def resolve_partition(rs_dir: Path, date_str: str) -> Optional[tuple[str, Path]]:
     """date <= date_str 인 파티션 중 가장 최신 (date, 경로). 없으면 None."""
-    if not rs_dir.is_dir():
-        return None
     best: Optional[tuple[str, Path]] = None
-    for entry in rs_dir.iterdir():
-        if not entry.is_dir() or not entry.name.startswith("date="):
-            continue
-        d = entry.name[len("date="):]
+    for d, part in _rs_index(rs_dir)[1].items():
         if d > date_str:
             continue
-        part = entry / PARTITION_NAME
-        if part.is_file() and (best is None or d > best[0]):
+        if best is None or d > best[0]:
             best = (d, part)
     return best
 
@@ -117,18 +146,38 @@ def _rank_map(ranked: list[dict]) -> dict[str, int]:
 
 
 def build_series(
-    rs_dir: Path, code: str, window_dates: list[str], market: str, top_n: int = 30
+    rs_dir: Path,
+    code: str,
+    window_dates: list[str],
+    market: str,
+    top_n: int = 30,
+    rank_map_cache: Optional[dict[str, dict[str, int]]] = None,
 ) -> list[Optional[int]]:
-    """각 window 날짜에서 해당 종목의 TOP N 랭킹 (없으면 None)."""
+    """각 window 날짜에서 해당 종목의 TOP N 랭킹 (없으면 None).
+
+    Args:
+        rank_map_cache: {해석된 날짜: {code: rank}} 공유 캐시. 지정하면 파티션당
+            1회만 로드·랭킹하고 이후 재사용한다. 미지정 시 날짜마다 새로 로드한다.
+    """
     ranks: list[Optional[int]] = []
     for d in window_dates:
         resolved = resolve_partition(rs_dir, d)
         if resolved is None:
             ranks.append(None)
             continue
-        _date, part = resolved
-        top = rank_top(load_marcap_rows(part), market, top_n)
-        ranks.append(_rank_map(top).get(code))
+        r_date, part = resolved
+
+        if rank_map_cache is None:
+            ranks.append(
+                _rank_map(rank_top(load_marcap_rows(part), market, top_n)).get(code)
+            )
+            continue
+
+        rmap = rank_map_cache.get(r_date)
+        if rmap is None:
+            rmap = _rank_map(rank_top(load_marcap_rows(part), market, top_n))
+            rank_map_cache[r_date] = rmap
+        ranks.append(rmap.get(code))
     return ranks
 
 
@@ -140,25 +189,57 @@ def compute_top30(
     window_dates: Optional[list[str]] = None,
     top_n: int = 30,
 ) -> dict:
-    """기준일 TOP N 각 종목에 previous_rank/rank_delta/new_entrant 부여."""
+    """기준일 TOP N 각 종목에 previous_rank/rank_delta/new_entrant 부여.
+
+    @MX:NOTE: 파티션(parquet)은 **해석된 날짜당 정확히 1회만** 로드한다.
+    @MX:REASON: 이전 구현은 종목마다 build_series()를 호출해
+        30 종목 × 6 기간 = 180회 같은 파일을 재읽기했다 (실측 1.42s).
+        파티션당 1회 로드로 줄이면 0.009s 수준이다.
+    """
     ref_part = resolve_partition(rs_dir, reference_date)
     if ref_part is None:
         raise FileNotFoundError(f"RS partition missing for {reference_date}")
-    _ref_date, ref_part_path = ref_part
-    ref_ranked = rank_top(load_marcap_rows(ref_part_path), market, top_n)
+    ref_date, ref_part_path = ref_part
+
+    if window_dates is None:
+        window_dates = [reference_date] if reference_date else []
+
+    # 해석된 날짜 -> 랭킹 리스트 (파티션당 1회 로드 후 재사용)
+    ranked_by_date: dict[str, list[dict]] = {}
+
+    def ranked_for(resolved_date: str, part_path: Path) -> list[dict]:
+        ranked = ranked_by_date.get(resolved_date)
+        if ranked is None:
+            ranked = rank_top(load_marcap_rows(part_path), market, top_n)
+            ranked_by_date[resolved_date] = ranked
+        return ranked
+
+    ref_ranked = ranked_for(ref_date, ref_part_path)
 
     comp_rank_map: dict[str, int] = {}
     comp_available = compare_date is not None
     if compare_date is not None:
         comp_part = resolve_partition(rs_dir, compare_date)
         if comp_part is not None:
-            _d, comp_part_path = comp_part
-            comp_rank_map = _rank_map(rank_top(load_marcap_rows(comp_part_path), market, top_n))
+            comp_date, comp_part_path = comp_part
+            comp_rank_map = _rank_map(ranked_for(comp_date, comp_part_path))
         else:
             comp_available = False
 
-    if window_dates is None:
-        window_dates = [reference_date] if reference_date else []
+    # window_dates 해석은 순서를 유지한 채 1회만 수행 (중복 해석 방지)
+    window_resolved: list[Optional[str]] = []
+    for d in window_dates:
+        resolved = resolve_partition(rs_dir, d)
+        if resolved is None:
+            window_resolved.append(None)
+            continue
+        r_date, part = resolved
+        window_resolved.append(r_date)
+        ranked_for(r_date, part)
+
+    window_rank_maps: dict[str, dict[str, int]] = {
+        r_date: _rank_map(ranked) for r_date, ranked in ranked_by_date.items()
+    }
 
     stocks = []
     for s in ref_ranked:
@@ -171,7 +252,10 @@ def compute_top30(
                 "previous_rank": previous_rank,
                 "rank_delta": rank_delta,
                 "new_entrant": new_entrant,
-                "series": build_series(rs_dir, s["code"], window_dates, market, top_n),
+                "series": [
+                    window_rank_maps[r_date].get(s["code"]) if r_date is not None else None
+                    for r_date in window_resolved
+                ],
             }
         )
 

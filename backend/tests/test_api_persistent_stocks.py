@@ -293,3 +293,75 @@ def test_persistent_stocks_with_early_reference_date_empty(client):
     data = response.json()
     assert data["stocks"] == []
 
+
+# -----------------------------------------------------------------------
+# REQ-8: mtime 기반 캐싱 동작 검증
+# -----------------------------------------------------------------------
+
+def test_persistent_stocks_cache_hit(client, monkeypatch):
+    """캐시 히트 시 _load_persistent_stocks 재호출 없이 캐시된 응답 반환."""
+    import app.routers.stocks as stocks_router
+
+    stocks_router._PERSISTENT_STOCKS_CACHE.clear()
+
+    # 1st call: cache miss -> _load_persistent_stocks called
+    res1 = client.get("/api/stocks/persistent?days=5&min=3")
+    assert res1.status_code == 200
+    assert len(stocks_router._PERSISTENT_STOCKS_CACHE) == 1
+
+    # spy on _load_persistent_stocks
+    call_count = {"count": 0}
+    orig_load = stocks_router._load_persistent_stocks
+
+    def fake_load(*args, **kwargs):
+        call_count["count"] += 1
+        return orig_load(*args, **kwargs)
+
+    monkeypatch.setattr(stocks_router, "_load_persistent_stocks", fake_load)
+
+    # 2nd call: cache hit -> _load_persistent_stocks should NOT be called
+    res2 = client.get("/api/stocks/persistent?days=5&min=3")
+    assert res2.status_code == 200
+    assert call_count["count"] == 0
+    assert res1.json() == res2.json()
+
+
+def test_persistent_stocks_cache_invalidation_on_mtime_change(client, monkeypatch):
+    """DB mtime이 변경되면 캐시가 무효화되어 다시 연산."""
+    import app.routers.stocks as stocks_router
+
+    stocks_router._PERSISTENT_STOCKS_CACHE.clear()
+
+    res1 = client.get("/api/stocks/persistent?days=5&min=3")
+    assert res1.status_code == 200
+
+    old_mtime = stocks_router._trends_db_mtime()
+    call_count = {"count": 0}
+    orig_load = stocks_router._load_persistent_stocks
+
+    def fake_load(*args, **kwargs):
+        call_count["count"] += 1
+        return orig_load(*args, **kwargs)
+
+    monkeypatch.setattr(stocks_router, "_load_persistent_stocks", fake_load)
+    # Simulate DB update by changing mtime
+    monkeypatch.setattr(stocks_router, "_trends_db_mtime", lambda: old_mtime + 10.0)
+
+    res2 = client.get("/api/stocks/persistent?days=5&min=3")
+    assert res2.status_code == 200
+    assert call_count["count"] == 1
+
+
+def test_persistent_stocks_cache_capacity_bound(client):
+    """캐시 항목 수가 _PERSISTENT_STOCKS_CACHE_MAX를 초과하지 않음."""
+    import app.routers.stocks as stocks_router
+
+    stocks_router._PERSISTENT_STOCKS_CACHE.clear()
+
+    # Request with various days parameter to fill cache beyond MAX
+    for d in range(1, stocks_router._PERSISTENT_STOCKS_CACHE_MAX + 10):
+        client.get(f"/api/stocks/persistent?days={min(d, 60)}&min=1")
+
+    assert len(stocks_router._PERSISTENT_STOCKS_CACHE) <= stocks_router._PERSISTENT_STOCKS_CACHE_MAX
+
+

@@ -1,8 +1,9 @@
+import gzip
 import os
 import sqlite3
 from datetime import date as date_cls, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from app.schemas import (
     ChartDataResponse,
     MacroDataResponse,
@@ -131,12 +132,19 @@ def _newest_mtime(*paths) -> float:
     return newest
 
 
-def _cached(cache: dict, cache_max: int, key, mtime: float, compute):
-    """mtime 키 캐시 조회. 미스면 compute() 실행 후 저장하고, 상한을 넘으면 가장 오래된 항목을 버린다."""
+def _cached(cache: dict, cache_max: int, key, mtime: float, compute, should_cache=None):
+    """mtime 키 캐시 조회. 미스면 compute() 실행 후 저장하고, 상한을 넘으면 가장 오래된 항목을 버린다.
+
+    should_cache 를 주면 그 결과가 False 일 때 저장하지 않는다. 일시적 오류(DB 락 등)로
+    만들어진 빈 응답이 다음 mtime 변경까지 눌러앉는 것을 막기 위한 것으로, compute() 는
+    실패 시 None 을 돌려주고 호출부가 빈 응답으로 폴백한다.
+    """
     hit = cache.get(key)
     if hit is not None and hit[0] == mtime:
         return hit[1]
     value = compute()
+    if should_cache is not None and not should_cache(value):
+        return value
     if len(cache) >= cache_max:
         cache.pop(next(iter(cache)))
     cache[key] = (mtime, value)
@@ -1119,7 +1127,8 @@ def get_wics_index(
 _WICS_INDEX_META_CACHE: dict[tuple, tuple[float, WicsIndexMetaResponse]] = {}
 
 
-def _load_wics_index_meta() -> WicsIndexMetaResponse:
+def _load_wics_index_meta() -> Optional[WicsIndexMetaResponse]:
+    """섹터 목록 + 날짜 범위 조회. 일시적 오류 시 None (호출부가 빈 응답으로 폴백·비캐시)."""
     db_path = get_stock_master_db_path()
     if not os.path.exists(db_path):
         return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
@@ -1142,7 +1151,7 @@ def _load_wics_index_meta() -> WicsIndexMetaResponse:
         return WicsIndexMetaResponse(sectors=sectors, min_date=min_date, max_date=max_date)
     except Exception as e:
         print(f"Error loading WICS index meta: {e}")
-        return WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
+        return None
     finally:
         conn.close()
 
@@ -1150,32 +1159,33 @@ def _load_wics_index_meta() -> WicsIndexMetaResponse:
 @router.get("/wics-index/meta", response_model=WicsIndexMetaResponse)
 def get_wics_index_meta():
     """wics_daily_index 섹터 목록 및 날짜 범위."""
-    return _cached(
+    empty = WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
+    result = _cached(
         _WICS_INDEX_META_CACHE,
         1,
         (),
         _file_mtime(get_stock_master_db_path()),
         _load_wics_index_meta,
+        should_cache=lambda v: v is not None,
     )
+    return result if result is not None else empty
 
 
-@router.get("/wics-index/all", response_model=WicsIndexAllResponse)
-def get_wics_index_all(
-    start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
-    tf: str = Query("D", description="D | W | M"),
-    weight: str = Query("MC", description="MC | EW"),
-):
-    """
-    전 WICS 섹터 지수 시계열(절대 레벨). rebase는 클라이언트 책임.
-    tf=W|M 이면 일별 close를 OHLC로 집계한다.
-    """
-    tf_u = (tf or "D").upper()
-    if tf_u not in ("D", "W", "M"):
-        tf_u = "D"
-    weight_u = (weight or "MC").upper()
-    if weight_u not in ("MC", "EW"):
-        weight_u = "MC"
+# /wics-index/all 응답 캐시.
+# 전 섹터 시계열(2.58MB)을 매 요청 직렬화(96ms)하고 GZipMiddleware(110ms)로 실시간 압축하면
+# 캐시 히트여도 115ms가 소모된다. raw JSON 바이트와 pre-compressed gzip 바이트를 함께 캐싱하여
+# FastAPI 직렬화와 GZipMiddleware를 모두 우회(~1.9ms 응답)한다.
+_WICS_INDEX_ALL_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
+_WICS_INDEX_ALL_CACHE_MAX = 8
+
+
+def _load_wics_index_all(
+    start_date: Optional[str],
+    end_date: Optional[str],
+    tf_u: str,
+    weight_u: str,
+) -> Optional[WicsIndexAllResponse]:
+    """전 WICS 섹터 지수 시계열 조회. 일시적 오류 시 None (호출부가 빈 응답으로 폴백·비캐시)."""
     col = "MC_Index" if weight_u == "MC" else "EW_Index"
 
     db_path = get_stock_master_db_path()
@@ -1243,9 +1253,63 @@ def get_wics_index_all(
         return WicsIndexAllResponse(tf=tf_u, weight=weight_u, sectors=sectors)
     except Exception as e:
         print(f"Error loading WICS index all: {e}")
-        return empty
+        return None
     finally:
         conn.close()
+
+
+@router.get("/wics-index/all", response_model=WicsIndexAllResponse)
+def get_wics_index_all(
+    request: Request,
+    start_date: Optional[str] = Query(None, description="시작일 YYYY-MM-DD"),
+    end_date: Optional[str] = Query(None, description="종료일 YYYY-MM-DD"),
+    tf: str = Query("D", description="D | W | M"),
+    weight: str = Query("MC", description="MC | EW"),
+):
+    """
+    전 WICS 섹터 지수 시계열(절대 레벨). rebase는 클라이언트 책임.
+    tf=W|M 이면 일별 close를 OHLC로 집계한다.
+    대용량 응답(~2.58MB)이므로 raw JSON 및 pre-compressed gzip 바이트를 캐시하여
+    FastAPI 직렬화(96ms)와 GZipMiddleware 압축(110ms)을 모두 우회한다.
+    """
+    tf_u = (tf or "D").upper()
+    if tf_u not in ("D", "W", "M"):
+        tf_u = "D"
+    weight_u = (weight or "MC").upper()
+    if weight_u not in ("MC", "EW"):
+        weight_u = "MC"
+
+    cache_key = (start_date, end_date, tf_u, weight_u)
+    current_mtime = _file_mtime(get_stock_master_db_path())
+
+    cached = _WICS_INDEX_ALL_CACHE.get(cache_key)
+    if cached is not None and cached[0] == current_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+    else:
+        model = _load_wics_index_all(start_date, end_date, tf_u, weight_u)
+        if model is None:
+            empty = WicsIndexAllResponse(tf=tf_u, weight=weight_u, sectors=[])
+            return Response(
+                content=empty.model_dump_json(by_alias=True).encode("utf-8"),
+                media_type="application/json",
+            )
+        raw_bytes = model.model_dump_json(by_alias=True).encode("utf-8")
+        gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+        if len(_WICS_INDEX_ALL_CACHE) >= _WICS_INDEX_ALL_CACHE_MAX:
+            _WICS_INDEX_ALL_CACHE.pop(next(iter(_WICS_INDEX_ALL_CACHE)))
+        _WICS_INDEX_ALL_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
 
 
 @router.get("/stocks/search", response_model=List[StockSearchResult])

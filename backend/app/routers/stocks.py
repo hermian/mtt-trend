@@ -6,7 +6,9 @@ Routes:
     GET /api/stocks/group-action?date=YYYY-MM-DD
 """
 
+import os
 from collections import defaultdict
+from pathlib import Path
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -26,6 +28,26 @@ from app.schemas import (
 )
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
+
+# ---------------------------------------------------------------------------
+# Caching helpers
+# ---------------------------------------------------------------------------
+
+_PERSISTENT_STOCKS_CACHE: dict[tuple, tuple[float, PersistentStocksResponse]] = {}
+_PERSISTENT_STOCKS_CACHE_MAX = 32
+
+
+def _file_mtime(path) -> float:
+    try:
+        return os.path.getmtime(path)
+    except OSError:
+        return 0.0
+
+
+def _trends_db_mtime() -> float:
+    from app.database import DB_PATH
+    p = str(DB_PATH)
+    return max(_file_mtime(p), _file_mtime(p + "-wal"))
 
 
 # ---------------------------------------------------------------------------
@@ -72,15 +94,13 @@ def _find_latest_common_date(db: Session) -> Optional[str]:
 # GET /api/stocks/persistent
 # ---------------------------------------------------------------------------
 
-@router.get("/persistent", response_model=PersistentStocksResponse)
-def get_persistent_stocks(
-    date: Optional[str] = Query(None, description="Reference date in YYYY-MM-DD format (defaults to latest)"),
-    days: int = Query(5, ge=1, le=60, description="Look-back window in trading days"),
-    min: int = Query(3, ge=1, description="Minimum number of appearances required"),
-    source: str = Query(SOURCE_52W, description="Data source: '52w_high' or 'mtt'"),
-    db: Session = Depends(get_db),
-):
-    """Return stocks that appeared in the top RS list at least `min` times in the last `days` days up to `date`."""
+def _load_persistent_stocks(
+    db: Session,
+    date: Optional[str],
+    days: int,
+    min: int,
+    source: str,
+) -> PersistentStocksResponse:
     recent = _recent_dates(db, date, days, source)
     if not recent:
         raise HTTPException(status_code=404, detail="No stock data available")
@@ -213,6 +233,31 @@ def get_persistent_stocks(
     ]
 
     return PersistentStocksResponse(days=days, min_appearances=min, stocks=stocks)
+
+
+@router.get("/persistent", response_model=PersistentStocksResponse)
+def get_persistent_stocks(
+    date: Optional[str] = Query(None, description="Reference date in YYYY-MM-DD format (defaults to latest)"),
+    days: int = Query(5, ge=1, le=60, description="Look-back window in trading days"),
+    min: int = Query(3, ge=1, description="Minimum number of appearances required"),
+    source: str = Query(SOURCE_52W, description="Data source: '52w_high' or 'mtt'"),
+    db: Session = Depends(get_db),
+):
+    """Return stocks that appeared in the top RS list at least `min` times in the last `days` days up to `date`."""
+    current_mtime = _trends_db_mtime()
+    cache_key = (date, days, min, source)
+
+    hit = _PERSISTENT_STOCKS_CACHE.get(cache_key)
+    if hit is not None and hit[0] == current_mtime:
+        return hit[1]
+
+    result = _load_persistent_stocks(db, date, days, min, source)
+
+    if len(_PERSISTENT_STOCKS_CACHE) >= _PERSISTENT_STOCKS_CACHE_MAX:
+        _PERSISTENT_STOCKS_CACHE.pop(next(iter(_PERSISTENT_STOCKS_CACHE)))
+    _PERSISTENT_STOCKS_CACHE[cache_key] = (current_mtime, result)
+
+    return result
 
 
 # ---------------------------------------------------------------------------

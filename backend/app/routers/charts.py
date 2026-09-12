@@ -109,7 +109,7 @@ def _normalize_ism_observations(
 
 
 @router.get("/data", response_model=ChartDataResponse)
-async def get_chart_data(
+def get_chart_data(
     symbol: str = Query("kodex_leverage", description="차트 종목명 (kodex_leverage, kosdaq_leverage 등)"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
@@ -126,7 +126,7 @@ async def get_chart_data(
     return ChartDataResponse(symbol=symbol.upper(), data=[])
 
 @router.get("/above-ma", response_model=ChartDataResponse)
-async def get_above_ma_chart_data(
+def get_above_ma_chart_data(
     market: str = Query("KOSPI", description="시장 구분 (KOSPI, KOSPI200, KOSDAQ, KOSDAQ150)"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
@@ -144,7 +144,7 @@ async def get_above_ma_chart_data(
 
 
 @router.get("/stockbee-mm", response_model=StockbeeMmResponse)
-async def get_stockbee_mm_data(
+def get_stockbee_mm_data(
     year: Optional[int] = Query(
         None, ge=1990, le=2100, description="연도(YYYY). 미지정 시 DB 최신일 기준 최근 1년"
     ),
@@ -163,7 +163,7 @@ async def get_stockbee_mm_data(
     return StockbeeMmResponse(data=[StockbeeMmRow(**r) for r in rows], years=years)
 
 @router.get("/trend-up-breadth", response_model=TrendUpBreadthResponse)
-async def get_trend_up_breadth_endpoint(
+def get_trend_up_breadth_endpoint(
     universe: str = Query("krx300", description="유니버스 구분 (krx300, kospi, kosdaq, all)"),
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
@@ -1181,7 +1181,7 @@ def get_wics_index_all(
 
 
 @router.get("/stocks/search", response_model=List[StockSearchResult])
-async def search_stocks_endpoint(
+def search_stocks_endpoint(
     q: str = Query(..., min_length=1, description="검색할 종목명 또는 종목코드"),
     type: str = Query("stock", description="자산 유형: stock | etf | all"),
     market: Optional[str] = Query(None, description="국가/시장 구분: kr | us | all"),
@@ -1277,7 +1277,7 @@ def get_avwap_chart_data(
 
 
 @router.get("/avwap/anchors", response_model=List[CustomAnchorResponse])
-async def list_custom_avwap_anchors(
+def list_custom_avwap_anchors(
     target: Optional[str] = Query(None, description="마켓 또는 종목코드 (예: sp500, kospi, 005930)"),
     include_inactive: bool = Query(False, description="비활성 앵커 포함 여부"),
 ):
@@ -1288,7 +1288,7 @@ async def list_custom_avwap_anchors(
 
 
 @router.post("/avwap/anchors", response_model=CustomAnchorResponse)
-async def add_custom_avwap_anchor(
+def add_custom_avwap_anchor(
     payload: CustomAnchorCreate,
 ):
     """
@@ -1300,7 +1300,7 @@ async def add_custom_avwap_anchor(
 
 
 @router.put("/avwap/anchors/{anchor_id}", response_model=CustomAnchorResponse)
-async def edit_custom_avwap_anchor(
+def edit_custom_avwap_anchor(
     anchor_id: str,
     payload: CustomAnchorUpdate,
 ):
@@ -1314,7 +1314,7 @@ async def edit_custom_avwap_anchor(
 
 
 @router.delete("/avwap/anchors/{anchor_id}")
-async def remove_custom_avwap_anchor(
+def remove_custom_avwap_anchor(
     anchor_id: str,
     target: Optional[str] = Query(None, description="마켓 또는 종목코드 (시스템 앵커 삭제 시 필요)"),
     anchor_date: Optional[str] = Query(None, description="앵커 기준일자 (시스템 앵커 삭제 시 필요)"),
@@ -1335,7 +1335,7 @@ async def remove_custom_avwap_anchor(
 
 
 @router.post("/avwap/anchors/reset")
-async def reset_custom_avwap_anchors(
+def reset_custom_avwap_anchors(
     target: str = Query(..., description="마켓 또는 종목코드 (예: sp500, kospi, 005930)"),
 ):
     """
@@ -1346,7 +1346,7 @@ async def reset_custom_avwap_anchors(
 
 
 @router.post("/returns/compare", response_model=ReturnComparisonResponse)
-async def compare_returns_endpoint(
+def compare_returns_endpoint(
     request: ReturnComparisonRequest,
 ):
     """

@@ -196,7 +196,7 @@ def _load_index_data(universe: str, start_date: Optional[str] = None, end_date: 
     return points
 
 
-def load_trend_up_breadth_data(
+def _load_trend_up_breadth_data_impl(
     universe: str = "krx300",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -385,3 +385,52 @@ def load_trend_up_breadth_data(
         distribution_daily=distribution_daily,
         distribution_5ma=distribution_5ma,
     )
+
+
+# /trend-up-breadth 응답 캐시.
+# marcap_adj.parquet / krx300_pdf.parquet / etf_krx.parquet / macro.db 는 장 마감 후
+# 1회 갱신되므로, 이 파일들의 최신 mtime 을 키로 쓰면 무효화에 충분하다
+# (_CHART_CACHE / _MACRO_CACHE 와 동일한 프로젝트 표준 패턴).
+# universe 4종 × 기간 조합이 캐시되므로 상한을 둬 무한 증가를 막는다.
+_TREND_UP_BREADTH_CACHE: Dict[tuple, Tuple[float, TrendUpBreadthResponse]] = {}
+_TREND_UP_BREADTH_CACHE_MAX = 8
+
+# 이 응답이 의존하는 데이터 파일들. 하나라도 갱신되면 캐시를 무효화한다.
+_TREND_UP_BREADTH_SOURCES = (
+    "marcap_adj.parquet",
+    "krx300_pdf.parquet",
+    "krx300_pdf.pkl",
+    "etf_krx.parquet",
+    "macro.db",
+)
+
+
+def _trend_up_breadth_mtime() -> float:
+    """의존 데이터 파일들 중 가장 최근 mtime. 없으면 0.0."""
+    db_dir = _get_db_dir()
+    newest = 0.0
+    for name in _TREND_UP_BREADTH_SOURCES:
+        try:
+            newest = max(newest, (db_dir / name).stat().st_mtime)
+        except OSError:
+            continue
+    return newest
+
+
+def load_trend_up_breadth_data(
+    universe: str = "krx300",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> TrendUpBreadthResponse:
+    """mtime 캐시를 적용한 공개 진입점. 실제 계산은 _load_trend_up_breadth_data_impl."""
+    key = (universe, start_date, end_date)
+    mtime = _trend_up_breadth_mtime()
+    cached = _TREND_UP_BREADTH_CACHE.get(key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+
+    response = _load_trend_up_breadth_data_impl(universe, start_date, end_date)
+    if len(_TREND_UP_BREADTH_CACHE) >= _TREND_UP_BREADTH_CACHE_MAX:
+        _TREND_UP_BREADTH_CACHE.pop(next(iter(_TREND_UP_BREADTH_CACHE)))
+    _TREND_UP_BREADTH_CACHE[key] = (mtime, response)
+    return response

@@ -449,8 +449,8 @@ curl -4 -s -o /dev/null -w "ttfb=%{time_starttransfer}s total=%{time_total}s\n" 
 > cd backend && TMPDIR="$PWD/.pytest-tmp" .venv/bin/pytest tests/ -q
 > ```
 
-**진행 상황**: P1 `wics-rankings` ✅ (아래, 프론트 가드) → P1 `macro` ✅ (아래, mtime 캐시)
-→ **다음: P2 `trend-up-breadth` 파켓 캐시** → P3 소항목.
+**진행 상황**: P1 `wics-rankings` ✅ → P1 `macro` ✅ → P2 `trend-up-breadth` ✅
+(+ `async def` 누락 11건 보완) → **다음: P3 소항목.**
 
 ### ⚠️ P2 배포 후 발견 — 대용량 엔드포인트의 동시성 역효과
 
@@ -545,6 +545,41 @@ GET /api/charts/wics-rankings                                         ← 무파
 > **백엔드 기본 구간 제한은 불필요해졌다.** 원래 계획은 "기본 구간 제한 + mtime 캐시" 였으나,
 > 무파라미터 호출 자체가 사라져 구간 호출(0.010s / 0.58MB)만 남는다. 캐시를 넣을 실익이 없다.
 > 단 다른 클라이언트가 무파라미터로 호출하면 여전히 15.64MB 가 나가므로, 필요하면 후속으로 캡을 검토한다.
+
+### ✅ P2 — `async def` 전환 누락 11건 보완 + `trend-up-breadth` mtime 캐시
+
+**발견**: P2(`5cffd0b`)에서 전환한 12건 외에, **`await` 없이 동기 헬퍼에 위임하는
+`async def` 핸들러가 11건 더** 남아 있었다. P2 스캐너가 핸들러 본문에서 `conn.execute`
+같은 **직접적인 블로킹 마커**를 찾았기 때문에, 블로킹 IO 를 동기 헬퍼에 위임하는 형태는
+걸리지 않았다.
+
+| # | 핸들러 | 위임 대상 |
+|---|---|---|
+| 1 | `get_chart_data` | `load_chart_data` |
+| 2 | `get_above_ma_chart_data` | `load_above_ma_data` (sqlite3) |
+| 3 | `get_stockbee_mm_data` | `load_stockbee_mm` |
+| 4 | `get_trend_up_breadth_endpoint` | `load_trend_up_breadth_data` (polars + sqlite3) |
+| 5 | `search_stocks_endpoint` | `search_stocks_db` |
+| 6–10 | AVWAP 앵커 CRUD 5건 | `custom_anchor_utils` (sqlite3) |
+| 11 | `compare_returns_endpoint` | `compute_return_comparison` |
+
+**영향 실측** (라이브 = 전환 전, `127.0.0.1`): 빠른 엔드포인트(`wics-months`)가
+단독일 때 **0.0034s** 인데, `trend-up-breadth`(약 0.22s)가 진행 중이면
+**0.152 ~ 0.324s** 로 **45~95배** 지연됐다. `async def` 가 이벤트 루프를 점유해
+**다른 모든 요청이 대기**하기 때문이다. 이것이 P2 에서 잡으려던 바로 그 문제다.
+
+**수정**: 11건 모두 `async def` → `def` (순수 시그니처 변경, `charts.py` 11줄).
+
+**추가**: `/trend-up-breadth` 에 mtime 캐시(`_TREND_UP_BREADTH_CACHE`, 상한 8).
+이 응답은 `marcap_adj.parquet` + `krx300_pdf.parquet` + `krx300_pdf.pkl` +
+`etf_krx.parquet` + `macro.db` 를 읽으므로, **5개 파일의 최신 mtime** 을 무효화 키로 쓴다.
+원래 계획의 "파켓 캐시"를 의존 파일이 여러 개라 이렇게 구현했다.
+
+**검증**
+- 응답 동등성: GET 6종이 개선 전과 **sha256·길이 완전 동일**
+- 캐시: cold **194ms** → warm **0.098ms** (약 **1,976배**), 캐시 크기 상한 8 유지
+- 잔여 스캔: `await` 없는 `async def` **0건**
+- 백엔드 테스트 **226 passed**
 
 ### 운영 규칙 (확정)
 

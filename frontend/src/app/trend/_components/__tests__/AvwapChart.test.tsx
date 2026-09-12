@@ -641,6 +641,39 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/HP추세:/)).toBeInTheDocument();
   });
 
+  it("toggles 거래대금 (amount) panel on and off", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // Amount panel is enabled by default
+    const amtBtn = screen.getByText("거래대금");
+    expect(amtBtn).toBeInTheDocument();
+    expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
+    expect(screen.getByText(/거래대금:/)).toBeInTheDocument();
+    expect(screen.getByText("15.4조")).toBeInTheDocument();
+
+    // Toggle off
+    fireEvent.click(amtBtn);
+    expect(screen.queryByText(/거래대금 \(조원\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/거래대금:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("15.4조")).not.toBeInTheDocument();
+
+    // Toggle back on
+    fireEvent.click(amtBtn);
+    expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
+    expect(screen.getByText(/거래대금:/)).toBeInTheDocument();
+    expect(screen.getByText("15.4조")).toBeInTheDocument();
+  });
+
   it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
     vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,

@@ -177,6 +177,7 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [showHp, setShowHp] = useState(true);
+  const [showAmount, setShowAmount] = useState(true);
   const isKospi = market === "kospi" && !symbol;
   const [showKhkLine, setShowKhkLine] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -1067,7 +1068,9 @@ export function AvwapChart() {
         { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: isMobile ? 360 : 550 },
         ...(showHp ? [{ id: "hp_dev", name: "HP 이탈도 (%)", height: 90 }] : []),
         { id: "volume", name: "거래량 & VIX Fix", height: 110 },
-        { id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 },
+        ...(showAmount
+          ? [{ id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 }]
+          : []),
       ];
 
       panels.forEach((panel, index) => {
@@ -2086,7 +2089,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -2666,6 +2669,17 @@ export function AvwapChart() {
           >
             HP필터
           </button>
+          <button
+            onClick={() => setShowAmount((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              showAmount
+                ? "bg-amber-500/20 text-amber-400 border-amber-500/40 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title="클릭하여 거래대금 패널 표시 ON/OFF"
+          >
+            거래대금
+          </button>
           {/* Supertrend Toggle & Settings Popover */}
           <div className="relative inline-flex items-center">
             <button
@@ -2945,7 +2959,7 @@ export function AvwapChart() {
                 <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
               </span>
             )}
-            {activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
+            {showAmount && activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
               <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
             )}
             {/* Drawdown Header Badge */}
@@ -3194,7 +3208,7 @@ export function AvwapChart() {
           )}
 
           {/* Panel 3: Volume & VIX Fix */}
-          <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
+          <div className={`w-full relative bg-[#090d16] ${showAmount ? "border-b border-gray-800" : ""}`}>
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
               거래량 (막대) & VIX Fix (초록 점선)
             </div>
@@ -3202,21 +3216,23 @@ export function AvwapChart() {
           </div>
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
-          <div className="w-full relative bg-[#090d16]">
-            <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
-              {Boolean(
-                chartData?.amount_unit === "조$" ||
-                (!symbol && ["sp500", "nasdaq100", "dow", "dow30", "sox"].includes(market.toLowerCase()))
-              ) && (
-                <span className="text-[10px] font-normal text-amber-300 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-800/60 font-mono">
-                  [추정식: 종가(Close) × 거래량(Volume)]
-                </span>
-              )}
-              <span>& SMA (주황 실선)</span>
+          {showAmount && (
+            <div className="w-full relative bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
+                {Boolean(
+                  chartData?.amount_unit === "조$" ||
+                  (!symbol && ["sp500", "nasdaq100", "dow", "dow30", "sox"].includes(market.toLowerCase()))
+                ) && (
+                  <span className="text-[10px] font-normal text-amber-300 bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-800/60 font-mono">
+                    [추정식: 종가(Close) × 거래량(Volume)]
+                  </span>
+                )}
+                <span>& SMA (주황 실선)</span>
+              </div>
+              <div data-chart-id="amount" className="w-full" />
             </div>
-            <div data-chart-id="amount" className="w-full" />
-          </div>
+          )}
         </div>
       </div>
     </div>

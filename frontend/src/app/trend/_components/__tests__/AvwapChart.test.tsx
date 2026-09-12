@@ -341,6 +341,35 @@ describe("AvwapChart Component", () => {
     expect(useAvwapSpy).toHaveBeenCalledWith("sox", "1D", null);
   });
 
+  it("renders SOXX proxy badges for SOX market in volume and amount panels", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: {
+        ...mockChartData,
+        market: "sox",
+        name: "SOX 지수",
+        amount_unit: "억$",
+      },
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // Click SOX tab
+    fireEvent.click(screen.getByText("SOX"));
+
+    // Volume panel badge
+    expect(screen.getByText("[프록시: SOXX ETF 거래량]")).toBeInTheDocument();
+
+    // Toggle on Amount panel
+    fireEvent.click(screen.getByText("거래대금"));
+    expect(screen.getByText("[프록시: SOXX ETF 거래대금]")).toBeInTheDocument();
+  });
+
   it("opens quick anchor popover and anchor manager modal", () => {
     vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,

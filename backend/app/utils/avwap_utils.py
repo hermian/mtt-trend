@@ -142,7 +142,7 @@ INDEX_AMOUNT_UNITS: Dict[str, str] = {
     "sp500": "조$",
     "nasdaq100": "조$",
     "dow30": "조$",
-    "sox": "조$",
+    "sox": "억$",
 }
 
 ANCHOR_COLORS = [
@@ -231,6 +231,41 @@ def _load_index_raw_df(market_key: str) -> Optional[Tuple[pd.DataFrame, float]]:
                     con,
                     params=(market_key,)
                 )
+                if not df.empty and market_key == "sox":
+                    try:
+                        # SOX 지수는 Yahoo Finance API에서 volume=0으로 제공되므로,
+                        # 1:1 추종 대표 ETF인 SOXX의 volume 및 amount를 결합합니다.
+                        soxx_df = pd.read_sql_query(
+                            "SELECT date as Date, volume as ProxyVolume, amount as ProxyAmount "
+                            "FROM index_ohlcv WHERE index_name = 'soxx' ORDER BY date",
+                            con
+                        )
+                        if not soxx_df.empty:
+                            df = df.merge(soxx_df, on="Date", how="left")
+                            df["Volume"] = df["ProxyVolume"].fillna(df["Volume"])
+                            df["Amount"] = df["ProxyAmount"].fillna(df["Amount"])
+                            df.drop(columns=["ProxyVolume", "ProxyAmount"], inplace=True)
+                        else:
+                            # macro.db에 soxx가 없을 경우 etf_us_price.db SOXX.O 폴백
+                            etf_db = db_path.parent / "etf_us_price.db"
+                            if etf_db.exists():
+                                con_etf = sqlite3.connect(f"file:{etf_db.resolve()}?mode=ro", uri=True)
+                                try:
+                                    fallback_df = pd.read_sql_query(
+                                        "SELECT Date, Volume as ProxyVolume, (Close * Volume) as ProxyAmount "
+                                        "FROM etf_us_price WHERE Code = 'SOXX.O' ORDER BY Date",
+                                        con_etf
+                                    )
+                                    if not fallback_df.empty:
+                                        fallback_df["Date"] = fallback_df["Date"].astype(str).str[:10]
+                                        df = df.merge(fallback_df, on="Date", how="left")
+                                        df["Volume"] = df["ProxyVolume"].fillna(df["Volume"])
+                                        df["Amount"] = df["ProxyAmount"].fillna(df["Amount"])
+                                        df.drop(columns=["ProxyVolume", "ProxyAmount"], inplace=True)
+                                finally:
+                                    con_etf.close()
+                    except Exception as pe:
+                        logger.warning(f"Failed to merge SOXX proxy volume into SOX: {pe}")
             finally:
                 con.close()
             if not df.empty:
@@ -414,8 +449,10 @@ def load_avwap_chart_data(
         vol_ma_len = cfg["vol_ma_length"]
         vol_ma_series = df["Volume"].rolling(window=vol_ma_len, min_periods=1).mean()
 
-        # Amount in Jo (조원 or 조$): Amount / 1e12
-        amount_series = df["Amount"] / 1e12
+        # Amount: Jo (조원/조$: 1e12), Eok (억$: 1e8), Million (백만$: 1e6)
+        amount_unit = INDEX_AMOUNT_UNITS.get(market_key, "조원")
+        amount_divisor = 1e8 if amount_unit == "억$" else (1e6 if amount_unit == "백만$" else 1e12)
+        amount_series = df["Amount"] / amount_divisor
         amt_ma_len = 50 if interval_key == "1D" else 10 if interval_key == "1W" else 12 if interval_key == "1M" else 3
         amount_sma50_series = amount_series.rolling(window=amt_ma_len, min_periods=1).mean()
 

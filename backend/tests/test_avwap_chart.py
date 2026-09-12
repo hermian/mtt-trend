@@ -192,7 +192,10 @@ def test_avwap_us_indices():
             assert res.status_code == 200
             data = res.json()
             assert data["interval"] == interval
-            assert data["amount_unit"] == "조$"
+            if market == "sox":
+                assert data["amount_unit"] == "억$"
+            else:
+                assert data["amount_unit"] == "조$"
             assert len(data["points"]) > 0
             assert len(data["anchors"]) > 0
             last_pt = data["points"][-1]
@@ -206,16 +209,29 @@ def test_avwap_us_indices():
             assert "vix_fix" in last_pt
             assert "amount" in last_pt
             assert "amount_sma50" in last_pt
-            if market != "sox":
-                assert last_pt["amount"] is not None and last_pt["amount"] > 0
-                assert last_pt["amount_sma50"] is not None and last_pt["amount_sma50"] > 0
-            else:
-                assert last_pt["amount"] is not None
+            assert last_pt["amount"] is not None and last_pt["amount"] > 0
+            assert last_pt["amount_sma50"] is not None and last_pt["amount_sma50"] > 0
+            assert last_pt["volume"] is not None and last_pt["volume"] > 0
             # Verify no 0 amount points in the 2024-08-12 ~ 2026-08-04 range
-            if interval == "1D" and market in ("sp500", "nasdaq100"):
+            if interval == "1D" and market in ("sp500", "nasdaq100", "sox"):
                 sub_pts = [p for p in data["points"] if "2024-08-12" <= p["date"] <= "2026-08-04"]
                 assert len(sub_pts) > 0
                 assert all(p["amount"] is not None and p["amount"] > 0 for p in sub_pts)
+                assert all(p["volume"] is not None and p["volume"] > 0 for p in sub_pts)
+
+
+def test_avwap_sox_volume_amount_proxy():
+    res = client.get("/api/charts/avwap?market=sox&interval=1D")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["amount_unit"] == "억$"
+    pts = data["points"]
+    # Check that modern points (post-2001 SOXX inception) have volume > 0 and amount > 0
+    recent_pts = [p for p in pts if p["date"] >= "2024-01-01"]
+    assert len(recent_pts) > 0
+    for p in recent_pts:
+        assert p["volume"] is not None and p["volume"] > 0
+        assert p["amount"] is not None and p["amount"] > 0
 
 
 

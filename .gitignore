@@ -218,3 +218,4 @@ backend/data/charts/*.csv
 .gjc/
 artifacts/
 frontend/artifacts/
+.workbuddy-ai/

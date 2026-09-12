@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useDates } from "@/hooks/useThemes";
 import dynamic from "next/dynamic";
@@ -229,13 +229,13 @@ function TrendPageContent() {
     }
   }, [source, dates]);
 
-  function handleThemeClick(themeName: string) {
-    if (selectedTheme === themeName) {
-      setSelectedTheme(null);
-    } else {
-      setSelectedTheme(themeName);
-    }
-  }
+  const handleThemeClick = useCallback((themeName: string) => {
+    setSelectedTheme((prev) => (prev === themeName ? null : themeName));
+  }, []);
+
+  const handleThemeClose = useCallback(() => {
+    setSelectedTheme(null);
+  }, []);
 
   return (
     <div className="flex flex-col min-h-screen bg-gray-950 text-white">
@@ -349,7 +349,7 @@ function TrendPageContent() {
                       themeName={selectedTheme}
                       date={selectedDate || ""}
                       source={source}
-                      onClose={() => setSelectedTheme(null)}
+                      onClose={handleThemeClose}
                     />
                   )}
 

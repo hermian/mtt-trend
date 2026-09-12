@@ -3,7 +3,7 @@
 import { useThemeStocks } from "@/hooks/useThemes";
 import { DataSource } from "@/lib/api";
 import { StockNameLink } from "@/components/StockNameLink";
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // @MX:ANCHOR: 테마 종목 패널 컴포넌트 (fan_in: trend/page.tsx)
 // @MX:REASON: 이 컴포넌트는 테마별 종목 목록을 표시하는 주요 UI입니다.
@@ -40,7 +40,7 @@ interface ThemeStocksPanelProps {
   onClose: () => void;
 }
 
-export function ThemeStocksPanel({ themeName, date, source, onClose }: ThemeStocksPanelProps) {
+export const ThemeStocksPanel = React.memo(function ThemeStocksPanel({ themeName, date, source, onClose }: ThemeStocksPanelProps) {
   const { data: stocks, isLoading, error } = useThemeStocks(themeName, date, source);
   // @MX:NOTE: 컴포넌트 마운트 시 즉시 패널 열기 (즉시 열기 UX)
   const [isVisible, setIsVisible] = useState(true);
@@ -157,4 +157,4 @@ export function ThemeStocksPanel({ themeName, date, source, onClose }: ThemeStoc
       </div>
     </div>
   );
-}
+});

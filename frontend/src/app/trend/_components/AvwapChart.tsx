@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -587,7 +587,7 @@ export function AvwapChart() {
   } | null>(null);
 
   // Select stock from search
-  const handleSelectStock = (stock: StockSearchResult) => {
+  const handleSelectStock = useCallback((stock: StockSearchResult) => {
     isSelectingRef.current = true;
     const nextType = stock.market === "ETF" || stock.market === "US_ETF" ? "etf" : "stock";
     const nextCountry =
@@ -622,10 +622,10 @@ export function AvwapChart() {
     setTimeout(() => {
       isSelectingRef.current = false;
     }, 150);
-  };
+  }, [router, searchParams]);
 
   // Clear stock search and return to market index mode
-  const handleClearStock = (targetMarket?: AvwapMarket) => {
+  const handleClearStock = useCallback((targetMarket?: AvwapMarket) => {
     isSelectingRef.current = true;
     setSymbol(null);
     setSearchQuery("");
@@ -638,10 +638,37 @@ export function AvwapChart() {
     setTimeout(() => {
       isSelectingRef.current = false;
     }, 150);
-  };
+  }, [router, searchParams]);
 
   const [showQuickAnchorPopover, setShowQuickAnchorPopover] = useState(false);
   const [showAnchorManagerModal, setShowAnchorManagerModal] = useState(false);
+
+  const handleCloseQuickAnchor = useCallback(() => {
+    setShowQuickAnchorPopover(false);
+    setPickerDate(null);
+  }, []);
+
+  const handleCloseAnchorManager = useCallback(() => {
+    setShowAnchorManagerModal(false);
+  }, []);
+
+  const handleCloseSupertrend = useCallback(() => {
+    setShowSupertrendPopover(false);
+  }, []);
+
+  const handleChangeSupertrendConfig = useCallback((newCfg: SupertrendConfig) => {
+    setSupertrendConfig(newCfg);
+    try {
+      localStorage.setItem("mtt_supertrend_config", JSON.stringify(newCfg));
+    } catch {}
+  }, []);
+
+  const handleResetSupertrendDefaults = useCallback(() => {
+    setSupertrendConfig(DEFAULT_SUPERTREND_CONFIG);
+    try {
+      localStorage.removeItem("mtt_supertrend_config");
+    } catch {}
+  }, []);
 
   const currentTarget = symbol || market;
   const currentTargetDisplayName =
@@ -663,7 +690,7 @@ export function AvwapChart() {
     });
   }, [chartData?.anchors, enabledAnchors]);
 
-  const handleAddCustomAnchor = async (date: string, label: string, color: string) => {
+  const handleAddCustomAnchor = useCallback(async (date: string, label: string, color: string) => {
     try {
       const newAnc = await api.addCustomAnchor({
         market_or_symbol: currentTarget,
@@ -689,9 +716,9 @@ export function AvwapChart() {
       console.error("Failed to add custom anchor:", e);
       alert("앵커 추가에 실패했습니다.");
     }
-  };
+  }, [currentTarget, queryClient]);
 
-  const handleUpdateCustomAnchor = async (id: string, date: string, label: string, color: string) => {
+  const handleUpdateCustomAnchor = useCallback(async (id: string, date: string, label: string, color: string) => {
     try {
       await api.updateCustomAnchor(id, {
         anchor_date: date,
@@ -703,9 +730,9 @@ export function AvwapChart() {
       console.error("Failed to update custom anchor:", e);
       alert("앵커 수정에 실패했습니다.");
     }
-  };
+  }, [queryClient]);
 
-  const handleDeleteAnchor = async (id: string, anchorDate: string, isCustom: boolean = true) => {
+  const handleDeleteAnchor = useCallback(async (id: string, anchorDate: string, isCustom: boolean = true) => {
     try {
       await api.deleteCustomAnchor(id, currentTarget, anchorDate);
       if (isCustom) {
@@ -721,9 +748,9 @@ export function AvwapChart() {
       console.error("Failed to delete anchor:", e);
       alert("앵커 삭제에 실패했습니다.");
     }
-  };
+  }, [currentTarget, queryClient]);
 
-  const handleResetToDefaults = async () => {
+  const handleResetToDefaults = useCallback(async () => {
     try {
       await api.resetAnchors(currentTarget);
       setLocalCustomAnchors(currentTarget, []);
@@ -731,11 +758,11 @@ export function AvwapChart() {
     } catch (e) {
       console.error("Failed to reset anchors:", e);
     }
-  };
+  }, [currentTarget, queryClient]);
 
 
   // Toggle individual anchor
-  const toggleAnchor = (id: string) => {
+  const toggleAnchor = useCallback((id: string) => {
     setEnabledAnchors((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
@@ -748,9 +775,9 @@ export function AvwapChart() {
       }
       return next;
     });
-  };
+  }, []);
 
-  const toggleAllAnchors = (enable: boolean) => {
+  const toggleAllAnchors = useCallback((enable: boolean) => {
     if (enable && chartData?.anchors) {
       setEnabledAnchors(new Set(chartData.anchors.map((a) => a.id)));
     } else {
@@ -762,7 +789,7 @@ export function AvwapChart() {
         setSelectedLineId(null);
       }
     }
-  };
+  }, [chartData?.anchors]);
 
 
   const isStockMode = !!chartData?.symbol;
@@ -3111,20 +3138,10 @@ export function AvwapChart() {
             </button>
             <SupertrendSettingsPopover
               isOpen={showSupertrendPopover}
-              onClose={() => setShowSupertrendPopover(false)}
+              onClose={handleCloseSupertrend}
               config={supertrendConfig}
-              onChangeConfig={(newCfg) => {
-                setSupertrendConfig(newCfg);
-                try {
-                  localStorage.setItem("mtt_supertrend_config", JSON.stringify(newCfg));
-                } catch {}
-              }}
-              onResetDefaults={() => {
-                setSupertrendConfig(DEFAULT_SUPERTREND_CONFIG);
-                try {
-                  localStorage.removeItem("mtt_supertrend_config");
-                } catch {}
-              }}
+              onChangeConfig={handleChangeSupertrendConfig}
+              onResetDefaults={handleResetSupertrendDefaults}
             />
           </div>
           {isKospi && (
@@ -3263,10 +3280,7 @@ export function AvwapChart() {
           {/* Quick Add Popover */}
           <AvwapQuickAnchorPopover
             isOpen={showQuickAnchorPopover}
-            onClose={() => {
-              setShowQuickAnchorPopover(false);
-              setPickerDate(null);
-            }}
+            onClose={handleCloseQuickAnchor}
             onAddAnchor={handleAddCustomAnchor}
             defaultDate={pickerDate || chartData?.points?.[chartData.points.length - 1]?.date || ""}
           />
@@ -3276,7 +3290,7 @@ export function AvwapChart() {
       {/* Anchor Manager Modal */}
       <AvwapAnchorManagerModal
         isOpen={showAnchorManagerModal}
-        onClose={() => setShowAnchorManagerModal(false)}
+        onClose={handleCloseAnchorManager}
         targetName={currentTargetDisplayName}
         anchors={unifiedAnchors}
         onToggleAnchor={toggleAnchor}

@@ -29,7 +29,7 @@ const COLOR_PALETTE = [
   "#4ade80", // Light Green
 ];
 
-export function AvwapQuickAnchorPopover({
+export const AvwapQuickAnchorPopover = React.memo(function AvwapQuickAnchorPopover({
   isOpen,
   onClose,
   onAddAnchor,
@@ -176,6 +176,6 @@ export function AvwapQuickAnchorPopover({
       </form>
     </div>
   );
-}
+});
 
 export default AvwapQuickAnchorPopover;

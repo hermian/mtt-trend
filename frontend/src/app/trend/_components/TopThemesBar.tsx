@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useThemesDaily } from "@/hooks/useThemes";
 import { ThemeDaily, DataSource } from "@/lib/api";
 
@@ -77,7 +77,7 @@ function ThemeTooltip({ theme }: { theme: ThemeDaily }) {
   );
 }
 
-export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme }: TopThemesBarProps) {
+export const TopThemesBar = React.memo(function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme }: TopThemesBarProps) {
   const { data: themes, isLoading, error } = useThemesDaily(date, source);
 
   // SPEC-MTT-004 F-01: 상위 테마 표시 개수 동적 설정
@@ -258,4 +258,4 @@ export function TopThemesBar({ date, source = "mtt", onThemeClick, selectedTheme
       </div>
     </div>
   );
-}
+});

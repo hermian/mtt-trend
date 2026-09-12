@@ -30,7 +30,7 @@ const PRESET_COLORS = [
   "#d946ef", "#a855f7", "#14b8a6", "#38bdf8", "#fb7185", "#4ade80"
 ];
 
-export function AvwapAnchorManagerModal({
+export const AvwapAnchorManagerModal = React.memo(function AvwapAnchorManagerModal({
   isOpen,
   onClose,
   targetName,
@@ -404,6 +404,6 @@ export function AvwapAnchorManagerModal({
       </div>
     </div>
   );
-}
+});
 
 export default AvwapAnchorManagerModal;

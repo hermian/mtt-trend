@@ -14,7 +14,7 @@ interface SupertrendSettingsPopoverProps {
   onResetDefaults: () => void;
 }
 
-export function SupertrendSettingsPopover({
+export const SupertrendSettingsPopover = React.memo(function SupertrendSettingsPopover({
   isOpen,
   onClose,
   config,
@@ -173,5 +173,5 @@ export function SupertrendSettingsPopover({
       </div>
     </div>
   );
-}
+});
 export default SupertrendSettingsPopover;

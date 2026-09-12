@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useThemesSurging } from "@/hooks/useThemes";
 import { SurgingTheme, DataSource } from "@/lib/api";
 
@@ -14,7 +14,7 @@ interface SurgingThemesCardProps {
   selectedTheme?: string | null;
 }
 
-export function SurgingThemesCard({ date, source = "mtt", onThemeClick, selectedTheme }: SurgingThemesCardProps) {
+export const SurgingThemesCard = React.memo(function SurgingThemesCard({ date, source = "mtt", onThemeClick, selectedTheme }: SurgingThemesCardProps) {
   const [threshold, setThreshold] = useState(10);
   const { data: themesData, isLoading, error } = useThemesSurging(date, threshold, source);
   
@@ -119,4 +119,4 @@ export function SurgingThemesCard({ date, source = "mtt", onThemeClick, selected
       </div>
     </div>
   );
-}
+});

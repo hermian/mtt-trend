@@ -30,6 +30,7 @@ import {
   setLocalCustomAnchors,
 } from "./_lib/avwapCalc";
 import { hpFilterSeries, getHpLambdaForInterval } from "@/lib/hpFilter";
+import { calculateMacd, type MacdResult } from "@/lib/macd";
 import {
   calculateSupertrend,
   DEFAULT_SUPERTREND_CONFIG,
@@ -177,7 +178,8 @@ export function AvwapChart() {
   const [showLvwap, setShowLvwap] = useState(true);
   const [showBbUpper, setShowBbUpper] = useState(true);
   const [showHp, setShowHp] = useState(true);
-  const [showAmount, setShowAmount] = useState(true);
+  const [showAmount, setShowAmount] = useState(false);
+  const [showMacd, setShowMacd] = useState(true);
   const isKospi = market === "kospi" && !symbol;
   const [showKhkLine, setShowKhkLine] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -492,6 +494,35 @@ export function AvwapChart() {
     return khkLineData[khkLineData.length - 1]?.value ?? null;
   }, [khkLineData]);
 
+  // MACD calculation for current chart points
+  const macdResult = useMemo<MacdResult | null>(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const rawPts = chartData.points
+      .map((p) => {
+        const time = toChartTime(p.date);
+        if (!time || p.close == null || !Number.isFinite(p.close)) return null;
+        return { time, close: p.close };
+      })
+      .filter((v): v is NonNullable<typeof v> => v !== null);
+    return calculateMacd(rawPts, { fastPeriod: 12, slowPeriod: 26, signalPeriod: 9 });
+  }, [chartData?.points]);
+
+  const macdMap = useMemo(() => {
+    const map = new Map<string, { macd: number; signal: number; histogram: number; color: string }>();
+    if (!macdResult) return map;
+    for (const p of macdResult.points) {
+      map.set(p.time, { macd: p.macd, signal: p.signal, histogram: p.histogram, color: p.color });
+    }
+    return map;
+  }, [macdResult]);
+
+  const latestMacdInfo = useMemo(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const lastPt = chartData.points[chartData.points.length - 1];
+    const time = toChartTime(lastPt.date) || lastPt.date;
+    return macdMap.get(time) ?? null;
+  }, [chartData?.points, macdMap]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -511,6 +542,7 @@ export function AvwapChart() {
     hpDev?: number | null;
     supertrend?: { value: number; trend: 1 | -1 } | null;
     khkLine?: number | null;
+    macd?: { macd: number; signal: number; histogram: number; color: string } | null;
   } | null>(null);
 
   // Select stock from search
@@ -987,6 +1019,46 @@ export function AvwapChart() {
           amtSmaPl.applyOptions({ axisLabelVisible: false });
         }
       }
+
+      // 5. MACD Panel
+      if (showMacd) {
+        const timeStr = toChartTime(pt.date);
+        const mInfo = timeStr ? macdMap.get(timeStr) : undefined;
+        const histPl = plMap.get("macd_hist");
+        const macdPl = plMap.get("macd_line");
+        const sigPl = plMap.get("macd_sig");
+
+        if (mInfo) {
+          if (histPl) {
+            histPl.applyOptions({
+              price: mInfo.histogram,
+              color: mInfo.color,
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+          if (macdPl) {
+            macdPl.applyOptions({
+              price: mInfo.macd,
+              color: "#3b82f6",
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+          if (sigPl) {
+            sigPl.applyOptions({
+              price: mInfo.signal,
+              color: "#f97316",
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+        } else {
+          if (histPl) histPl.applyOptions({ axisLabelVisible: false });
+          if (macdPl) macdPl.applyOptions({ axisLabelVisible: false });
+          if (sigPl) sigPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
     };
 
     try {
@@ -1071,6 +1143,9 @@ export function AvwapChart() {
         ...(showAmount
           ? [{ id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 }]
           : []),
+        ...(showMacd
+          ? [{ id: "macd", name: "MACD (12, 26, 9)", height: 110 }]
+          : []),
       ];
 
       panels.forEach((panel, index) => {
@@ -1105,7 +1180,9 @@ export function AvwapChart() {
                   ? { top: 0.02, bottom: 0.02 }
                   : panel.id === "hp_dev"
                     ? { top: 0.08, bottom: 0.08 }
-                    : { top: 0.05, bottom: 0.05 },
+                    : panel.id === "macd"
+                      ? { top: 0.1, bottom: 0.1 }
+                      : { top: 0.05, bottom: 0.05 },
             autoScale: true,
             minimumWidth: 95,
             mode: panel.id === "main"
@@ -1756,6 +1833,90 @@ export function AvwapChart() {
           crosshairPriceLinesRef.current.set("amt_sma", amtSmaHoverLine);
         }
 
+        // 5. Panel: MACD (12, 26, 9)
+        else if (panel.id === "macd") {
+          const macdFormat = {
+            type: "custom" as const,
+            formatter: (price: number) => price.toFixed(2),
+            minMove: 0.01,
+          };
+
+          // 1) Histogram
+          const histSeries = chart.addSeries(HistogramSeries, {
+            priceFormat: macdFormat,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            base: 0,
+          });
+          activeSeries.push(histSeries);
+
+          // Zero baseline
+          histSeries.createPriceLine({
+            price: 0,
+            color: "rgba(100, 116, 139, 0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          const histHoverLine = histSeries.createPriceLine({
+            price: 0,
+            color: "#22c55e",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("macd_hist", histHoverLine);
+
+          // 2) MACD Line (Solid, Blue #3b82f6)
+          const macdLineSeries = chart.addSeries(LineSeries, {
+            color: "#3b82f6",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceFormat: macdFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(macdLineSeries);
+
+          const macdHoverLine = macdLineSeries.createPriceLine({
+            price: 0,
+            color: "#3b82f6",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("macd_line", macdHoverLine);
+
+          // 3) Signal Line (Dashed 점선, Orange #f97316)
+          const sigLineSeries = chart.addSeries(LineSeries, {
+            color: "#f97316",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dashed,
+            priceFormat: macdFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(sigLineSeries);
+
+          const sigHoverLine = sigLineSeries.createPriceLine({
+            price: 0,
+            color: "#f97316",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("macd_sig", sigHoverLine);
+        }
+
         seriesRef.current.set(panel.id, activeSeries);
 
         // TimeScale sync & dynamic vertical autoScale on scroll/pan
@@ -1807,6 +1968,7 @@ export function AvwapChart() {
           const hpInfo = matchedPoint ? hpMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           const stInfo = matchedPoint ? supertrendMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           const khkVal = matchedPoint ? khkMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) ?? null : null;
+          const macdInfo = matchedPoint ? macdMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
             updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
@@ -1835,6 +1997,7 @@ export function AvwapChart() {
               hpDev: hpInfo?.deviation,
               supertrend: stInfo || null,
               khkLine: khkVal,
+              macd: macdInfo || null,
             });
           } else {
             setHoveredData(null);
@@ -2068,6 +2231,16 @@ export function AvwapChart() {
           amtSmaS.setData(linePoints((p) => p.amount_sma50));
         }
 
+        // 5. MACD (12, 26, 9)
+        if (showMacd && macdResult) {
+          const macdSeriesList = seriesRef.current.get("macd") || [];
+          if (macdSeriesList.length >= 3) {
+            macdSeriesList[0].setData(macdResult.histogramSeries);
+            macdSeriesList[1].setData(macdResult.macdSeries);
+            macdSeriesList[2].setData(macdResult.signalSeries);
+          }
+        }
+
         // Initial visible range (show last 250 bars for 1D/1W, or all for 1M/1Y)
         const firstChart = chartsRef.current.values().next().value;
         if (firstChart) {
@@ -2089,7 +2262,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -2269,6 +2442,7 @@ export function AvwapChart() {
     hpDev: latestHpInfo?.deviation,
     supertrend: latestSupertrendInfo,
     khkLine: latestKhkInfo,
+    macd: latestMacdInfo,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -2680,6 +2854,17 @@ export function AvwapChart() {
           >
             거래대금
           </button>
+          <button
+            onClick={() => setShowMacd((prev) => !prev)}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              showMacd
+                ? "bg-blue-500/20 text-blue-400 border-blue-500/40 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title="클릭하여 MACD(12, 26, 9) 패널 표시 ON/OFF"
+          >
+            MACD
+          </button>
           {/* Supertrend Toggle & Settings Popover */}
           <div className="relative inline-flex items-center">
             <button
@@ -3059,6 +3244,18 @@ export function AvwapChart() {
                 )}
               </span>
             )}
+            {showMacd && activeDisplay.macd && (
+              <span>
+                MACD: <span className="text-blue-400 font-bold">{activeDisplay.macd.macd.toFixed(2)}</span>{" "}
+                <span className="text-orange-400 font-semibold">(Sig: {activeDisplay.macd.signal.toFixed(2)})</span>{" "}
+                <span
+                  className="font-bold"
+                  style={{ color: activeDisplay.macd.color }}
+                >
+                  Hist: {activeDisplay.macd.histogram >= 0 ? `+${activeDisplay.macd.histogram.toFixed(2)}` : activeDisplay.macd.histogram.toFixed(2)}
+                </span>
+              </span>
+            )}
           </>
         )}
       </div>
@@ -3208,7 +3405,7 @@ export function AvwapChart() {
           )}
 
           {/* Panel 3: Volume & VIX Fix */}
-          <div className={`w-full relative bg-[#090d16] ${showAmount ? "border-b border-gray-800" : ""}`}>
+          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd ? "border-b border-gray-800" : ""}`}>
             <div className="absolute top-1.5 left-3 z-10 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
               거래량 (막대) & VIX Fix (초록 점선)
             </div>
@@ -3217,7 +3414,7 @@ export function AvwapChart() {
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           {showAmount && (
-            <div className="w-full relative bg-[#090d16]">
+            <div className={`w-full relative bg-[#090d16] ${showMacd ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
                 {Boolean(
@@ -3231,6 +3428,19 @@ export function AvwapChart() {
                 <span>& SMA (주황 실선)</span>
               </div>
               <div data-chart-id="amount" className="w-full" />
+            </div>
+          )}
+
+          {/* Panel 5: MACD (12, 26, 9) */}
+          {showMacd && (
+            <div className="w-full relative bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span className="text-blue-400 font-bold">MACD (12, 26, 9)</span>
+                <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
+                  (파랑: MACD, 주황 점선: Signal, 막대: Hist)
+                </span>
+              </div>
+              <div data-chart-id="macd" className="w-full" />
             </div>
           )}
         </div>

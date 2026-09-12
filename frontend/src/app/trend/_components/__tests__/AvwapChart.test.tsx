@@ -153,6 +153,8 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText("3년")).toBeInTheDocument();
     expect(screen.getByText("전기간")).toBeInTheDocument();
     expect(screen.getByText(/전체: -3.5%/)).toBeInTheDocument();
+    // Enable amount panel
+    fireEvent.click(screen.getByText("거래대금"));
     expect(screen.getByText("15.4조")).toBeInTheDocument();
     expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
     expect(screen.getByText("KR")).toBeInTheDocument();
@@ -577,6 +579,8 @@ describe("AvwapChart Component", () => {
 
     renderWithClient(<AvwapChart />);
 
+    // Enable amount panel
+    fireEvent.click(screen.getByText("거래대금"));
     expect(screen.getByText(/거래대금 \(백만\$\)/)).toBeInTheDocument();
     expect(screen.getByText("2.5B$")).toBeInTheDocument();
   });
@@ -654,24 +658,54 @@ describe("AvwapChart Component", () => {
 
     renderWithClient(<AvwapChart />);
 
-    // Amount panel is enabled by default
+    // Amount panel is disabled by default
     const amtBtn = screen.getByText("거래대금");
     expect(amtBtn).toBeInTheDocument();
-    expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
-    expect(screen.getByText(/거래대금:/)).toBeInTheDocument();
-    expect(screen.getByText("15.4조")).toBeInTheDocument();
-
-    // Toggle off
-    fireEvent.click(amtBtn);
     expect(screen.queryByText(/거래대금 \(조원\)/)).not.toBeInTheDocument();
     expect(screen.queryByText(/거래대금:/)).not.toBeInTheDocument();
     expect(screen.queryByText("15.4조")).not.toBeInTheDocument();
 
-    // Toggle back on
+    // Toggle on
     fireEvent.click(amtBtn);
     expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
     expect(screen.getByText(/거래대금:/)).toBeInTheDocument();
     expect(screen.getByText("15.4조")).toBeInTheDocument();
+
+    // Toggle back off
+    fireEvent.click(amtBtn);
+    expect(screen.queryByText(/거래대금 \(조원\)/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/거래대금:/)).not.toBeInTheDocument();
+    expect(screen.queryByText("15.4조")).not.toBeInTheDocument();
+  });
+
+  it("toggles MACD panel on and off", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // MACD panel is enabled by default
+    const macdBtn = screen.getByText("MACD");
+    expect(macdBtn).toBeInTheDocument();
+    expect(screen.getByText("MACD (12, 26, 9)")).toBeInTheDocument();
+    expect(screen.getByText(/MACD:/)).toBeInTheDocument();
+
+    // Toggle off
+    fireEvent.click(macdBtn);
+    expect(screen.queryByText("MACD (12, 26, 9)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/MACD:/)).not.toBeInTheDocument();
+
+    // Toggle back on
+    fireEvent.click(macdBtn);
+    expect(screen.getByText("MACD (12, 26, 9)")).toBeInTheDocument();
+    expect(screen.getByText(/MACD:/)).toBeInTheDocument();
   });
 
   it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
@@ -686,6 +720,9 @@ describe("AvwapChart Component", () => {
     } as any);
 
     renderWithClient(<AvwapChart />);
+
+    // Enable amount panel
+    fireEvent.click(screen.getByText("거래대금"));
 
     expect(lastSubscribeCrosshairMoveCallback).toBeDefined();
 

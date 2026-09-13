@@ -605,6 +605,91 @@ GET /api/charts/wics-rankings                                         ← 무파
 **검증**: 응답 4케이스(변경 2개 엔드포인트 3케이스 + 대조군 `wics-index/all`) **sha256·길이 완전 동일**,
 `wics-index/meta` 엔트리 1개 유지, `foreign-flow` 캐시 크기 상한 4 유지, **226 passed**.
 
+---
+
+### 🔴 신규 발견 — ETF 가격 DB 복합 인덱스 부재 (2026-09-13 21:30)
+
+> 위 "잔여 스캔: `await` 없는 `async def` **0건**" 은 **`charts.py` 한정**이었다.
+> 전 라우터로 넓히면 5건이 더 남아 있고, 그 실체를 재보니 **이벤트 루프 문제가 아니라
+> DB 인덱스 문제**였다.
+
+#### 5건의 실측 (`curl -4 http://127.0.0.1:8000`, 4회 최솟값)
+
+| 핸들러 | 자체 지연 | 콜드 최악 | 페이로드 | 그 사이 `/top30/dates`(단독 0.9ms) | 판정 |
+|---|---|---|---|---|---|
+| `etf.py:9` `get_etf_heatmap` (KR) | **2,043 ms** | 동일 (캐시 없음) | 30.8 KB | **2,119 ms (2,383×)** | 🔴 치명 |
+| `etf.py:9` `get_etf_heatmap` (US) | **944 ms** | 동일 | 26.5 KB | 921 ms (1,036×) | 🔴 치명 |
+| `heatmap.py:17` `get_stock_heatmap` | 8.8 ms | ~420 ms | 281 KB | 관측 불가 | 🟠 보통 |
+| `top30.py:32` `list_top30_dates` | 0.8 ms | 3.9 ms | 5.3 KB | 관측 불가 | 🟢 무시 |
+| `top30.py:43` `get_top30_matrix` | 19.1 ms | 28.3 ms | 96.1 KB | 관측 불가 | 🟢 무시 |
+| `top30.py:80` `get_top30` | 43.7 ms | 245.5 ms | 5.1 KB | 12.8 ms (14×) | 🟡 경미 |
+
+**정정**: 앞서 "heatmap·top30 은 **대용량 페이로드**라 threadpool 전환이 위험하다"고 적었는데 **틀렸다**.
+페이로드는 5 ~ 281 KB 로 작다. 진짜 문제는 `etf/heatmap` 의 **2초 블로킹**이다.
+
+#### 근본 원인 — `etf_price` 에 `(종목코드, 날짜)` 인덱스가 없다
+
+`load_etf_heatmap_data("KR")` 를 cProfile 로 재면 **2,244 ms 중 2,234 ms(99.6%)가
+`sqlite3.Cursor.execute` 1,856회**다 (쿼리당 1.17 ms).
+177개 ETF × 10개 기간 + 6개 지수 × 10 = 1,856회를 **개별 점조회**로 돌린다.
+
+```sql
+-- etf_heatmap_utils.py:39
+SELECT 종가 FROM etf_price WHERE 종목코드 = ? AND (날짜 <= ? OR 날짜 <= ?)
+ORDER BY 날짜 DESC LIMIT 1
+```
+
+`etf_price` 는 **148만 행 / 1,171 종목**(종목당 ~1,264행)인데 인덱스가 이렇다:
+
+| 인덱스 | 컬럼 |
+|---|---|
+| `ix_price_code` | `(종목코드)` |
+| `ix_price_date` | `(날짜)` |
+| `sqlite_autoindex_etf_price_1` | `(날짜, 종목코드)` |
+
+→ `(종목코드, 날짜)` **복합 인덱스가 없다.** 실행 계획은
+`SEARCH etf_price USING INDEX ix_price_code (종목코드=?)` + **`USE TEMP B-TREE FOR ORDER BY`** —
+호출마다 1,264행을 훑고 **임시 B-tree 로 정렬**한다. 1,856 × (1,264행 스캔 + 정렬) = 2.2초.
+
+**같은 누락이 `etf_us_price.db` 에도 있다** (`Code` / `Date`, **418만 행 / 816 MB**).
+`macro.db` 의 다른 테이블들은 전부 **올바른 순서의 복합 인덱스**를 갖고 있어 대비된다:
+`ix_index_ohlcv_name_date(index_name, date)`, `ix_fred_macro_series_date(series_id, date)`,
+`ix_kr_fear_greed_market_date(market, date)`, `ix_index_fundamental_name_date(index_name, date)`.
+→ 두 ETF 가격 테이블만 규약에서 빠져 있다.
+
+#### 인덱스 추가 실측 (237 MB DB 복사본에서 검증)
+
+| 방식 | 1,770 점조회 | 비고 |
+|---|---|---|
+| ① 현재 (복합 인덱스 없음) | **2,071.9 ms** | 1.171 ms/쿼리 |
+| ② **`(종목코드, 날짜)` 추가** | **97.9 ms** | 0.055 ms/쿼리 → **21배** |
+| ③ 단일 `IN` 쿼리로 통합 (36.7만 행 fetch) | 212.1 ms | ❌ 더 느림 |
+| ④ 창 함수 10쿼리 | 5,100 ms | ❌ 훨씬 느림 |
+
+`CREATE INDEX` 소요는 **0.8초**. ②가 최선이며 **코드 변경이 필요 없다**.
+
+#### 제안 (우선순위)
+
+- **P0 — 인덱스 2개 추가** (근본 해결, 코드 변경 0)
+  ```sql
+  CREATE INDEX IF NOT EXISTS ix_price_code_date ON etf_price(종목코드, 날짜);
+  CREATE INDEX IF NOT EXISTS ix_price_code_date ON etf_us_price(Code, Date);
+  ```
+  기대: `etf/heatmap` **2,043 ms → ~100 ms**.
+  ⚠️ **이 DB 는 이 저장소가 만들지 않는다** — 이 저장소는 `theme_daily`/`theme_stock_daily` 만
+  생성한다(`app/database.py`). 외부 `screener` 적재 코드에 넣어야 **영구적**이며,
+  DB 를 재생성하면 인덱스가 사라진다.
+- **P1 — `etf/heatmap` 에 mtime 키 응답 캐시.** 인덱스 후에도 100 ms/요청 → 반복은 0 ms.
+  `charts.py` 의 `_cached` 헬퍼 재사용 + 상한.
+- **P2 — 5개 핸들러 `async def` → `def`.** 블로킹을 이벤트 루프에서 threadpool 로 옮긴다.
+  P0 이후에는 블로킹 창이 100 ms 이하로 줄어 이득이 작아지지만 구조적으로 맞다.
+  (`get_stock_heatmap` 콜드 0.42초, `get_top30` 콜드 0.25초도 함께 해소)
+- **P3 — `get_top30` / `get_top30_matrix` mtime 캐시.** 44 ms → 0 ms. 경미하지만 저렴.
+
+**기각된 대안**: ③ 단일 쿼리 통합(212 ms), ④ 창 함수(5,100 ms) — 둘 다 현행보다 나쁘다.
+`etf_price` 를 전체 이력으로 읽는 경로(ETF AVWAP, 콜드 284 ms)는 인덱스 이득이 **1.2배뿐**이다
+(모든 행을 읽어야 하므로). 그 경로는 별도 과제다.
+
 ### 운영 규칙 (확정)
 
 - **빌드·배포는 에이전트가 실행하지 않는다.** 필요 시 사용자에게 실행을 요청한다.

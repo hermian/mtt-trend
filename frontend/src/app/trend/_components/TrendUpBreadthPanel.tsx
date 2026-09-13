@@ -49,13 +49,13 @@ interface HistogramCardProps {
   xAxisUnit: string;
 }
 
-const HistogramCard: React.FC<HistogramCardProps> = ({
+const HistogramCard: React.FC<HistogramCardProps> = React.memo(function HistogramCard({
   title,
   subtitle,
   stats,
   colorClass,
   xAxisUnit,
-}) => {
+}) {
   const [hoveredBin, setHoveredBin] = useState<HistogramBin | null>(null);
 
   const maxCount = useMemo(() => {
@@ -204,7 +204,7 @@ const HistogramCard: React.FC<HistogramCardProps> = ({
       </div>
     </div>
   );
-};
+});
 
 export const TrendUpBreadthPanel: React.FC = () => {
   const [universe, setUniverse] = useState<UniverseType>("krx300");
@@ -239,6 +239,7 @@ export const TrendUpBreadthPanel: React.FC = () => {
   const breadthChartRef = useRef<IChartApi | null>(null);
 
   const isSyncingRef = useRef<boolean>(false);
+  const lastHoveredTimeRef = useRef<string | null>(null);
   // Calculate start date based on period (기본 3년으로 가볍고 빠른 초기 로드)
   const startDate = useMemo(() => {
     const now = new Date();
@@ -502,9 +503,13 @@ export const TrendUpBreadthPanel: React.FC = () => {
       isSyncingRef.current = false;
     });
 
+    // Reset last hovered time ref on data change
+    lastHoveredTimeRef.current = null;
+
     // Crosshair Sync & HUD updates
     const updateHovered = (timeStr: string | null) => {
-      if (!timeStr) return;
+      if (!timeStr || timeStr === lastHoveredTimeRef.current) return;
+      lastHoveredTimeRef.current = timeStr;
       setHoveredDate(timeStr);
       const bPt = breadthMap.get(timeStr);
       if (bPt) {
@@ -550,19 +555,25 @@ export const TrendUpBreadthPanel: React.FC = () => {
     // Initial fit view (동일한 일자 배열이므로 완벽히 동일한 시간 윈도우 핏팅)
     timeScaleIndex.fitContent();
     timeScaleBreadth.fitContent();
-    // Resize Observer
+
+    // Resize Observer with rAF debounce
+    let resizeTimer: number | null = null;
     const handleResize = () => {
-      if (indexChartContainerRef.current && indexChartRef.current) {
-        indexChartRef.current.applyOptions({ width: indexChartContainerRef.current.clientWidth });
-      }
-      if (breadthChartContainerRef.current && breadthChartRef.current) {
-        breadthChartRef.current.applyOptions({ width: breadthChartContainerRef.current.clientWidth });
-      }
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
+      resizeTimer = requestAnimationFrame(() => {
+        if (indexChartContainerRef.current && indexChartRef.current) {
+          indexChartRef.current.applyOptions({ width: indexChartContainerRef.current.clientWidth });
+        }
+        if (breadthChartContainerRef.current && breadthChartRef.current) {
+          breadthChartRef.current.applyOptions({ width: breadthChartContainerRef.current.clientWidth });
+        }
+      });
     };
 
     window.addEventListener("resize", handleResize);
 
     return () => {
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
       window.removeEventListener("resize", handleResize);
       if (indexChartRef.current) {
         indexChartRef.current.remove();

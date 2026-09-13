@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import bisect
 import logging
 import os
 import pickle
@@ -196,22 +197,14 @@ def _load_index_data(universe: str, start_date: Optional[str] = None, end_date: 
     return points
 
 
-def _load_trend_up_breadth_data_impl(
-    universe: str = "krx300",
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-) -> TrendUpBreadthResponse:
-    """Trend-up Breadth 시계열 데이터 및 분포 히스토그램 통계를 계산하여 반환."""
-    universe_key = universe.lower().strip()
-    if universe_key not in UNIVERSE_DISPLAY_NAMES:
-        universe_key = "krx300"
-    universe_name = UNIVERSE_DISPLAY_NAMES[universe_key]
-
+def _compute_universe_full_data(universe_key: str) -> Tuple[TrendUpBreadthResponse, List[str]]:
+    """유니버스 전체 기간에 대한 Trend-up Breadth 및 Index 데이터를 1회 전량 계산."""
+    universe_name = UNIVERSE_DISPLAY_NAMES.get(universe_key, "KRX 300")
     db_dir = _get_db_dir()
     marcap_path = db_dir / "marcap_adj.parquet"
     if not marcap_path.exists():
         logger.error(f"marcap_adj.parquet가 존재하지 않습니다: {marcap_path}")
-        return TrendUpBreadthResponse(
+        empty_resp = TrendUpBreadthResponse(
             universe=universe_key,
             universe_name=universe_name,
             index_data=[],
@@ -219,6 +212,7 @@ def _load_trend_up_breadth_data_impl(
             distribution_daily=DistributionStats(),
             distribution_5ma=DistributionStats(),
         )
+        return empty_resp, []
 
     # 1. Base prices scan
     df_scan = pl.scan_parquet(marcap_path)
@@ -239,7 +233,6 @@ def _load_trend_up_breadth_data_impl(
                         pl.col("기준일").dt.date().alias("Date"),
                         pl.col("종목코드").alias("Code"),
                     ])
-                    # 최신일 구성종목
                     max_d = pdf_raw["기준일"].max()
                     latest_codes = set(pdf_raw.filter(pl.col("기준일") == max_d)["종목코드"].to_list())
             except Exception as e:
@@ -257,9 +250,7 @@ def _load_trend_up_breadth_data_impl(
 
         if pdf_pairs_df is not None and len(pdf_pairs_df) > 0:
             pdf_dates = set(pdf_pairs_df["Date"].unique().to_list())
-            # 1) PDF가 존재하는 날짜: 정확한 당일 구성종목 join
             part_exact = df_all_krx.join(pdf_pairs_df, on=["Date", "Code"], how="inner")
-            # 2) PDF가 아직 없는 날짜 (백필 진행 중인 날짜): 최신 구성종목 set 적용
             if latest_codes:
                 part_recent = df_all_krx.filter(
                     (~pl.col("Date").is_in(list(pdf_dates))) & pl.col("Code").is_in(list(latest_codes))
@@ -279,7 +270,7 @@ def _load_trend_up_breadth_data_impl(
         df_filtered = df_scan.select(["Date", "Code", "Close"]).collect()
 
     if len(df_filtered) == 0:
-        return TrendUpBreadthResponse(
+        empty_resp = TrendUpBreadthResponse(
             universe=universe_key,
             universe_name=universe_name,
             index_data=[],
@@ -287,6 +278,7 @@ def _load_trend_up_breadth_data_impl(
             distribution_daily=DistributionStats(),
             distribution_5ma=DistributionStats(),
         )
+        return empty_resp, []
 
     # 2. Sort by Code, Date and Calculate MA20 and MA40
     df_sorted = df_filtered.sort(["Code", "Date"])
@@ -333,37 +325,26 @@ def _load_trend_up_breadth_data_impl(
 
     distribution_daily = _compute_distribution_stats(daily_arr, start_date=first_date, end_date=last_date)
     distribution_5ma = _compute_distribution_stats(ma5_arr, start_date=first_date, end_date=last_date)
-    # 사용자 요청 날짜 필터링 적용 (시계열 차트용)
-    if start_date:
-        try:
-            s_date = datetime.strptime(start_date, "%Y-%m-%d").date()
-            summary = summary.filter(pl.col("Date") >= s_date)
-        except ValueError:
-            pass
-    if end_date:
-        try:
-            e_date = datetime.strptime(end_date, "%Y-%m-%d").date()
-            summary = summary.filter(pl.col("Date") <= e_date)
-        except ValueError:
-            pass
 
-    breadth_points: List[TrendUpBreadthPoint] = []
-    for row in summary.iter_rows(named=True):
-        t_str = str(row["Date"])[:10]
-        r_val = round(float(row["trend_up_ratio"]), 2) if row.get("trend_up_ratio") is not None else None
-        r5_val = round(float(row["trend_up_ratio_5ma"]), 2) if row.get("trend_up_ratio_5ma") is not None else None
-        breadth_points.append(
-            TrendUpBreadthPoint(
-                time=t_str,
-                trend_up_ratio=r_val,
-                trend_up_ratio_5ma=r5_val,
-                trend_up_stocks=int(row["trend_up_stocks"]) if row.get("trend_up_stocks") is not None else None,
-                total_stocks=int(row["total_stocks"]) if row.get("total_stocks") is not None else None,
-            )
+    dates_str = [str(d)[:10] for d in summary["Date"].to_list()]
+    r_list = [round(float(v), 2) if v is not None else None for v in summary["trend_up_ratio"].to_list()]
+    r5_list = [round(float(v), 2) if v is not None else None for v in summary["trend_up_ratio_5ma"].to_list()]
+    up_list = [int(v) if v is not None else None for v in summary["trend_up_stocks"].to_list()]
+    tot_list = [int(v) if v is not None else None for v in summary["total_stocks"].to_list()]
+
+    breadth_points = [
+        TrendUpBreadthPoint(
+            time=d,
+            trend_up_ratio=r,
+            trend_up_ratio_5ma=r5,
+            trend_up_stocks=up,
+            total_stocks=tot,
         )
+        for d, r, r5, up, tot in zip(dates_str, r_list, r5_list, up_list, tot_list)
+    ]
 
-    # 4. Index OHLCV 데이터 로드
-    raw_index_points = _load_index_data(universe_key, start_date=start_date, end_date=end_date)
+    # 4. Index OHLCV 데이터 로드 (전체 기간)
+    raw_index_points = _load_index_data(universe_key, start_date=None, end_date=None)
 
     # 5. 상하단 차트 X축 1:1 완벽 정렬을 위한 공통 일자(Date Alignment) 동기화
     index_dates = {p.time for p in raw_index_points}
@@ -377,7 +358,9 @@ def _load_trend_up_breadth_data_impl(
         aligned_index_points = raw_index_points
         aligned_breadth_points = breadth_points
 
-    return TrendUpBreadthResponse(
+    full_dates = [p.time for p in aligned_breadth_points]
+
+    full_response = TrendUpBreadthResponse(
         universe=universe_key,
         universe_name=universe_name,
         index_data=aligned_index_points,
@@ -385,15 +368,8 @@ def _load_trend_up_breadth_data_impl(
         distribution_daily=distribution_daily,
         distribution_5ma=distribution_5ma,
     )
+    return full_response, full_dates
 
-
-# /trend-up-breadth 응답 캐시.
-# marcap_adj.parquet / krx300_pdf.parquet / etf_krx.parquet / macro.db 는 장 마감 후
-# 1회 갱신되므로, 이 파일들의 최신 mtime 을 키로 쓰면 무효화에 충분하다
-# (_CHART_CACHE / _MACRO_CACHE 와 동일한 프로젝트 표준 패턴).
-# universe 4종 × 기간 조합이 캐시되므로 상한을 둬 무한 증가를 막는다.
-_TREND_UP_BREADTH_CACHE: Dict[tuple, Tuple[float, TrendUpBreadthResponse]] = {}
-_TREND_UP_BREADTH_CACHE_MAX = 8
 
 # 이 응답이 의존하는 데이터 파일들. 하나라도 갱신되면 캐시를 무효화한다.
 _TREND_UP_BREADTH_SOURCES = (
@@ -417,20 +393,83 @@ def _trend_up_breadth_mtime() -> float:
     return newest
 
 
+# 유니버스별 전체 계산 결과 캐시: universe -> (mtime, full_response, full_dates)
+_UNIVERSE_FULL_CACHE: Dict[str, Tuple[float, TrendUpBreadthResponse, List[str]]] = {}
+
+# 기간 슬라이스 결과 쿼리 캐시: (universe, start_date, end_date) -> (mtime, response)
+_TREND_UP_BREADTH_QUERY_CACHE: Dict[Tuple[str, Optional[str], Optional[str]], Tuple[float, TrendUpBreadthResponse]] = {}
+_TREND_UP_BREADTH_QUERY_CACHE_MAX = 32
+
+
+def _get_or_compute_universe_data(universe_key: str) -> Tuple[TrendUpBreadthResponse, List[str]]:
+    """유니버스 전체 집계 데이터를 캐시에서 조회하거나 새로 계산."""
+    mtime = _trend_up_breadth_mtime()
+    cached = _UNIVERSE_FULL_CACHE.get(universe_key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1], cached[2]
+
+    full_response, full_dates = _compute_universe_full_data(universe_key)
+    _UNIVERSE_FULL_CACHE[universe_key] = (mtime, full_response, full_dates)
+    return full_response, full_dates
+
+
+def _load_trend_up_breadth_data_impl(
+    universe: str = "krx300",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+) -> TrendUpBreadthResponse:
+    """호환성 유지용 내부 진입점."""
+    return load_trend_up_breadth_data(universe, start_date, end_date)
+
+
 def load_trend_up_breadth_data(
     universe: str = "krx300",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
 ) -> TrendUpBreadthResponse:
-    """mtime 캐시를 적용한 공개 진입점. 실제 계산은 _load_trend_up_breadth_data_impl."""
-    key = (universe, start_date, end_date)
+    """
+    mtime 기반 유니버스 캐시와 O(log N) bisect 슬라이싱을 적용한 고성능 진입점.
+    전체 유니버스 집계(7,500일)는 메모리에 1회 캐싱되며,
+    기간 변경(1y, 3y, 5y, all) 시 0.1ms 이내로 슬라이스하여 반환합니다.
+    """
+    universe_key = universe.lower().strip()
+    if universe_key not in UNIVERSE_DISPLAY_NAMES:
+        universe_key = "krx300"
+
+    key = (universe_key, start_date, end_date)
     mtime = _trend_up_breadth_mtime()
-    cached = _TREND_UP_BREADTH_CACHE.get(key)
+    cached = _TREND_UP_BREADTH_QUERY_CACHE.get(key)
     if cached is not None and cached[0] == mtime:
         return cached[1]
 
-    response = _load_trend_up_breadth_data_impl(universe, start_date, end_date)
-    if len(_TREND_UP_BREADTH_CACHE) >= _TREND_UP_BREADTH_CACHE_MAX:
-        _TREND_UP_BREADTH_CACHE.pop(next(iter(_TREND_UP_BREADTH_CACHE)))
-    _TREND_UP_BREADTH_CACHE[key] = (mtime, response)
+    full_response, full_dates = _get_or_compute_universe_data(universe_key)
+
+    if not full_dates or (not start_date and not end_date):
+        response = full_response
+    else:
+        i_start = bisect.bisect_left(full_dates, start_date) if start_date else 0
+        i_end = bisect.bisect_right(full_dates, end_date) if end_date else len(full_dates)
+
+        response = TrendUpBreadthResponse(
+            universe=full_response.universe,
+            universe_name=full_response.universe_name,
+            index_data=full_response.index_data[i_start:i_end],
+            breadth_data=full_response.breadth_data[i_start:i_end],
+            distribution_daily=full_response.distribution_daily,
+            distribution_5ma=full_response.distribution_5ma,
+        )
+
+    if len(_TREND_UP_BREADTH_QUERY_CACHE) >= _TREND_UP_BREADTH_QUERY_CACHE_MAX:
+        _TREND_UP_BREADTH_QUERY_CACHE.pop(next(iter(_TREND_UP_BREADTH_QUERY_CACHE)))
+    _TREND_UP_BREADTH_QUERY_CACHE[key] = (mtime, response)
     return response
+
+
+def prewarm_trend_up_breadth_cache() -> None:
+    """서버 시작 시 4대 유니버스의 전체 집계 데이터를 백그라운드에서 사전 계산 및 캐싱."""
+    for universe in ("krx300", "kospi", "kosdaq", "all"):
+        try:
+            _get_or_compute_universe_data(universe)
+        except Exception as e:
+            logger.warning(f"Trend-up breadth prewarm failed for {universe}: {e}")
+

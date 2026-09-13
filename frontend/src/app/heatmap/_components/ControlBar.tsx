@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { memo, useState } from "react";
 import clsx from "clsx";
 import type { HeatmapGrouping, HeatmapPeriod } from "@/lib/api";
 
@@ -131,7 +131,7 @@ function btnClass(active: boolean): string {
   );
 }
 
-export function ControlBar({
+export const ControlBar = memo(function ControlBar({
   value,
   onChange,
   onSaveDefault,
@@ -502,4 +502,4 @@ export function ControlBar({
       )}
     </div>
   );
-}
+});

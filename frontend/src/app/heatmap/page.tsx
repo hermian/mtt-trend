@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useToast } from "@/contexts/ToastContext";
 import { useStockHeatmap } from "@/hooks/useStockHeatmap";
 import { ControlBar, type HeatmapControls } from "./_components/ControlBar";
@@ -45,21 +45,21 @@ export default function StockHeatmapPage() {
   const [selectedStock, setSelectedStock] = useState<StockHeatmapItem | null>(null);
   const isMarketGrouping = MARKET_GROUPINGS.has(controls.grouping);
 
-  const handleSaveDefault = () => {
+  const handleSaveDefault = useCallback(() => {
     const ok = saveHeatmapControls(controls);
     if (ok) {
       toast.success("현재 필터가 기본값으로 저장되었습니다.");
     } else {
       toast.error("기본값 저장에 실패했습니다.");
     }
-  };
+  }, [controls, toast]);
 
-  const handleResetDefault = () => {
+  const handleResetDefault = useCallback(() => {
     clearSavedHeatmapControls();
     setControls(DEFAULT_HEATMAP_CONTROLS);
     setDrilledGroup(null);
     toast.success("기본 설정으로 초기화되었습니다.");
-  };
+  }, [toast]);
 
   const { data, isFetching, isError, error } = useStockHeatmap({
     grouping: controls.grouping,
@@ -81,15 +81,23 @@ export default function StockHeatmapPage() {
   })();
 
   // Reset drill-down when controls change
-  const handleControlChange = (patch: Partial<HeatmapControls>) => {
+  const handleControlChange = useCallback((patch: Partial<HeatmapControls>) => {
     setDrilledGroup(null);
     setControls((prev) => ({ ...prev, ...patch }));
-  };
+  }, []);
 
-  const handleOpenModal = (groupName?: string | null) => {
+  const handleOpenModal = useCallback((groupName?: string | null) => {
     setModalInitialGroup(groupName ?? null);
     setIsModalOpen(true);
-  };
+  }, []);
+
+  const handleDrill = useCallback((groupName: string) => {
+    setDrilledGroup(groupName);
+  }, []);
+
+  const handleSelectStock = useCallback((stock: StockHeatmapItem) => {
+    setSelectedStock(stock);
+  }, []);
 
   const scale = useMemo(() => {
     const rets = (data?.groups ?? []).flatMap((g) =>
@@ -218,8 +226,8 @@ export default function StockHeatmapPage() {
             <GroupTreemap
               groups={data.groups}
               scale={scale}
-              onDrill={(name) => setDrilledGroup(name)}
-              onShowStockList={(name) => handleOpenModal(name)}
+              onDrill={handleDrill}
+              onShowStockList={handleOpenModal}
             />
           </div>
         )}
@@ -229,7 +237,7 @@ export default function StockHeatmapPage() {
             <StockTreemap
               group={stockTreemapGroup}
               scale={scale}
-              onSelectStock={setSelectedStock}
+              onSelectStock={handleSelectStock}
             />
           </div>
         )}

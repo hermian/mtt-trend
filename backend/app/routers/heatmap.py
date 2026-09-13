@@ -3,14 +3,20 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
 
 from app.schemas import StockHeatmapResponse
+from app.utils.cache_utils import cached_by_mtime
+from app.utils.mtime_utils import newest_mtime
 from app.utils.stock_heatmap_utils import (
     PERIOD_TRADING_DAYS,
     VALID_GROUPINGS,
     PriceDbLockedError,
     shape_heatmap,
+    stock_heatmap_sources,
 )
 
 router = APIRouter(prefix="/heatmap", tags=["heatmap"])
+
+_STOCK_HEATMAP_CACHE: dict = {}
+_STOCK_HEATMAP_CACHE_MAX = 32
 
 
 @router.get("/stocks", response_model=StockHeatmapResponse)
@@ -35,6 +41,24 @@ def get_stock_heatmap(
     최신 RS 유니버스(~/.cache/db/rs) 기준으로 그룹별(섹터/WICS 산업/테마/KOSPI/KOSDAQ)
     종목 목록과 선택 기간(또는 시작일~종료일 지정)의 수익률·RS·시가총액을 반환합니다.
     """
+    # Sanitize query parameter defaults if called directly outside FastAPI injection
+    if not isinstance(start_date, str):
+        start_date = None
+    if not isinstance(end_date, str):
+        end_date = None
+    if not isinstance(marcap_min, (int, float)):
+        marcap_min = None
+    if not isinstance(marcap_max, (int, float)):
+        marcap_max = None
+    if not isinstance(min_ret, (int, float)):
+        min_ret = None
+    if not isinstance(min_rs, int):
+        min_rs = None
+    if not isinstance(mmt, str):
+        mmt = None
+    if not isinstance(limit, int):
+        limit = 0
+
     if grouping not in VALID_GROUPINGS:
         raise HTTPException(
             status_code=400,
@@ -47,18 +71,37 @@ def get_stock_heatmap(
             status_code=400,
             detail=f"period must be one of {list(PERIOD_TRADING_DAYS)} or CUSTOM",
         )
+    cache_key = (
+        grouping,
+        period,
+        start_date,
+        end_date,
+        marcap_min,
+        marcap_max,
+        min_ret,
+        min_rs,
+        mmt,
+        limit,
+    )
     try:
-        return shape_heatmap(
-            grouping=grouping,
-            period=period,
-            start_date=start_date,
-            end_date=end_date,
-            marcap_min=marcap_min,
-            marcap_max=marcap_max,
-            min_ret=min_ret,
-            min_rs=min_rs,
-            mmt=mmt,
-            limit=limit,
+        return cached_by_mtime(
+            _STOCK_HEATMAP_CACHE,
+            _STOCK_HEATMAP_CACHE_MAX,
+            cache_key,
+            newest_mtime(*stock_heatmap_sources()),
+            lambda: shape_heatmap(
+                grouping=grouping,
+                period=period,
+                start_date=start_date,
+                end_date=end_date,
+                marcap_min=marcap_min,
+                marcap_max=marcap_max,
+                min_ret=min_ret,
+                min_rs=min_rs,
+                mmt=mmt,
+                limit=limit,
+            ),
+            should_cache=bool,
         )
     except FileNotFoundError as e:
         raise HTTPException(status_code=503, detail=f"데이터 파일을 찾을 수 없습니다: {e}")

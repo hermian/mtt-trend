@@ -98,6 +98,20 @@ def latest_rs_partition(rs_dir: Path) -> Optional[tuple[str, Path]]:
     return best
 
 
+def stock_heatmap_sources() -> list[Path]:
+    """shape_heatmap 이 읽는 원본 파일 목록. 캐시 무효화 키(최신 mtime) 산출용."""
+    rs_dir = get_rs_dir()
+    price_db = get_stock_price_db_path()
+    part = latest_rs_partition(rs_dir)
+    sources: list[Path] = []
+    if part and part[1].is_file():
+        sources.append(part[1])
+    if price_db.is_file():
+        sources.append(price_db)
+    return sources
+
+
+
 # ---------------------------------------------------------------------------
 # Base frame cache (all stocks × attributes × 6 period returns)
 # ---------------------------------------------------------------------------

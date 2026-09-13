@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
 import type { StockHeatmapGroup, StockHeatmapItem } from "@/lib/api";
 import { squarify, type Rect } from "../_lib/treemap";
 import { heatColor, type ColorScale } from "../_lib/colors";
@@ -26,7 +26,141 @@ interface GroupHoverState {
   y: number;
 }
 
-export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupTreemapProps) {
+const GroupTreemapCells = memo(function GroupTreemapCells({
+  layout,
+  scale,
+  onDrill,
+  onHoverGroup,
+  onLeaveGroup,
+}: {
+  layout: Array<{ item: { g: unknown; weight: number }; rect: Rect }>;
+  scale: ColorScale;
+  onDrill: (groupName: string) => void;
+  onHoverGroup: (group: StockHeatmapGroup, clientX: number, clientY: number) => void;
+  onLeaveGroup: () => void;
+}) {
+  return (
+    <>
+      {layout.map(({ item, rect }) => {
+        const g = item.g as StockHeatmapGroup;
+        const ret = g.avg_return ?? 0;
+        const { fill, text } = heatColor(ret, scale);
+        const cx = rect.x + rect.w / 2;
+        const cy = rect.y + rect.h / 2;
+
+        // Progressive disclosure based on box size
+        const showName = rect.w > 50 && rect.h > 28;
+        const showRet = rect.w > 60 && rect.h > 44;
+        const showRS = rect.w > 60 && rect.h > 58 && g.rs !== null;
+        const showCount = rect.w > 70 && rect.h > 72;
+
+        // Font sizes scale with box width
+        const nameFs = Math.min(14, Math.max(9, rect.w / 8));
+        const retFs = Math.min(13, Math.max(9, rect.w / 9));
+        const subFs = Math.min(11, Math.max(8, rect.w / 11));
+
+        // Compute total text block height for vertical centering
+        const lineHeights: number[] = [];
+        if (showName) lineHeights.push(nameFs);
+        if (showRet) lineHeights.push(retFs);
+        if (showRS) lineHeights.push(subFs);
+        if (showCount) lineHeights.push(subFs);
+        const lineGap = 3;
+        const totalH = lineHeights.reduce((s, h) => s + h, 0) + lineGap * Math.max(0, lineHeights.length - 1);
+        let curY = cy - totalH / 2;
+
+        const nameMaxW = rect.w - 12;
+
+        return (
+          <g
+            key={g.name}
+            className="cursor-pointer"
+            onClick={() => onDrill(g.name)}
+            onMouseMove={(e) => {
+              if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
+                onHoverGroup(g, e.clientX, e.clientY);
+              }
+            }}
+            onMouseLeave={onLeaveGroup}
+          >
+            <rect
+              x={rect.x}
+              y={rect.y}
+              width={rect.w}
+              height={rect.h}
+              fill={fill}
+              stroke="rgba(0,0,0,0.5)"
+              strokeWidth={1}
+            />
+            {showName && (
+              <text
+                x={cx}
+                y={curY + nameFs * 0.85}
+                fontSize={nameFs}
+                fontWeight={700}
+                fill={text}
+                textAnchor="middle"
+                pointerEvents="none"
+              >
+                {truncate(g.name, nameMaxW, nameFs)}
+              </text>
+            )}
+            {showName && showRet && (curY += nameFs + lineGap)}
+            {showRet && (
+              <text
+                x={cx}
+                y={curY + retFs * 0.85}
+                fontSize={retFs}
+                fontWeight={600}
+                fill={text}
+                textAnchor="middle"
+                pointerEvents="none"
+                opacity={0.9}
+              >
+                {formatReturn(g.avg_return)}
+              </text>
+            )}
+            {showRet && showRS && (curY += retFs + lineGap)}
+            {showRS && (
+              <text
+                x={cx}
+                y={curY + subFs * 0.85}
+                fontSize={subFs}
+                fill={text}
+                textAnchor="middle"
+                pointerEvents="none"
+                opacity={0.7}
+              >
+                RS {g.rs}
+              </text>
+            )}
+            {showRS && showCount && (curY += subFs + lineGap)}
+            {showCount && (
+              <text
+                x={cx}
+                y={curY + subFs * 0.85}
+                fontSize={subFs}
+                fill={text}
+                textAnchor="middle"
+                pointerEvents="none"
+                opacity={0.6}
+              >
+                {g.stock_count}종목
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </>
+  );
+});
+
+export const GroupTreemap = memo(function GroupTreemap({
+  groups,
+  scale,
+  onDrill,
+  onShowStockList,
+}: GroupTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<GroupHoverState | null>(null);
@@ -34,11 +168,20 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    let rafId: number | null = null;
     const ro = new ResizeObserver((entries) => {
-      setWidth(entries[0].contentRect.width);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (entries[0]) {
+          setWidth(entries[0].contentRect.width);
+        }
+      });
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   }, []);
 
   const height = Math.max(480, Math.min(width * 0.6, 800));
@@ -50,6 +193,17 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
     );
   }, [groups, width, height]);
 
+  const handleHoverGroup = useCallback(
+    (group: StockHeatmapGroup, clientX: number, clientY: number) => {
+      setHover({ group, x: clientX, y: clientY });
+    },
+    [],
+  );
+
+  const handleLeaveGroup = useCallback(() => {
+    setHover(null);
+  }, []);
+
   return (
     <div ref={containerRef} className="relative w-full">
       <svg
@@ -59,120 +213,13 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
         aria-label="그룹별 히트맵"
         className="block select-none"
       >
-        {layout.map(({ item, rect }) => {
-          const g = item.g as StockHeatmapGroup;
-          const ret = g.avg_return ?? 0;
-          const { fill, text } = heatColor(ret, scale);
-          const cx = rect.x + rect.w / 2;
-          const cy = rect.y + rect.h / 2;
-
-          // Progressive disclosure based on box size
-          const showName = rect.w > 50 && rect.h > 28;
-          const showRet = rect.w > 60 && rect.h > 44;
-          const showRS = rect.w > 60 && rect.h > 58 && g.rs !== null;
-          const showCount = rect.w > 70 && rect.h > 72;
-
-          // Font sizes scale with box width
-          const nameFs = Math.min(14, Math.max(9, rect.w / 8));
-          const retFs = Math.min(13, Math.max(9, rect.w / 9));
-          const subFs = Math.min(11, Math.max(8, rect.w / 11));
-
-          // Compute total text block height for vertical centering
-          const lineHeights: number[] = [];
-          if (showName) lineHeights.push(nameFs);
-          if (showRet) lineHeights.push(retFs);
-          if (showRS) lineHeights.push(subFs);
-          if (showCount) lineHeights.push(subFs);
-          const lineGap = 3;
-          const totalH = lineHeights.reduce((s, h) => s + h, 0) + lineGap * Math.max(0, lineHeights.length - 1);
-          let curY = cy - totalH / 2;
-
-          const nameMaxW = rect.w - 12;
-
-          return (
-            <g
-              key={g.name}
-              className="cursor-pointer"
-              onClick={() => onDrill(g.name)}
-              onMouseMove={(e) => {
-                if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
-                  setHover({
-                    group: g,
-                    x: e.clientX,
-                    y: e.clientY,
-                  });
-                }
-              }}
-              onMouseLeave={() => setHover(null)}
-            >
-              <rect
-                x={rect.x}
-                y={rect.y}
-                width={rect.w}
-                height={rect.h}
-                fill={fill}
-                stroke="rgba(0,0,0,0.5)"
-                strokeWidth={1}
-              />
-              {showName && (
-                <text
-                  x={cx}
-                  y={curY + nameFs * 0.85}
-                  fontSize={nameFs}
-                  fontWeight={700}
-                  fill={text}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                >
-                  {truncate(g.name, nameMaxW, nameFs)}
-                </text>
-              )}
-              {showName && showRet && (curY += nameFs + lineGap)}
-              {showRet && (
-                <text
-                  x={cx}
-                  y={curY + retFs * 0.85}
-                  fontSize={retFs}
-                  fontWeight={600}
-                  fill={text}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                  opacity={0.9}
-                >
-                  {formatReturn(g.avg_return)}
-                </text>
-              )}
-              {showRet && showRS && (curY += retFs + lineGap)}
-              {showRS && (
-                <text
-                  x={cx}
-                  y={curY + subFs * 0.85}
-                  fontSize={subFs}
-                  fill={text}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                  opacity={0.7}
-                >
-                  RS {g.rs}
-                </text>
-              )}
-              {showRS && showCount && (curY += subFs + lineGap)}
-              {showCount && (
-                <text
-                  x={cx}
-                  y={curY + subFs * 0.85}
-                  fontSize={subFs}
-                  fill={text}
-                  textAnchor="middle"
-                  pointerEvents="none"
-                  opacity={0.6}
-                >
-                  {g.stock_count}종목
-                </text>
-              )}
-            </g>
-          );
-        })}
+        <GroupTreemapCells
+          layout={layout}
+          scale={scale}
+          onDrill={onDrill}
+          onHoverGroup={handleHoverGroup}
+          onLeaveGroup={handleLeaveGroup}
+        />
       </svg>
 
       {/* 데스크톱 마우스 호버 툴팁 / 팝업 */}
@@ -260,7 +307,7 @@ export function GroupTreemap({ groups, scale, onDrill, onShowStockList }: GroupT
       )}
     </div>
   );
-}
+});
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Stock-level treemap  (Step 2 – drill-down)
@@ -283,7 +330,86 @@ interface SelectedState {
   stock: StockHeatmapItem;
 }
 
-export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps) {
+const StockTreemapCells = memo(function StockTreemapCells({
+  cells,
+  scale,
+  selectedCode,
+  onStockClick,
+  onHoverStock,
+  onLeaveStock,
+}: {
+  cells: Array<{ item: { s: StockHeatmapItem; weight: number }; rect: Rect }>;
+  scale: ColorScale;
+  selectedCode?: string;
+  onStockClick: (e: React.MouseEvent, stock: StockHeatmapItem) => void;
+  onHoverStock: (stock: StockHeatmapItem, clientX: number, clientY: number) => void;
+  onLeaveStock: () => void;
+}) {
+  return (
+    <>
+      {cells.map(({ item, rect: cr }) => {
+        const { fill, text } = heatColor(item.s.ret, scale);
+        const fs = cr.w > 95 ? 11 : 9.5;
+        const showRet = cr.w > 58 && cr.h > 36;
+        const showName = showRet || (cr.w > 36 && cr.h > 16);
+        const isSelectedCell = selectedCode === item.s.code;
+
+        return (
+          <g
+            key={item.s.code}
+            className="cursor-pointer"
+            onMouseMove={(e) => {
+              if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
+                onHoverStock(item.s, e.clientX, e.clientY);
+              }
+            }}
+            onMouseLeave={onLeaveStock}
+            onClick={(e) => onStockClick(e, item.s)}
+          >
+            <rect
+              x={cr.x}
+              y={cr.y}
+              width={cr.w}
+              height={cr.h}
+              fill={fill}
+              stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
+              strokeWidth={isSelectedCell ? 2 : 0.5}
+            />
+            {showName && (
+              <text
+                x={cr.x + 3}
+                y={cr.y + fs + 2}
+                fontSize={fs}
+                fontWeight={600}
+                fill={text}
+                pointerEvents="none"
+              >
+                {truncate(item.s.name, cr.w - 6, fs)}
+              </text>
+            )}
+            {showRet && (
+              <text
+                x={cr.x + 3}
+                y={cr.y + fs * 2 + 4}
+                fontSize={fs - 1}
+                fill={text}
+                pointerEvents="none"
+              >
+                {formatReturn(item.s.ret)}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </>
+  );
+});
+
+export const StockTreemap = memo(function StockTreemap({
+  group,
+  scale,
+  onSelectStock,
+}: StockTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1000);
   const [hover, setHover] = useState<HoverState | null>(null);
@@ -292,11 +418,20 @@ export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps)
   useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
+    let rafId: number | null = null;
     const ro = new ResizeObserver((entries) => {
-      setWidth(entries[0].contentRect.width);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        if (entries[0]) {
+          setWidth(entries[0].contentRect.width);
+        }
+      });
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      if (rafId !== null) cancelAnimationFrame(rafId);
+      ro.disconnect();
+    };
   }, []);
 
   const height = Math.max(480, Math.min(width * 0.6, 800));
@@ -308,27 +443,38 @@ export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps)
     );
   }, [group, width, height]);
 
-  const handleStockClick = (
-    e: React.MouseEvent,
-    stock: StockHeatmapItem,
-  ) => {
-    const isTouchEvent = (e.nativeEvent as PointerEvent).pointerType === "touch";
+  const handleStockClick = useCallback(
+    (e: React.MouseEvent, stock: StockHeatmapItem) => {
+      const isTouchEvent = (e.nativeEvent as PointerEvent).pointerType === "touch";
 
-    if (isTouchEvent) {
-      e.stopPropagation();
-      setSelected((prev) =>
-        prev?.stock.code === stock.code ? null : { stock },
-      );
-    } else if (onSelectStock) {
-      onSelectStock(stock);
-    } else {
-      window.open(
-        getStreamlitSearchUrl(stock.name, "stock"),
-        "_blank",
-        "noopener",
-      );
-    }
-  };
+      if (isTouchEvent) {
+        e.stopPropagation();
+        setSelected((prev) =>
+          prev?.stock.code === stock.code ? null : { stock },
+        );
+      } else if (onSelectStock) {
+        onSelectStock(stock);
+      } else {
+        window.open(
+          getStreamlitSearchUrl(stock.name, "stock"),
+          "_blank",
+          "noopener",
+        );
+      }
+    },
+    [onSelectStock],
+  );
+
+  const handleHoverStock = useCallback(
+    (stock: StockHeatmapItem, clientX: number, clientY: number) => {
+      setHover({ stock, x: clientX, y: clientY });
+    },
+    [],
+  );
+
+  const handleLeaveStock = useCallback(() => {
+    setHover(null);
+  }, []);
 
   return (
     <div
@@ -343,64 +489,14 @@ export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps)
         aria-label={`${group.name} 종목 히트맵`}
         className="block select-none"
       >
-        {cells.map(({ item, rect: cr }) => {
-          const { fill, text } = heatColor(item.s.ret, scale);
-          const fs = cr.w > 95 ? 11 : 9.5;
-          const showRet = cr.w > 58 && cr.h > 36;
-          const showName = showRet || (cr.w > 36 && cr.h > 16);
-          const isSelectedCell = selected?.stock.code === item.s.code;
-
-          return (
-            <g
-              key={item.s.code}
-              className="cursor-pointer"
-              onMouseMove={(e) => {
-                if ((e.nativeEvent as PointerEvent).pointerType !== "touch") {
-                  setHover({
-                    stock: item.s,
-                    x: e.clientX,
-                    y: e.clientY,
-                  });
-                }
-              }}
-              onMouseLeave={() => setHover(null)}
-              onClick={(e) => handleStockClick(e, item.s)}
-            >
-              <rect
-                x={cr.x}
-                y={cr.y}
-                width={cr.w}
-                height={cr.h}
-                fill={fill}
-                stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
-                strokeWidth={isSelectedCell ? 2 : 0.5}
-              />
-              {showName && (
-                <text
-                  x={cr.x + 3}
-                  y={cr.y + fs + 2}
-                  fontSize={fs}
-                  fontWeight={600}
-                  fill={text}
-                  pointerEvents="none"
-                >
-                  {truncate(item.s.name, cr.w - 6, fs)}
-                </text>
-              )}
-              {showRet && (
-                <text
-                  x={cr.x + 3}
-                  y={cr.y + fs * 2 + 4}
-                  fontSize={fs - 1}
-                  fill={text}
-                  pointerEvents="none"
-                >
-                  {formatReturn(item.s.ret)}
-                </text>
-              )}
-            </g>
-          );
-        })}
+        <StockTreemapCells
+          cells={cells}
+          scale={scale}
+          selectedCode={selected?.stock.code}
+          onStockClick={handleStockClick}
+          onHoverStock={handleHoverStock}
+          onLeaveStock={handleLeaveStock}
+        />
       </svg>
 
       {/* 데스크톱 마우스 호버 툴팁 */}
@@ -548,4 +644,4 @@ export function StockTreemap({ group, scale, onSelectStock }: StockTreemapProps)
       )}
     </div>
   );
-}
+});

@@ -80,6 +80,8 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
   const chartDataRef = useRef<any>(null);
+  const dataMapRef = useRef<Map<number, any>>(new Map());
+  const lastHoveredTimeRef = useRef<any>(null);
   const selectedIndexRef = useRef<IndexType>("kospi");
   const isSyncingRef = useRef<boolean>(false);
   const [status, setStatus] = useState<string>("Initializing...");
@@ -270,7 +272,13 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
   }, [chartData, selectedDate]);
 
   useEffect(() => {
-    if (formattedData.length > 0) chartDataRef.current = formattedData;
+    if (formattedData.length > 0) {
+      chartDataRef.current = formattedData;
+      const map = new Map<number, any>();
+      formattedData.forEach((p) => map.set(p.time, p));
+      dataMapRef.current = map;
+      lastHoveredTimeRef.current = null;
+    }
   }, [formattedData]);
 
   // 최신 봉 기준으로 범례 초기값 설정 (마우스 이동 전에도 값 표시)
@@ -491,14 +499,19 @@ export const MarketFlowChart: React.FC<MarketFlowChartProps> = () => {
 
           const idx = selectedIndexRef.current;
           if (!param.time || !param.point || param.point.x < 0) {
-            const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
-            if (latestPoint) {
-              setHoveredData(buildHoveredData(latestPoint, idx));
-            } else {
-              setHoveredData(null);
+            if (lastHoveredTimeRef.current !== null) {
+              lastHoveredTimeRef.current = null;
+              const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
+              if (latestPoint) {
+                setHoveredData(buildHoveredData(latestPoint, idx));
+              } else {
+                setHoveredData(null);
+              }
             }
           } else {
-            const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
+            if (param.time === lastHoveredTimeRef.current) return;
+            lastHoveredTimeRef.current = param.time;
+            const currentPoint = dataMapRef.current.get(param.time as number);
             if (currentPoint) {
               setHoveredData(buildHoveredData(currentPoint, idx));
             }

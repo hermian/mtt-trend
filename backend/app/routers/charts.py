@@ -47,7 +47,7 @@ from app.utils.wics_index_utils import (
     default_lookback_start,
 )
 from app.utils.chart_utils import load_chart_data, load_chart_bytes
-from app.utils.above_ma_utils import load_above_ma_data
+from app.utils.above_ma_utils import load_above_ma_data, get_above_ma_db_path
 from app.utils.foreign_flow_utils import load_foreign_flow_data, foreign_flow_sources
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
@@ -151,6 +151,10 @@ def get_chart_data(
     # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
     return ChartDataResponse(symbol=symbol.upper(), data=[])
 
+_ABOVE_MA_CACHE: dict[tuple, tuple[float, ChartDataResponse]] = {}
+_ABOVE_MA_CACHE_MAX = 8
+
+
 @router.get("/above-ma", response_model=ChartDataResponse)
 def get_above_ma_chart_data(
     market: str = Query("KOSPI", description="시장 구분 (KOSPI, KOSPI200, KOSDAQ, KOSDAQ150)"),
@@ -160,13 +164,20 @@ def get_above_ma_chart_data(
     """
     Above MA 실시간 지표 데이터를 반환합니다 (정전 시 누락 데이터 보간 포함).
     """
-    data = load_above_ma_data(market, start_date, end_date)
-    
-    if data:
-        return data
-    
-    # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
-    return ChartDataResponse(symbol=market.upper(), data=[])
+    def _compute() -> ChartDataResponse:
+        data = load_above_ma_data(market, start_date, end_date)
+        if data:
+            return data
+        return ChartDataResponse(symbol=market.upper(), data=[])
+
+    db_path = get_above_ma_db_path()
+    return cached_by_mtime(
+        _ABOVE_MA_CACHE,
+        _ABOVE_MA_CACHE_MAX,
+        (market.upper(), start_date, end_date),
+        file_mtime(db_path),
+        _compute,
+    )
 
 
 @router.get("/stockbee-mm", response_model=StockbeeMmResponse)
@@ -695,6 +706,13 @@ def get_foreign_flow_chart_data(
     )
 
 
+_MARKET_FLOW_CACHE: dict[tuple, tuple[float, MarketFlowResponse]] = {}
+_MARKET_FLOW_CACHE_MAX = 16
+
+_MARKET_FLOW_DATES_CACHE: dict[tuple, tuple[float, list[str]]] = {}
+_MARKET_FLOW_DATES_CACHE_MAX = 2
+
+
 @router.get("/market-flow", response_model=MarketFlowResponse)
 def get_market_flow_chart_data(
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
@@ -704,74 +722,95 @@ def get_market_flow_chart_data(
     ~/.cache/db/macro.db에서 수급 데이터(market_flow)를 반환합니다.
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
-    if not os.path.exists(db_path):
-        return MarketFlowResponse(data=[])
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    def _compute() -> MarketFlowResponse:
+        if not os.path.exists(db_path):
+            return MarketFlowResponse(data=[])
 
-    query = "SELECT * FROM market_flow"
-    filters = []
-    params = []
-    if start_date:
-        filters.append("date >= ?")
-        params.append(start_date)
-    if end_date:
-        filters.append("date <= ?")
-        params.append(end_date)
-    if filters:
-        query += " WHERE " + " AND ".join(filters)
-    query += " ORDER BY date ASC, time ASC"
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
 
-    try:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-        result = []
-        for row in rows:
-            result.append(MarketFlowPoint(
-                date=row["date"],
-                time=row["time"],
-                kospi_price=row["kospi_price"],
-                kospi200_price=row["kospi200_price"],
-                kosdaq_price=row["kosdaq_price"],
-                kq150_price=row["kq150_price"],
-                kospi_foreigner=row["kospi_foreigner"],
-                kospi_institution=row["kospi_institution"],
-                kospi_individual=row["kospi_individual"],
-                kospi_program=row["kospi_program"],
-                kosdaq_foreigner=row["kosdaq_foreigner"],
-                kosdaq_institution=row["kosdaq_institution"],
-                kosdaq_individual=row["kosdaq_individual"],
-                future_foreigner=row["future_foreigner"],
-                future_institution=row["future_institution"],
-                future_individual=row["future_individual"],
-                emini_nasdaq_price=row["emini_nasdaq_price"] if "emini_nasdaq_price" in row.keys() else None
-            ))
-        return MarketFlowResponse(data=result)
-    except Exception as e:
-        print(f"Error loading market flow data: {e}")
-        return MarketFlowResponse(data=[])
-    finally:
-        conn.close()
+        query = "SELECT * FROM market_flow"
+        filters = []
+        params = []
+        if start_date:
+            filters.append("date >= ?")
+            params.append(start_date)
+        if end_date:
+            filters.append("date <= ?")
+            params.append(end_date)
+        if filters:
+            query += " WHERE " + " AND ".join(filters)
+        query += " ORDER BY date ASC, time ASC"
+
+        try:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            result = []
+            for row in rows:
+                result.append(MarketFlowPoint(
+                    date=row["date"],
+                    time=row["time"],
+                    kospi_price=row["kospi_price"],
+                    kospi200_price=row["kospi200_price"],
+                    kosdaq_price=row["kosdaq_price"],
+                    kq150_price=row["kq150_price"],
+                    kospi_foreigner=row["kospi_foreigner"],
+                    kospi_institution=row["kospi_institution"],
+                    kospi_individual=row["kospi_individual"],
+                    kospi_program=row["kospi_program"],
+                    kosdaq_foreigner=row["kosdaq_foreigner"],
+                    kosdaq_institution=row["kosdaq_institution"],
+                    kosdaq_individual=row["kosdaq_individual"],
+                    future_foreigner=row["future_foreigner"],
+                    future_institution=row["future_institution"],
+                    future_individual=row["future_individual"],
+                    emini_nasdaq_price=row["emini_nasdaq_price"] if "emini_nasdaq_price" in row.keys() else None
+                ))
+            return MarketFlowResponse(data=result)
+        except Exception as e:
+            logger.error(f"Error loading market flow data: {e}")
+            return MarketFlowResponse(data=[])
+        finally:
+            conn.close()
+
+    return cached_by_mtime(
+        _MARKET_FLOW_CACHE,
+        _MARKET_FLOW_CACHE_MAX,
+        (start_date, end_date),
+        file_mtime(db_path),
+        _compute,
+    )
+
 
 @router.get("/market-flow/dates", response_model=list[str])
 def get_market_flow_dates():
     """market_flow 테이블의 모든 고유 날짜 목록을 반환합니다."""
     db_path = os.path.expanduser("~/.cache/db/macro.db")
-    if not os.path.exists(db_path):
-        return []
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT DISTINCT date FROM market_flow ORDER BY date ASC")
-        rows = cursor.fetchall()
-        return [row[0] for row in rows if row[0]]
-    except Exception as e:
-        print(f"Error loading market flow dates: {e}")
-        return []
-    finally:
-        conn.close()
+
+    def _compute() -> list[str]:
+        if not os.path.exists(db_path):
+            return []
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT DISTINCT date FROM market_flow ORDER BY date ASC")
+            rows = cursor.fetchall()
+            return [row[0] for row in rows if row[0]]
+        except Exception as e:
+            logger.error(f"Error loading market flow dates: {e}")
+            return []
+        finally:
+            conn.close()
+
+    return cached_by_mtime(
+        _MARKET_FLOW_DATES_CACHE,
+        _MARKET_FLOW_DATES_CACHE_MAX,
+        (),
+        file_mtime(db_path),
+        _compute,
+    )
 
 def get_stock_master_db_path() -> str:
     override = os.environ.get("STOCK_MASTER_DB_PATH")

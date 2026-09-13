@@ -39,6 +39,8 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
   const chartsRef = useRef<Map<string, IChartApi>>(new Map());
   const seriesRef = useRef<Map<string, ISeriesApi<SeriesType>[]>>(new Map());
   const chartDataRef = useRef<any>(null);
+  const dataMapRef = useRef<Map<number, any>>(new Map());
+  const lastHoveredTimeRef = useRef<any>(null);
   const isSyncingRef = useRef<boolean>(false);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
@@ -89,7 +91,13 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
   }, [chartData]);
 
   useEffect(() => {
-    if (formattedData.length > 0) chartDataRef.current = formattedData;
+    if (formattedData.length > 0) {
+      chartDataRef.current = formattedData;
+      const map = new Map<number, any>();
+      formattedData.forEach((p) => map.set(p.time, p));
+      dataMapRef.current = map;
+      lastHoveredTimeRef.current = null;
+    }
   }, [formattedData]);
 
   const [verticalLineXs, setVerticalLineXs] = useState<number[]>([]);
@@ -313,21 +321,26 @@ export const AboveMaChart: React.FC<AboveMaChartProps> = ({ market, height = 700
           });
 
           if (!param.time || !param.point || param.point.x < 0) {
-            const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
-            if (latestPoint) {
-              setHoveredData({
-                time: latestPoint.originalTime,
-                close: latestPoint.close || 0,
-                changePct: latestPoint.changePct ?? null,
-                above_sma10: latestPoint.indicators?.above_sma10 || 0,
-                above_sma20: latestPoint.indicators?.above_sma20 || 0,
-                above_sma50: latestPoint.indicators?.above_sma50 || 0,
-              });
-            } else {
-              setHoveredData(null);
+            if (lastHoveredTimeRef.current !== null) {
+              lastHoveredTimeRef.current = null;
+              const latestPoint = chartDataRef.current?.[chartDataRef.current.length - 1];
+              if (latestPoint) {
+                setHoveredData({
+                  time: latestPoint.originalTime,
+                  close: latestPoint.close || 0,
+                  changePct: latestPoint.changePct ?? null,
+                  above_sma10: latestPoint.indicators?.above_sma10 || 0,
+                  above_sma20: latestPoint.indicators?.above_sma20 || 0,
+                  above_sma50: latestPoint.indicators?.above_sma50 || 0,
+                });
+              } else {
+                setHoveredData(null);
+              }
             }
           } else {
-            const currentPoint = chartDataRef.current?.find((p: any) => p.time === param.time);
+            if (param.time === lastHoveredTimeRef.current) return;
+            lastHoveredTimeRef.current = param.time;
+            const currentPoint = dataMapRef.current.get(param.time as number);
             if (currentPoint) {
               setHoveredData({
                 time: currentPoint.originalTime,

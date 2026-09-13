@@ -246,16 +246,16 @@ function collectValuesFor(
   return out;
 }
 
-/** HP 이탈도 맵 (이미 계산된 deviation 시리즈에서 해당 시각 값 추출) */
+/** HP 이탈도 맵 (이미 계산된 deviation 맵에서 해당 시각 값 추출) */
 function collectHpDevAt(
   time: string,
-  hpDevById: Map<string, TimePoint[]>,
+  hpDevById: Map<string, Map<string, number>>,
 ): Record<string, number> | undefined {
   if (hpDevById.size === 0) return undefined;
   const out: Record<string, number> = {};
-  hpDevById.forEach((pts, id) => {
-    const hit = pts.find((p) => p.time === time);
-    if (hit) out[id] = hit.value;
+  hpDevById.forEach((map, id) => {
+    const hit = map.get(time);
+    if (hit !== undefined) out[id] = hit;
   });
   return Object.keys(out).length ? out : undefined;
 }
@@ -369,10 +369,12 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     >
   >(new Map());
   const chartDataRef = useRef<FakePoint[] | null>(null);
+  const dateIndexMapRef = useRef<Map<string, number>>(new Map());
+  const lastHoveredTimeRef = useRef<any>(null);
   /** MA/HP 계산용 전체(워밍업 포함) 데이터 */
   const fullDataRef = useRef<FakePoint[] | null>(null);
   /** 호버 범례용 HP 이탈도 캐시 (차트 재생성·데이터 갱신 시 갱신) */
-  const hpDevCacheRef = useRef<Map<string, TimePoint[]>>(new Map());
+  const hpDevCacheRef = useRef<Map<string, Map<string, number>>>(new Map());
   const displayStartRef = useRef<string | undefined>(undefined);
   const [status, setStatus] = useState<string>("Initializing...");
   const [hoveredData, setHoveredData] = useState<HoveredData | null>(null);
@@ -445,7 +447,13 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   useEffect(() => {
     displayStartRef.current = displayStart;
     if (fullFormattedData.length > 0) fullDataRef.current = fullFormattedData;
-    if (formattedData.length > 0) chartDataRef.current = formattedData;
+    if (formattedData.length > 0) {
+      chartDataRef.current = formattedData;
+      const map = new Map<string, number>();
+      formattedData.forEach((p, idx) => map.set(p.time, idx));
+      dateIndexMapRef.current = map;
+      lastHoveredTimeRef.current = null;
+    }
   }, [fullFormattedData, formattedData, displayStart]);
 
   const activeIndicators = useMemo(
@@ -563,10 +571,16 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     chart.subscribeCrosshairMove((param) => {
       const arr = chartDataRef.current;
       if (!param.time || !param.point || param.point.x < 0) {
-        publishHover(arr && arr.length ? arr.length - 1 : undefined);
+        if (lastHoveredTimeRef.current !== null) {
+          lastHoveredTimeRef.current = null;
+          publishHover(arr && arr.length ? arr.length - 1 : undefined);
+        }
         return;
       }
-      publishHover(arr ? arr.findIndex((p) => p.time === param.time) : undefined);
+      if (param.time === lastHoveredTimeRef.current) return;
+      lastHoveredTimeRef.current = param.time;
+      const idx = dateIndexMapRef.current.get(param.time as string);
+      publishHover(idx);
     });
 
     // 정규화된 시리즈는 공통 % 축(right)에, raw는 각자 고유 스케일에 배치
@@ -626,7 +640,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
           lineWidth: 1,
           lineStyle: LineStyle.Dashed,
           axisLabelVisible: true,
-          title: "위험 2%",
+          title: "",
         });
       }
 
@@ -639,11 +653,11 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         });
         main.createPriceLine({
           price: 75, color: "#ef4444", lineWidth: 1, lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true, title: "75",
+          axisLabelVisible: true, title: "",
         });
         main.createPriceLine({
           price: 25, color: "#3b82f6", lineWidth: 1, lineStyle: LineStyle.Dashed,
-          axisLabelVisible: true, title: "25",
+          axisLabelVisible: true, title: "",
         });
       }
 
@@ -714,7 +728,11 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
       const series = seriesRef.current.get(ind.id);
       if (!series) return;
       const deviation = applySeriesData(ind, series, fullPts, dStart, normalized, hpEnabled);
-      if (deviation) hpDevCache.set(ind.id, deviation);
+      if (deviation) {
+        const m = new Map<string, number>();
+        deviation.forEach((d) => m.set(d.time, d.value));
+        hpDevCache.set(ind.id, m);
+      }
     });
 
     setStatus("Ready");
@@ -754,7 +772,11 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         normalized,
         hpEnabled,
       );
-      if (deviation) hpDevCache.set(ind.id, deviation);
+      if (deviation) {
+        const m = new Map<string, number>();
+        deviation.forEach((d) => m.set(d.time, d.value));
+        hpDevCache.set(ind.id, m);
+      }
     });
 
     const last = formattedData[formattedData.length - 1];

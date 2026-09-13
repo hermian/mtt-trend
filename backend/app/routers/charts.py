@@ -214,14 +214,15 @@ def get_trend_up_breadth_endpoint(
 # /macro 응답 캐시.
 # macro.db 는 평일 18:27 KST 수집 후 1회 갱신되므로 mtime 무효화로 충분하다
 # (_CHART_CACHE / _AVWAP_CACHE 와 동일한 프로젝트 표준 패턴).
-# 응답이 ~13MB 로 크고, 동시 요청 시 재계산이 메모리를 크게 압박하므로
-# 최근 _MACRO_CACHE_MAX 개만 유지해 무한 증가를 막는다.
-_MACRO_CACHE: dict[tuple, tuple[float, MacroDataResponse]] = {}
+# 대용량 응답(~13MB)이므로 raw JSON 및 pre-compressed gzip 바이트를 캐시하여
+# FastAPI 직렬화(500ms+)와 GZipMiddleware 압축(300ms+)을 모두 우회한다.
+_MACRO_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
 _MACRO_CACHE_MAX = 4
 
 
 @router.get("/macro", response_model=MacroDataResponse)
 def get_macro_chart_data(
+    request: Request,
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)")
 ):
@@ -282,16 +283,27 @@ def get_macro_chart_data(
     """
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
-        return MacroDataResponse(data=[])
+        return Response(content=b'{"data":[]}', media_type="application/json")
 
     try:
         db_mtime = os.path.getmtime(db_path)
     except OSError:
         db_mtime = 0.0
-    cache_key = (start_date, end_date)
+    cache_key = (db_path, start_date, end_date)
     cached = _MACRO_CACHE.get(cache_key)
     if cached is not None and cached[0] == db_mtime:
-        return cached[1]
+        raw_bytes, gz_bytes = cached[1], cached[2]
+        accept_encoding = request.headers.get("accept-encoding", "")
+        if "gzip" in accept_encoding:
+            return Response(
+                content=gz_bytes,
+                media_type="application/json",
+                headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+            )
+        return Response(
+            content=raw_bytes,
+            media_type="application/json",
+        )
 
     effective_start_date = start_date if start_date is not None else "1980-01-01"
 
@@ -509,8 +521,8 @@ def get_macro_chart_data(
         for key, (table, col) in ffill_tables.items():
             apply_table_ffill(key, table, col)
     except Exception as e:
-        print(f"Error loading macro data: {e}")
-        return MacroDataResponse(data=[])
+        logger.error(f"Error loading macro data: {e}")
+        return Response(content=b'{"data":[]}', media_type="application/json")
     finally:
         conn.close()
 
@@ -583,10 +595,23 @@ def get_macro_chart_data(
         for d, p in sorted(merged.items())
     ]
     response = MacroDataResponse(data=result)
+    raw_bytes = response.model_dump_json(by_alias=True).encode("utf-8")
+    gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
     if len(_MACRO_CACHE) >= _MACRO_CACHE_MAX:
         _MACRO_CACHE.pop(next(iter(_MACRO_CACHE)))
-    _MACRO_CACHE[cache_key] = (db_mtime, response)
-    return response
+    _MACRO_CACHE[cache_key] = (db_mtime, raw_bytes, gz_bytes)
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
 
 
 @router.get("/valuation-bands", response_model=ValuationBandsResponse)

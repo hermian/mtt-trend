@@ -181,16 +181,30 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Returns comparison startup pre-warm encountered non-fatal error: {e}")
 
+    async def run_macro_prewarm():
+        """서버 시작 시 매크로 지표 데이터를 사전 웜업하여 사용자 첫 접속 시 0ms 체감 제공"""
+        try:
+            from fastapi import Request
+            from app.routers.charts import get_macro_chart_data
+            req = Request(scope={"type": "http", "headers": [(b"accept-encoding", b"gzip")]})
+            await asyncio.to_thread(get_macro_chart_data, req)
+            logger.info("Macro startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"Macro startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
     _prewarm_task = asyncio.create_task(run_avwap_prewarm())
     _charts_prewarm_task = asyncio.create_task(run_charts_prewarm())
     _breadth_prewarm_task = asyncio.create_task(run_trend_up_breadth_prewarm())
     _returns_prewarm_task = asyncio.create_task(run_returns_prewarm())
+    _macro_prewarm_task = asyncio.create_task(run_macro_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _macro_prewarm_task and not _macro_prewarm_task.done():
+        _macro_prewarm_task.cancel()
     if _returns_prewarm_task and not _returns_prewarm_task.done():
         _returns_prewarm_task.cancel()
     if _breadth_prewarm_task and not _breadth_prewarm_task.done():

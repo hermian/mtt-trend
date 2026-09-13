@@ -737,14 +737,13 @@ def get_valuation_bands(
 
 
 # /foreign-flow 응답 캐시.
-# 매 요청 kospi_investor(.etf).parquet + kospi200_future.parquet + macro.db 를 다시 읽어
-# ~112ms 가 걸린다(응답 900KB). 원본 파일들은 장 마감 후 1회 갱신되므로 mtime 무효화로 충분하다.
-_FOREIGN_FLOW_CACHE: dict[tuple, tuple[float, ForeignFlowResponse]] = {}
+_FOREIGN_FLOW_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
 _FOREIGN_FLOW_CACHE_MAX = 4
 
 
 @router.get("/foreign-flow", response_model=ForeignFlowResponse)
 def get_foreign_flow_chart_data(
+    request: Request,
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
     etf: bool = Query(False, description="True면 KOSPI 현물+ETF 수급 캐시 사용"),
@@ -754,20 +753,34 @@ def get_foreign_flow_chart_data(
 
     단위: 순매수/MA = 억원, kospi = 지수.
     """
+    cache_key = (start_date, end_date, etf)
+    current_mtime = newest_mtime(*foreign_flow_sources())
 
-    def _compute() -> ForeignFlowResponse:
+    cached = _FOREIGN_FLOW_CACHE.get(cache_key)
+    if cached is not None and cached[0] == current_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+    else:
         rows = load_foreign_flow_data(start_date, end_date, etf=etf)
-        return ForeignFlowResponse(
+        resp = ForeignFlowResponse(
             etf=etf,
             data=[ForeignFlowPoint(**row) for row in rows],
         )
+        raw_bytes = resp.model_dump_json(by_alias=True).encode("utf-8")
+        gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+        if len(_FOREIGN_FLOW_CACHE) >= _FOREIGN_FLOW_CACHE_MAX:
+            _FOREIGN_FLOW_CACHE.pop(next(iter(_FOREIGN_FLOW_CACHE)))
+        _FOREIGN_FLOW_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
 
-    return cached_by_mtime(
-        _FOREIGN_FLOW_CACHE,
-        _FOREIGN_FLOW_CACHE_MAX,
-        (start_date, end_date, etf),
-        newest_mtime(*foreign_flow_sources()),
-        _compute,
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
     )
 
 

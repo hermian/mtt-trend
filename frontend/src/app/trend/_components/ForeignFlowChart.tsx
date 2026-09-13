@@ -124,14 +124,24 @@ export const ForeignFlowChart: React.FC<ForeignFlowChartProps> = ({ height = 560
     });
     chartRef.current = chart;
 
-    const onResize = () => {
-      if (containerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+    let animationFrameId: number | null = null;
+    const ro = new ResizeObserver(() => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
       }
-    };
-    window.addEventListener("resize", onResize);
+      animationFrameId = requestAnimationFrame(() => {
+        if (containerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({ width: containerRef.current.clientWidth });
+        }
+      });
+    });
+    ro.observe(containerRef.current);
+
     return () => {
-      window.removeEventListener("resize", onResize);
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      ro.disconnect();
       chart.remove();
       chartRef.current = null;
       seriesRef.current = [];

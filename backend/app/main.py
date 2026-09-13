@@ -205,6 +205,18 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Valuation bands startup pre-warm encountered non-fatal error: {e}")
 
+    async def run_foreign_flow_prewarm():
+        """서버 시작 시 외국인 현선물 데이터를 사전 웜업하여 0ms 체감 제공"""
+        try:
+            from fastapi import Request
+            from app.routers.charts import get_foreign_flow_chart_data
+            req = Request(scope={"type": "http", "headers": [(b"accept-encoding", b"gzip")]})
+            for etf_val in (False, True):
+                await asyncio.to_thread(get_foreign_flow_chart_data, req, etf=etf_val)
+            logger.info("Foreign flow startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"Foreign flow startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
     _prewarm_task = asyncio.create_task(run_avwap_prewarm())
@@ -213,10 +225,13 @@ async def lifespan(app: FastAPI):
     _returns_prewarm_task = asyncio.create_task(run_returns_prewarm())
     _macro_prewarm_task = asyncio.create_task(run_macro_prewarm())
     _valuation_prewarm_task = asyncio.create_task(run_valuation_prewarm())
+    _foreign_flow_prewarm_task = asyncio.create_task(run_foreign_flow_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _foreign_flow_prewarm_task and not _foreign_flow_prewarm_task.done():
+        _foreign_flow_prewarm_task.cancel()
     if _valuation_prewarm_task and not _valuation_prewarm_task.done():
         _valuation_prewarm_task.cancel()
     if _macro_prewarm_task and not _macro_prewarm_task.done():

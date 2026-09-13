@@ -21,7 +21,6 @@ const mockData: SupplyDemandResponse = {
       force_oscillator: 10,
       accumulation_3ma: { 세력: 100, 외국인: 50, 기관계: 40, 개인: -20 },
       dispersion_pct: { 세력: 80, 외국인: 60 },
-      norm_accumulation: { 세력: 0.5, 외국인: 0.3 },
     },
   ],
   table_supply: [{ label: "08-21", 종가: 100000, 거래량: 1000000, 개인: -100 }],

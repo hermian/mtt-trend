@@ -44,13 +44,6 @@ export const DISPERSION_COLORS: Record<string, string> = {
   기타외국인: "#a1887f",
 };
 
-export const NORM_COLORS: Record<string, string> = {
-  세력: "#AF7817",
-  외국인: "red",
-  기관계: "green",
-  개인: "blue",
-};
-
 export const PRICE_OVERLAY_COLOR = "rgba(40,40,40,0.25)";
 
 export const SUM_PRESETS: { id: "1m" | "3m" | "6m" | "12m"; label: string }[] = [
@@ -75,6 +68,5 @@ export const CHART_HEIGHTS = {
   maOsc: 128,
   maAccum: 256,
   dispersion: 520,
-  norm: 520,
   periodBar: 420,
 } as const;

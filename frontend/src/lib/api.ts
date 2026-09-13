@@ -1041,7 +1041,6 @@ export interface SupplyDemandPoint {
   force_oscillator: number | null;
   accumulation_3ma: Record<string, number | null>;
   dispersion_pct: Record<string, number | null>;
-  norm_accumulation: Record<string, number | null>;
 }
 
 export interface SupplyDemandTableRow {

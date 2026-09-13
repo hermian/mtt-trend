@@ -592,7 +592,6 @@ class SupplyDemandPoint(BaseModel):
     force_oscillator: Optional[float] = None
     accumulation_3ma: Dict[str, Optional[float]]
     dispersion_pct: Dict[str, Optional[float]]
-    norm_accumulation: Dict[str, Optional[float]]
 
 
 class SupplyDemandTableRow(BaseModel):

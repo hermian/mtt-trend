@@ -39,15 +39,22 @@ SUM_WINDOWS = [5, 20, 60, 240]
 LDS_PERIODS = [5, 20, 60, 90, 120, 150, 180, 210, 240, 300, 360, 420, 600, 720]
 SUM_PRESETS = {"1m": 31, "3m": 91, "6m": 182, "12m": 365}
 DEFAULT_SUM_PERIOD = "3m"
-NORM_COLS = ["세력", "외국인", "기관계", "개인"]
 ACCUM_MA_COLS = ["세력", "외국인", "기관계", "개인"]
+# 시계열 JSON 의 소수 자릿수. 차트 표시에는 2자리로 충분하고, 이걸로 전송량이 크게 줄어든다
+# (실측 005930: raw 4.05 → 2.84MB, gzip6 1.09 → 0.44MB, 압축 시간 58 → 31ms).
+SERIES_ROUND_ND = 2
 
 # ---------------------------------------------------------------------------
-# 인메모리 캐시 — 키: ("analysis"|"period_sums", code, sum_period, sum_start, sum_end)
+# 인메모리 캐시 — 키: ("analysis"|"period_sums"|"price_profile", code, ...)
 # 값: (sugeub.sqlite mtime, marcap.duckdb mtime, 응답 dict)
 # DB 파일이 갱신되면(장마감 후 수집) mtime 불일치로 자동 재계산.
+#
+# 상한이 반드시 필요하다. analysis 엔트리 1개가 실측 9.57MB(5,526 포인트)이고
+# 키 공간이 2,915 종목이라 상한이 없으면 전부 조회 시 27.9GB 까지 자란다.
+# 6 이면 최악 57MB 로, 메모리가 고갈된 이 머신(swap 16/17.4GB)에서 감당 가능한 선이다.
 # ---------------------------------------------------------------------------
-_SUGEUB_CACHE: dict[tuple[str, str, str, str, str], tuple[float, float, Any]] = {}
+_SUGEUB_CACHE: dict[tuple[str, ...], tuple[float, float, Any]] = {}
+_SUGEUB_CACHE_MAX = 6
 
 
 def _db_mtimes() -> tuple[float, float]:
@@ -66,7 +73,7 @@ def invalidate_sugeub_cache() -> None:
 
 
 def _cached_result(
-    key: tuple[str, str, str, str, str],
+    key: tuple[str, ...],
 ) -> Optional[Any]:
     sugeub_mtime, marcap_mtime = _db_mtimes()
     cached = _SUGEUB_CACHE.get(key)
@@ -75,7 +82,9 @@ def _cached_result(
     return None
 
 
-def _store_result(key: tuple[str, str, str, str, str], result: Any) -> None:
+def _store_result(key: tuple[str, ...], result: Any) -> None:
+    if len(_SUGEUB_CACHE) >= _SUGEUB_CACHE_MAX and key not in _SUGEUB_CACHE:
+        _SUGEUB_CACHE.pop(next(iter(_SUGEUB_CACHE)))
     _SUGEUB_CACHE[key] = (*_db_mtimes(), result)
 
 
@@ -271,11 +280,6 @@ def build_lds_frame(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _norm(s: pd.Series) -> pd.Series:
-    rng = s.max() - s.min()
-    return (s - s.mean()) / rng if rng else s * 0
-
-
 def _frame_to_rows(df: pd.DataFrame) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     for idx, row in df.iterrows():
@@ -308,40 +312,53 @@ def _dispersion_frame_to_rows(df: pd.DataFrame, index_name: str = "label") -> li
     return rows
 
 
+def _round_series(v: float) -> float:
+    """차트 표시용 반올림. -0.0 을 0.0 으로 정규화한다(JSON 에 "-0.0" 이 나가지 않도록)."""
+    r = round(v, SERIES_ROUND_ND)
+    return 0.0 if r == 0 else r
+
+
+def _series_num(v: Any) -> Optional[float]:
+    """NaN → None. inf 는 그대로 둔다(pydantic 기본 ser_json_inf_nan 이 null 로 직렬화)."""
+    if v != v:
+        return None
+    return _round_series(v)
+
+
 def _build_series(df: pd.DataFrame) -> list[dict[str, Any]]:
-    """시계열 JSON — rolling/norm은 행마다 재계산하지 않고 컬럼 단위로 1회만 산출."""
-    force_osc = df["세력"].rolling(5).mean() - df["세력"].rolling(20).mean()
-    accum_3ma_cols = {
-        c: df[f"{c}매집수량"].rolling(3).mean() for c in ACCUM_MA_COLS if f"{c}매집수량" in df.columns
+    """시계열 JSON.
+
+    rolling 은 컬럼 단위로 1회만 산출하고, 행 순회는 pandas Series 대신 list 로 뽑아
+    인덱스로 접근한다. iterrows 는 행마다 Series 를 만들어 이 함수 하나가 콜드 경로의
+    72%(5,526행 기준 280ms)를 차지했는데, 컬럼 tolist 로 바꾸면 9ms 로 줄고 출력은
+    동일하다. 값은 float64 전체 정밀도를 유지할 이유가 없어 소수 2자리로 반올림한다
+    (차트 표시 오차 0.005 이하, gzip 전송량 -60%).
+
+    norm_accumulation 은 프론트에서 쓰지 않아 내보내지 않는다.
+    """
+    force_osc = (df["세력"].rolling(5).mean() - df["세력"].rolling(20).mean()).tolist()
+    accum = {
+        c: df[f"{c}매집수량"].rolling(3).mean().tolist()
+        for c in ACCUM_MA_COLS
+        if f"{c}매집수량" in df.columns
     }
-    norm_cols = {
-        c: _norm(df[f"{c}매집수량"]) for c in NORM_COLS if f"{c}매집수량" in df.columns
+    disp = {
+        c: (df[f"{c}분산비율"] * 100).tolist()
+        for c in DISPLAY_COLS
+        if f"{c}분산비율" in df.columns
     }
+    dates = df.index.strftime("%Y-%m-%d").tolist()
+    close = df["종가"].tolist()
 
     series: list[dict[str, Any]] = []
-    for dt, row in df.iterrows():
-        accum_3ma = {
-            c: float(v) if pd.notna(v := accum_3ma_cols[c].loc[dt]) else None
-            for c in accum_3ma_cols
-        }
-        dispersion = {
-            c: float(v * 100) if pd.notna(v := row.get(f"{c}분산비율")) else None
-            for c in DISPLAY_COLS
-            if f"{c}분산비율" in df.columns
-        }
-        norm_acc = {
-            c: float(v) if pd.notna(v := norm_cols[c].loc[dt]) else None
-            for c in norm_cols
-        }
-        osc_val = force_osc.loc[dt]
+    for i, date in enumerate(dates):
         series.append(
             {
-                "date": dt.strftime("%Y-%m-%d"),
-                "close": float(row["종가"]),
-                "force_oscillator": float(osc_val) if pd.notna(osc_val) else None,
-                "accumulation_3ma": accum_3ma,
-                "dispersion_pct": dispersion,
-                "norm_accumulation": norm_acc,
+                "date": date,
+                "close": _round_series(float(close[i])),
+                "force_oscillator": _series_num(force_osc[i]),
+                "accumulation_3ma": {c: _series_num(v[i]) for c, v in accum.items()},
+                "dispersion_pct": {c: _series_num(v[i]) for c, v in disp.items()},
             }
         )
     return series

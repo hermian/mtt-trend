@@ -91,6 +91,25 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     return map;
   }, [hpResult]);
 
+  const dataMap = useMemo(() => {
+    const map = new Map<string, (typeof sortedData)[0]>();
+    for (let i = 0; i < sortedData.length; i++) {
+      map.set(sortedData[i].time, sortedData[i]);
+    }
+    return map;
+  }, [sortedData]);
+
+  const dataMapRef = useRef(dataMap);
+  useEffect(() => {
+    dataMapRef.current = dataMap;
+  }, [dataMap]);
+
+  const hpMapRef = useRef(hpMap);
+  useEffect(() => {
+    hpMapRef.current = hpMap;
+  }, [hpMap]);
+
+
   const scrollToLatest = () => {
     if (chartDataRef.current?.data && chartsRef.current.size > 0) {
       const data = chartDataRef.current.data;
@@ -316,15 +335,12 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
             setHoveredData(null);
           } else {
             const timeStr = typeof param.time === "string" ? param.time : "";
-            const currentPoint = chartDataRef.current?.data?.find((p: any) => {
-              const ptTime = toChartTime(p.time) ?? String(p.time).slice(0, 10);
-              return ptTime === timeStr || p.time === timeStr;
-            });
-            const hpVal = hpMap.get(timeStr);
+            const currentPoint = dataMapRef.current.get(timeStr);
+            const hpVal = hpMapRef.current.get(timeStr);
             if (currentPoint) { 
               setHoveredData({ 
                 time: currentPoint.time, 
-                ohlc: { open: currentPoint.open, high: currentPoint.high, low: currentPoint.low, close: currentPoint.close, volume: currentPoint.volume || 0 }, 
+                ohlc: { open: currentPoint.open ?? 0, high: currentPoint.high ?? 0, low: currentPoint.low ?? 0, close: currentPoint.close ?? 0, volume: currentPoint.volume || 0 }, 
                 indicators: currentPoint.indicators || {},
                 hpTrend: hpVal ?? null,
               }); 
@@ -416,38 +432,47 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
     }
   }, [showHp, hpResult]);
 
-  const renderTooltip = (config: IndicatorConfig) => {
-    if (!hoveredData) return null;
-    return (
-      <div className="absolute top-1 left-16 z-30 pointer-events-none text-[9px] font-mono bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded border border-white/5 flex gap-2 shadow-lg animate-in fade-in duration-200">
-        {config.id === "main" ? (
-          <>
-            <span className={hoveredData.ohlc && hoveredData.ohlc.close >= hoveredData.ohlc.open ? "text-red-400" : "text-blue-400"}>C: {hoveredData.ohlc?.close}</span>
-            <span className="text-slate-100 font-bold ml-1">V: {(hoveredData.ohlc?.volume || 0).toLocaleString()}</span>
-            {showHp && hoveredData.hpTrend !== undefined && hoveredData.hpTrend !== null && (
-              <span className="text-[#f472b6] font-bold ml-1">HP: {hoveredData.hpTrend.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
-            )}
-          </>
-        ) : config.id === "above_sma_group" ? (
-          <><span className="text-red-500 font-bold">10:{hoveredData.indicators["above_sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["above_sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["above_sma50"]?.toFixed(1)}</span></>
-        ) : config.id === "above_sma200" ? (
-          <span className="text-blue-400 font-bold">200:{hoveredData.indicators["above_sma200"] != null ? `${hoveredData.indicators["above_sma200"]?.toFixed(1)}%` : "-"}</span>
-        ) : config.id === "adr_group" ? (
-          <><span className="text-[#a78bfa] font-bold">14:{hoveredData.indicators["adr14"]?.toFixed(1)}</span><span className="text-[#f472b6] font-bold">20:{hoveredData.indicators["adr20"]?.toFixed(1)}</span></>
-        ) : config.id === "disparity_sma50" ? (
-          <span className="text-[#eab308] font-bold">이격:{hoveredData.indicators["disparity_sma50"]?.toFixed(1)}</span>
-        ) : config.id === "macd" ? (
-          <><span className="text-blue-400">M:{hoveredData.indicators["macd"]?.toFixed(1)}</span><span className="text-orange-400">S:{hoveredData.indicators["macd_signal"]?.toFixed(1)}</span></>
-        ) : config.id === "stochastic" ? (
-           <><span className="text-amber-400">K:{hoveredData.indicators["stoch_k"]?.toFixed(1)}</span><span className="text-slate-100">D:{hoveredData.indicators["stoch_d"]?.toFixed(1)}</span></>
-        ) : config.id === "vix_fix" ? (
-           <><span className="text-red-400">VF:{hoveredData.indicators["vix_fix"]?.toFixed(1)}</span>{(hoveredData.indicators["vix_fix_fear"] ?? 0) > 0 && <span className="text-orange-400 font-bold">FEAR:{hoveredData.indicators["vix_fix_fear"]?.toFixed(1)}</span>}</>
-        ) : (
-          <span className="text-blue-300">{config.name}:{hoveredData.indicators[config.id]?.toFixed(1)}</span>
-        )}
-      </div>
-    );
-  };
+const PanelTooltip = React.memo(function PanelTooltip({
+  config,
+  hoveredData,
+  showHp,
+}: {
+  config: IndicatorConfig;
+  hoveredData: HoveredData | null;
+  showHp: boolean;
+}) {
+  if (!hoveredData) return null;
+  return (
+    <div className="absolute top-1 left-16 z-30 pointer-events-none text-[9px] font-mono bg-black/40 backdrop-blur-sm px-1.5 py-0.5 rounded border border-white/5 flex gap-2 shadow-lg animate-in fade-in duration-200">
+      {config.id === "main" ? (
+        <>
+          <span className={hoveredData.ohlc && hoveredData.ohlc.close >= hoveredData.ohlc.open ? "text-red-400" : "text-blue-400"}>C: {hoveredData.ohlc?.close}</span>
+          <span className="text-slate-100 font-bold ml-1">V: {(hoveredData.ohlc?.volume || 0).toLocaleString()}</span>
+          {showHp && hoveredData.hpTrend !== undefined && hoveredData.hpTrend !== null && (
+            <span className="text-[#f472b6] font-bold ml-1">HP: {hoveredData.hpTrend.toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+          )}
+        </>
+      ) : config.id === "above_sma_group" ? (
+        <><span className="text-red-500 font-bold">10:{hoveredData.indicators["above_sma10"]?.toFixed(1)}</span><span className="text-green-500 font-bold">20:{hoveredData.indicators["above_sma20"]?.toFixed(1)}</span><span className="text-blue-500 font-bold">50:{hoveredData.indicators["above_sma50"]?.toFixed(1)}</span></>
+      ) : config.id === "above_sma200" ? (
+        <span className="text-blue-400 font-bold">200:{hoveredData.indicators["above_sma200"] != null ? `${hoveredData.indicators["above_sma200"]?.toFixed(1)}%` : "-"}</span>
+      ) : config.id === "adr_group" ? (
+        <><span className="text-[#a78bfa] font-bold">14:{hoveredData.indicators["adr14"]?.toFixed(1)}</span><span className="text-[#f472b6] font-bold">20:{hoveredData.indicators["adr20"]?.toFixed(1)}</span></>
+      ) : config.id === "disparity_sma50" ? (
+        <span className="text-[#eab308] font-bold">이격:{hoveredData.indicators["disparity_sma50"]?.toFixed(1)}</span>
+      ) : config.id === "macd" ? (
+        <><span className="text-blue-400">M:{hoveredData.indicators["macd"]?.toFixed(1)}</span><span className="text-orange-400">S:{hoveredData.indicators["macd_signal"]?.toFixed(1)}</span></>
+      ) : config.id === "stochastic" ? (
+         <><span className="text-amber-400">K:{hoveredData.indicators["stoch_k"]?.toFixed(1)}</span><span className="text-slate-100">D:{hoveredData.indicators["stoch_d"]?.toFixed(1)}</span></>
+      ) : config.id === "vix_fix" ? (
+         <><span className="text-red-400">VF:{hoveredData.indicators["vix_fix"]?.toFixed(1)}</span>{(hoveredData.indicators["vix_fix_fear"] ?? 0) > 0 && <span className="text-orange-400 font-bold">FEAR:{hoveredData.indicators["vix_fix_fear"]?.toFixed(1)}</span>}</>
+      ) : (
+        <span className="text-blue-300">{config.name}:{hoveredData.indicators[config.id]?.toFixed(1)}</span>
+      )}
+    </div>
+  );
+});
+
 
   return (
     <div ref={containerRef} className="relative flex flex-col w-full h-[calc(100vh-3.5rem)] md:h-full min-h-0 bg-slate-950 overflow-hidden border-t border-slate-800">
@@ -521,7 +546,7 @@ const InteractiveChart: React.FC<InteractiveChartProps> = ({ symbol, configs, he
         <div className="flex flex-col">
           {configs.map((config) => (
             <div key={config.id} className="relative border-b border-slate-900/50 last:border-0 group shrink-0">
-              {renderTooltip(config)}
+              <PanelTooltip config={config} hoveredData={hoveredData} showHp={showHp} />
               <div data-chart-id={config.id} className="w-full" style={{ height: config.id === 'main' ? '400px' : '100px' }}>
                 <div className="absolute top-1 left-2 z-20 pointer-events-none"><span className="text-[8px] font-black text-slate-600 uppercase tracking-widest">{config.name}</span></div>
               </div>

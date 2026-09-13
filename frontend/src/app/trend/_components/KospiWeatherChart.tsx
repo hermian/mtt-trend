@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useMemo } from "react";
 import { 
   createChart, 
   IChartApi, 
@@ -65,6 +65,23 @@ export function KospiWeatherChart() {
   const { data: chartData, isLoading, error } = useChartData("kospi", "all");
   const chartDataRef = useRef(chartData);
   useEffect(() => { chartDataRef.current = chartData; }, [chartData]);
+
+  const dataMap = useMemo(() => {
+    const map = new Map<string, ChartDataPoint>();
+    const rows = chartData?.data;
+    if (rows && rows.length > 0) {
+      for (let i = 0; i < rows.length; i++) {
+        const t = toChartTime(rows[i].time);
+        if (t) map.set(t, rows[i]);
+      }
+    }
+    return map;
+  }, [chartData]);
+  const dataMapRef = useRef(dataMap);
+  useEffect(() => {
+    dataMapRef.current = dataMap;
+  }, [dataMap]);
+
 
   const scrollToLatest = () => {
     const rows = chartDataRef.current?.data;
@@ -524,7 +541,7 @@ export function KospiWeatherChart() {
             setHoveredData(null);
           } else {
             const timeStr = String(param.time).split("T")[0];
-            const dataPoint = chartDataRef.current?.data?.find((d) => toChartTime(d.time) === timeStr);
+            const dataPoint = dataMapRef.current.get(timeStr);
             if (dataPoint) {
               setHoveredData({
                 time: timeStr,

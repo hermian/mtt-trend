@@ -46,7 +46,7 @@ from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
     default_lookback_start,
 )
-from app.utils.chart_utils import load_chart_data
+from app.utils.chart_utils import load_chart_data, load_chart_bytes
 from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data, foreign_flow_sources
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
@@ -123,18 +123,31 @@ def _normalize_ism_observations(
 
 @router.get("/data", response_model=ChartDataResponse)
 def get_chart_data(
+    request: Request,
     symbol: str = Query("kodex_leverage", description="차트 종목명 (kodex_leverage, kosdaq_leverage 등)"),
     start_date: Optional[str] = None,
     end_date: Optional[str] = None
 ):
     """
     KODEX/KOSDAQ 레버리지 실제 시장 데이터를 반환합니다.
+    사전 압축(pre-compressed gzip) 캐시를 적용하여 응답 지연을 최소화합니다.
     """
-    data = load_chart_data(symbol, start_date, end_date)
-    
-    if data:
-        return data
-    
+    wants_gzip = "gzip" in request.headers.get("accept-encoding", "")
+    raw_bytes, gz_bytes = load_chart_bytes(
+        symbol=symbol, start_date=start_date, end_date=end_date, need_raw=not wants_gzip
+    )
+    if gz_bytes is not None:
+        if wants_gzip:
+            return Response(
+                content=gz_bytes,
+                media_type="application/json",
+                headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+            )
+        return Response(
+            content=raw_bytes,
+            media_type="application/json",
+        )
+
     # 데이터 로드 실패 시 빈 데이터 반환 (에러 방지)
     return ChartDataResponse(symbol=symbol.upper(), data=[])
 

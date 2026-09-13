@@ -1,12 +1,22 @@
+import gzip
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Tuple
 
 import polars as pl
 from app.schemas import ChartDataPoint, ChartDataResponse
 
 logger = logging.getLogger(__name__)
+
+def _to_float(val):
+    if val is None or val == "" or str(val).lower() == "none":
+        return 0.0
+    try:
+        return round(float(val), 2)
+    except Exception:
+        return 0.0
+
 
 def _leverage_csv_dir() -> Path:
     """KODEX/KOSDAQ 레버리지 CSV 디렉터리. MTT_LEVERAGE_CSV_DIR이 있으면 우선(테스트 등).
@@ -206,8 +216,14 @@ def load_chart_data(
             calculated_vix_fix_fear = vix_fix_fear.to_list()
             calculated_adr20 = adr20.to_list()
             
+            mmt_dict = _get_mmt_dict()
+            kq_dict = _get_kosdaq_dict()
+
             new_data_points = []
             for i, row in enumerate(raw_data):
+                d_str = str(row.get("Date"))[:10]
+                mmt_entry = mmt_dict.get(d_str, {})
+                kq_entry = kq_dict.get(d_str, {})
                 h52 = row.get("high52sum")
                 l52 = row.get("low52sum")
                 try:
@@ -215,67 +231,66 @@ def load_chart_data(
                 except (TypeError, ValueError):
                     h52_l52 = None
 
+                amt = row.get("Amount")
+                vol = row.get("Volume")
+
                 indicators = {
-                    "rsi": calculated_rsi[i],
-                    "macd": calculated_macd[i],
-                    "macd_signal": calculated_sig[i],
-                    "stoch_k": calculated_sk[i],
-                    "stoch_d": calculated_sd[i],
-                    "price_sma50": calculated_ma50[i],
-                    "price_sma100": calculated_ma100[i],
-                    "price_sma150": calculated_ma150[i],
-                    "price_sma200": calculated_ma200[i],
+                    "rsi": _to_float(calculated_rsi[i]),
+                    "macd": _to_float(calculated_macd[i]),
+                    "macd_signal": _to_float(calculated_sig[i]),
+                    "stoch_k": _to_float(calculated_sk[i]),
+                    "stoch_d": _to_float(calculated_sd[i]),
+                    "price_sma50": _to_float(calculated_ma50[i]),
+                    "price_sma100": _to_float(calculated_ma100[i]),
+                    "price_sma150": _to_float(calculated_ma150[i]),
+                    "price_sma200": _to_float(calculated_ma200[i]),
                     # CSV SMA*_pct: 시장 breadth (해당 이평 위 종목 비율)
-                    "above_sma10": row.get("SMA10_pct") if row.get("SMA10_pct") is not None else row.get("above10ma_pct"),
-                    "above_sma20": row.get("SMA20_pct") if row.get("SMA20_pct") is not None else row.get("above20ma_pct"),
-                    "above_sma50": row.get("SMA50_pct") if row.get("SMA50_pct") is not None else row.get("above50ma_pct"),
-                    "above_sma200": row.get("SMA200_pct") if row.get("SMA200_pct") is not None else row.get("above200ma_pct"),
-                    "disparity_sma50": calculated_disparity_sma50[i],
-                    "adr14": row.get("ADR14") if row.get("ADR14") is not None else row.get("adr14"),
-                    "adr20": round(float(row.get("ADR20")), 2) if row.get("ADR20") is not None else round(float(calculated_adr20[i]), 2),
-                    "vix_fix": calculated_vix_fix[i],
-                    "vix_fix_fear": calculated_vix_fix_fear[i],
-                    "price_sma150": row.get("SMA150"),
-                    "stockbee_mm": row.get("stockbee_mm"),
-                    "above_sma40": row.get("above40ma_pct") if row.get("above40ma_pct") is not None else row.get("SMA40_pct"),
-                    "high52sum": h52,
-                    "low52sum": l52,
-                    "high52_low52": h52_l52,
-                    "bam": row.get("bam"),
-                    "adl": row.get("adl"),
-                    "mcclellan_oscilator": row.get("mcclellan_oscilator"),
-                    "mcclellan_summation_indicator": row.get("mcclellan_summation_indicator"),
-                    "mcclellan_summation": row.get("mcclellan_summation_indicator"),
-                    "saito_ratio": row.get("saito_ratio"),
-                    "zbt": row.get("ZBT") if row.get("ZBT") is not None else row.get("zbt"),
-                    "mmt": _get_mmt_dict().get(str(row.get("Date"))[:10], {}).get("mmt", row.get("MMT") if row.get("MMT") is not None else row.get("mmt")),
-                    "mmt_r": _get_mmt_dict().get(str(row.get("Date"))[:10], {}).get("mmt_r", row.get("MMT_R") if row.get("MMT_R") is not None else row.get("mmt_r")),
-                    "usdkrw": row.get("USD/KRW") if row.get("USD/KRW") is not None else row.get("usdkrw"),
-                    "kospi_amount": round(float(row.get("Amount")) / 1e11, 2) if row.get("Amount") is not None else None,
-                    "kosdaq_amount": _get_kosdaq_dict().get(str(row.get("Date"))[:10], {}).get("kosdaq_amount"),
-                    "kospi_volume": round(float(row.get("Volume")) / 1e7, 2) if row.get("Volume") is not None else None,
-                    "kosdaq_volume": _get_kosdaq_dict().get(str(row.get("Date"))[:10], {}).get("kosdaq_volume"),
-                    "macd_hist": row.get("MACDh_12_26_9"),
+                    "above_sma10": _to_float(row.get("SMA10_pct") if row.get("SMA10_pct") is not None else row.get("above10ma_pct")),
+                    "above_sma20": _to_float(row.get("SMA20_pct") if row.get("SMA20_pct") is not None else row.get("above20ma_pct")),
+                    "above_sma50": _to_float(row.get("SMA50_pct") if row.get("SMA50_pct") is not None else row.get("above50ma_pct")),
+                    "above_sma200": _to_float(row.get("SMA200_pct") if row.get("SMA200_pct") is not None else row.get("above200ma_pct")),
+                    "disparity_sma50": _to_float(calculated_disparity_sma50[i]),
+                    "adr14": _to_float(row.get("ADR14") if row.get("ADR14") is not None else row.get("adr14")),
+                    "adr20": round(float(row.get("ADR20")), 2) if row.get("ADR20") is not None else _to_float(calculated_adr20[i]),
+                    "vix_fix": _to_float(calculated_vix_fix[i]),
+                    "vix_fix_fear": _to_float(calculated_vix_fix_fear[i]),
+                    "price_sma150_raw": _to_float(row.get("SMA150")),
+                    "stockbee_mm": _to_float(row.get("stockbee_mm")),
+                    "above_sma40": _to_float(row.get("above40ma_pct") if row.get("above40ma_pct") is not None else row.get("SMA40_pct")),
+                    "high52sum": _to_float(h52),
+                    "low52sum": _to_float(l52),
+                    "high52_low52": _to_float(h52_l52),
+                    "bam": _to_float(row.get("bam")),
+                    "adl": _to_float(row.get("adl")),
+                    "mcclellan_oscilator": _to_float(row.get("mcclellan_oscilator")),
+                    "mcclellan_summation_indicator": _to_float(row.get("mcclellan_summation_indicator")),
+                    "mcclellan_summation": _to_float(row.get("mcclellan_summation_indicator")),
+                    "saito_ratio": _to_float(row.get("saito_ratio")),
+                    "zbt": _to_float(row.get("ZBT") if row.get("ZBT") is not None else row.get("zbt")),
+                    "mmt": mmt_entry.get("mmt", _to_float(row.get("MMT") if row.get("MMT") is not None else row.get("mmt"))),
+                    "mmt_r": mmt_entry.get("mmt_r", _to_float(row.get("MMT_R") if row.get("MMT_R") is not None else row.get("mmt_r"))),
+                    "usdkrw": _to_float(row.get("USD/KRW") if row.get("USD/KRW") is not None else row.get("usdkrw")),
+                    "kospi_amount": round(float(amt) / 1e11, 2) if amt is not None else None,
+                    "kosdaq_amount": kq_entry.get("kosdaq_amount"),
+                    "kospi_volume": round(float(vol) / 1e7, 2) if vol is not None else None,
+                    "kosdaq_volume": kq_entry.get("kosdaq_volume"),
+                    "macd_hist": _to_float(row.get("MACDh_12_26_9")),
                 }
-                
-                def _to_float(val):
-                    if val is None or val == "" or str(val).lower() == "none":
-                        return 0.0
-                    try:
-                        return round(float(val), 2)
-                    except Exception:
-                        return 0.0
 
                 new_data_points.append(ChartDataPoint(
                     time=normalize_chart_time(row["Date"]),
                     open=row["Open"], high=row["High"], low=row["Low"], close=row["Close"],
-                    volume=row.get("Volume", 0),
-                    indicators={k: _to_float(v) for k, v in indicators.items()}
+                    volume=vol or 0,
+                    indicators=indicators
                 ))
             
             cache["data"] = new_data_points
+            cache["response"] = ChartDataResponse(symbol=symbol.upper(), data=new_data_points)
             cache["last_mtime"] = current_mtime
             logger.info(f"Sync Completed with Volume for {symbol}.")
+
+        if not start_date and not end_date:
+            return cache.get("response")
 
         all_points = cache["data"]
         filtered_points = [p for p in all_points if (not start_date or p.time >= start_date) and (not end_date or p.time <= end_date)]
@@ -283,3 +298,50 @@ def load_chart_data(
     except Exception as e:
         logger.error(f"Engine error: {e}")
         return None
+
+
+def load_chart_bytes(
+    symbol: str,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    *,
+    need_raw: bool = True,
+) -> Tuple[Optional[bytes], Optional[bytes]]:
+    """
+    차트 응답 데이터를 (raw_bytes, gz_bytes) 형태로 반환합니다.
+    캐시된 데이터 모델에 압축 바이트를 메모이제이션하여 웜 요청 시 1ms 이내로 응답합니다.
+    """
+    data = load_chart_data(symbol, start_date, end_date)
+    if data is None:
+        return None, None
+
+    gz_bytes = getattr(data, "_cached_gz_bytes", None)
+    if gz_bytes is None:
+        gz_bytes = gzip.compress(
+            data.model_dump_json(by_alias=True).encode("utf-8"), compresslevel=6
+        )
+        try:
+            object.__setattr__(data, "_cached_gz_bytes", gz_bytes)
+        except Exception:
+            pass
+
+    raw_bytes = getattr(data, "_cached_raw_bytes", None)
+    if need_raw and raw_bytes is None:
+        raw_bytes = data.model_dump_json(by_alias=True).encode("utf-8")
+        try:
+            object.__setattr__(data, "_cached_raw_bytes", raw_bytes)
+        except Exception:
+            pass
+
+    return raw_bytes, gz_bytes
+
+
+def prewarm_charts_cache():
+    """서버 시작 시 주요 지수의 심층지표 데이터를 사전 웜업하여 사용자 첫 접속 시 0ms 체감 제공"""
+    targets = ["kospi", "kodex_leverage", "kosdaq", "kosdaq_leverage", "kospi200", "kosdaq150"]
+    for s in targets:
+        try:
+            load_chart_bytes(s, need_raw=False)
+        except Exception as e:
+            logger.warning(f"Failed to prewarm chart for {s}: {e}")
+

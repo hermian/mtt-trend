@@ -25,6 +25,7 @@ from app.file_watcher import create_file_watcher, set_watchdog_active
 _file_observer = None
 _file_watcher_handler = None
 _initial_sync_task = None
+_charts_prewarm_task = None
 
 
 async def run_initial_sync_async(data_dir: Path, logger: logging.Logger) -> None:
@@ -151,13 +152,25 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"AVWAP startup pre-warm encountered non-fatal error: {e}")
 
+    async def run_charts_prewarm():
+        """서버 시작 시 주요 지수의 심층지표 데이터를 사전 웜업하여 사용자 첫 접속 시 0ms 체감 제공"""
+        try:
+            from app.utils.chart_utils import prewarm_charts_cache
+            await asyncio.to_thread(prewarm_charts_cache)
+            logger.info("Charts startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"Charts startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
     _prewarm_task = asyncio.create_task(run_avwap_prewarm())
+    _charts_prewarm_task = asyncio.create_task(run_charts_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _charts_prewarm_task and not _charts_prewarm_task.done():
+        _charts_prewarm_task.cancel()
     if _prewarm_task and not _prewarm_task.done():
         _prewarm_task.cancel()
     if _initial_sync_task and not _initial_sync_task.done():

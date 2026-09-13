@@ -66,31 +66,55 @@ export function KospiWeatherChart() {
   const chartDataRef = useRef(chartData);
   useEffect(() => { chartDataRef.current = chartData; }, [chartData]);
 
-  const dataMap = useMemo(() => {
-    const map = new Map<string, ChartDataPoint>();
+  const cleanPoints = useMemo(() => {
     const rows = chartData?.data;
-    if (rows && rows.length > 0) {
-      for (let i = 0; i < rows.length; i++) {
-        const t = toChartTime(rows[i].time);
-        if (t) map.set(t, rows[i]);
-      }
+    if (!rows || rows.length === 0) return [];
+    const out: {
+      time: string;
+      open?: number;
+      high?: number;
+      low?: number;
+      close?: number;
+      volume?: number;
+      indicators: Record<string, any>;
+    }[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < rows.length; i++) {
+      const p = rows[i];
+      const time = toChartTime(p.time);
+      if (!time || seen.has(time)) continue;
+      seen.add(time);
+      out.push({
+        time,
+        open: toFiniteNumber(p.open) ?? undefined,
+        high: toFiniteNumber(p.high) ?? undefined,
+        low: toFiniteNumber(p.low) ?? undefined,
+        close: toFiniteNumber(p.close) ?? undefined,
+        volume: toFiniteNumber(p.volume) ?? undefined,
+        indicators: p.indicators || {},
+      });
+    }
+    return out;
+  }, [chartData]);
+
+  const dataMap = useMemo(() => {
+    const map = new Map<string, (typeof cleanPoints)[0]>();
+    for (let i = 0; i < cleanPoints.length; i++) {
+      map.set(cleanPoints[i].time, cleanPoints[i]);
     }
     return map;
-  }, [chartData]);
+  }, [cleanPoints]);
+
   const dataMapRef = useRef(dataMap);
   useEffect(() => {
     dataMapRef.current = dataMap;
   }, [dataMap]);
 
-
   const scrollToLatest = () => {
-    const rows = chartDataRef.current?.data;
-    if (!rows?.length || chartsRef.current.size === 0) return;
-    const times = rows.map((p) => toChartTime(p.time)).filter((t): t is string => t != null);
-    if (times.length === 0) return;
-    const lastIndex = times.length - 1;
+    if (!cleanPoints.length || chartsRef.current.size === 0) return;
+    const lastIndex = cleanPoints.length - 1;
     const startIndex = Math.max(0, lastIndex - 150);
-    const range = { from: times[startIndex] as any, to: times[lastIndex] as any };
+    const range = { from: cleanPoints[startIndex].time as any, to: cleanPoints[lastIndex].time as any };
     isSyncingRef.current = true;
     chartsRef.current.forEach((c) => {
       try {
@@ -578,37 +602,29 @@ export function KospiWeatherChart() {
   }, []);
 
   useEffect(() => {
-    const rows = chartData?.data;
-    if (!rows || chartsRef.current.size === 0) return;
-    const points: ChartDataPoint[] = rows;
+    if (!cleanPoints.length || chartsRef.current.size === 0) return;
 
-    const linePoints = (pick: (p: ChartDataPoint) => unknown) => {
+    const linePoints = (pick: (p: (typeof cleanPoints)[0]) => unknown) => {
       const out: { time: string; value: number }[] = [];
-      const seen = new Set<string>();
-      for (const p of points) {
-        const time = toChartTime(p.time);
+      for (let i = 0; i < cleanPoints.length; i++) {
+        const p = cleanPoints[i];
         const value = toFiniteNumber(pick(p));
-        if (!time || value == null || seen.has(time)) continue;
-        seen.add(time);
-        out.push({ time, value });
+        if (value != null) {
+          out.push({ time: p.time, value });
+        }
       }
-      return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+      return out;
     };
 
     const candlePoints = () => {
       const out: { time: string; open: number; high: number; low: number; close: number }[] = [];
-      const seen = new Set<string>();
-      for (const p of points) {
-        const time = toChartTime(p.time);
-        const open = toFiniteNumber(p.open);
-        const high = toFiniteNumber(p.high);
-        const low = toFiniteNumber(p.low);
-        const close = toFiniteNumber(p.close);
-        if (!time || open == null || high == null || low == null || close == null || seen.has(time)) continue;
-        seen.add(time);
-        out.push({ time, open, high, low, close });
+      for (let i = 0; i < cleanPoints.length; i++) {
+        const p = cleanPoints[i];
+        if (p.open != null && p.high != null && p.low != null && p.close != null) {
+          out.push({ time: p.time, open: p.open, high: p.high, low: p.low, close: p.close });
+        }
       }
-      return out.sort((a, b) => (a.time < b.time ? -1 : 1));
+      return out;
     };
 
     const safeSet = (series: ISeriesApi<any> | undefined, data: unknown[]) => {
@@ -684,76 +700,87 @@ export function KospiWeatherChart() {
     });
 
     setTimeout(() => { scrollToLatest(); }, 300);
-  }, [chartData]);
+  }, [cleanPoints]);
 
-  const renderTooltip = (config: IndicatorConfig) => {
-    if (!hoveredData || !hoveredData.indicators) return null;
-    const ind = hoveredData.indicators || {};
-    const ohlc = hoveredData.ohlc;
+const WeatherPanelTooltip = React.memo(function WeatherPanelTooltip({
+  config,
+  hoveredData,
+}: {
+  config: IndicatorConfig;
+  hoveredData: {
+    time: string;
+    ohlc?: { open: number; high: number; low: number; close: number; volume: number };
+    indicators: Record<string, any>;
+  } | null;
+}) {
+  if (!hoveredData || !hoveredData.indicators) return null;
+  const ind = hoveredData.indicators || {};
+  const ohlc = hoveredData.ohlc;
 
-    return (
-      <div className="absolute top-1 left-2 z-30 pointer-events-none text-[9px] font-mono bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded border border-slate-700/50 flex gap-2 text-slate-200 shadow-md">
-        {config.id === "main" ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-emerald-400 font-bold">{hoveredData.time}</span>
-            <span className="text-slate-400">O:</span>
-            <span className="text-slate-200">{(ohlc?.open ?? 0).toLocaleString()}</span>
-            <span className="text-slate-400">H:</span>
-            <span className="text-slate-200">{(ohlc?.high ?? 0).toLocaleString()}</span>
-            <span className="text-slate-400">L:</span>
-            <span className="text-slate-200">{(ohlc?.low ?? 0).toLocaleString()}</span>
-            <span className="text-slate-400">C:</span>
-            <span className={(ohlc?.close ?? 0) >= (ohlc?.open ?? 0) ? "text-red-400 font-bold" : "text-blue-400 font-bold"}>
-              {(ohlc?.close ?? 0).toLocaleString()}
-            </span>
-            <span className="text-red-400 font-bold ml-2">SMA50: {(ind["price_sma50"] ?? 0).toLocaleString()}</span>
-            <span className="text-blue-400 font-bold ml-1">SMA100: {(ind["price_sma100"] ?? 0).toLocaleString()}</span>
-            <span className="text-emerald-400 font-bold ml-1">SMA200: {(ind["price_sma200"] ?? 0).toLocaleString()}</span>
-          </div>
-        ) : config.id === "stockbee_mm" ? (
-          <><span className="text-red-400 font-bold">MM: {ind["stockbee_mm"] ?? 0}</span><span className="text-emerald-400 font-bold ml-2">Above 40MA: {ind["above_sma40"] ?? 0}%</span></>
-        ) : config.id === "high52_low52" ? (
-          <><span className="text-red-400 font-bold">H52: {ind["high52sum"] ?? 0}</span><span className="text-blue-400 font-bold ml-1">L52: {ind["low52sum"] ?? 0}</span></>
-        ) : config.id === "high52_low52_net" ? (
-          <span className="text-emerald-400 font-bold">H-L Net: {ind["high52_low52"] ?? (ind["high52sum"] !== undefined && ind["low52sum"] !== undefined ? ind["high52sum"] - ind["low52sum"] : 0)}</span>
-        ) : config.id === "vix_fix" ? (
-          <span className="text-emerald-400 font-bold">VIX FIX: {ind["vix_fix"] ?? 0}</span>
-        ) : config.id === "mmt_r" ? (
-          <span className="text-emerald-400 font-bold">MMT Ratio: {ind["mmt_r"] ?? ind["above_sma40"] ?? 0}%</span>
-        ) : config.id === "mmt" ? (
-          <span className="text-emerald-400 font-bold">MMT: {ind["mmt"] ?? ind["adv"] ?? 0}</span>
-        ) : config.id === "adl" ? (
-          <span className="text-emerald-400 font-bold">ADL: {ind["adl"] !== undefined ? Number(ind["adl"]).toLocaleString() : "-"}</span>
-        ) : config.id === "bam" ? (
-          <span className="text-emerald-400 font-bold">BAM(ADR10): {ind["bam"] ?? 0}</span>
-        ) : config.id === "adr14" ? (
-          <span className="text-emerald-400 font-bold">ADR14: {ind["adr14"] ?? "-"}</span>
-        ) : config.id === "above_sma_short" ? (
-          <><span className="text-red-500 font-bold">10: {ind["above_sma10"] ?? 0}%</span><span className="text-green-500 font-bold ml-1">20: {ind["above_sma20"] ?? 0}%</span><span className="text-yellow-500 font-bold ml-1">40: {ind["above_sma40"] ?? 0}%</span><span className="text-blue-500 font-bold ml-1">50: {ind["above_sma50"] ?? 0}%</span></>
-        ) : config.id === "above_sma200" ? (
-          <span className="text-emerald-400 font-bold">200: {ind["above_sma200"] ?? 0}%</span>
-        ) : config.id === "market_amount" ? (
-          <><span className="text-red-400 font-bold">KS대금: {ind["kospi_amount"] ?? 0}천억</span><span className="text-blue-400 font-bold ml-1">KQ대금: {ind["kosdaq_amount"] ?? 0}천억</span></>
-        ) : config.id === "market_volume" ? (
-          <><span className="text-red-400 font-bold">KS량: {ind["kospi_volume"] ?? 0}천만</span><span className="text-blue-400 font-bold ml-1">KQ량: {ind["kosdaq_volume"] ?? 0}천만</span></>
-        ) : config.id === "rsi" ? (
-          <span className="text-emerald-400 font-bold">RSI_14: {ind["rsi"] ?? 0}</span>
-        ) : config.id === "macd" ? (
-          <><span className="text-blue-400 font-bold">MACD: {ind["macd"] ?? 0}</span><span className="text-orange-400 font-bold ml-1">Sig: {ind["macd_signal"] ?? 0}</span></>
-        ) : config.id === "zbt" ? (
-          <span className="text-emerald-400 font-bold">ZBT: {ind["zbt"] ?? 0}</span>
-        ) : config.id === "mcclellan_oscilator" ? (
-          <span className="text-emerald-400 font-bold">McC OSC: {ind["mcclellan_oscilator"] ?? 0}</span>
-        ) : config.id === "mcclellan_summation" ? (
-          <span className="text-emerald-400 font-bold">McC SUM: {ind["mcclellan_summation"] ?? ind["mcclellan_summation_indicator"] ?? 0}</span>
-        ) : config.id === "saito_ratio" ? (
-          <span className="text-emerald-400 font-bold">Saito: {ind["saito_ratio"] ?? 0}</span>
-        ) : (
-          <span className="text-emerald-400 font-bold">{ind[config.id] ?? "-"}</span>
-        )}
-      </div>
-    );
-  };
+  return (
+    <div className="absolute top-1 left-2 z-30 pointer-events-none text-[9px] font-mono bg-black/50 backdrop-blur-sm px-2 py-0.5 rounded border border-slate-700/50 flex gap-2 text-slate-200 shadow-md">
+      {config.id === "main" ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-emerald-400 font-bold">{hoveredData.time}</span>
+          <span className="text-slate-400">O:</span>
+          <span className="text-slate-200">{(ohlc?.open ?? 0).toLocaleString()}</span>
+          <span className="text-slate-400">H:</span>
+          <span className="text-slate-200">{(ohlc?.high ?? 0).toLocaleString()}</span>
+          <span className="text-slate-400">L:</span>
+          <span className="text-slate-200">{(ohlc?.low ?? 0).toLocaleString()}</span>
+          <span className="text-slate-400">C:</span>
+          <span className={(ohlc?.close ?? 0) >= (ohlc?.open ?? 0) ? "text-red-400 font-bold" : "text-blue-400 font-bold"}>
+            {(ohlc?.close ?? 0).toLocaleString()}
+          </span>
+          <span className="text-red-400 font-bold ml-2">SMA50: {(ind["price_sma50"] ?? 0).toLocaleString()}</span>
+          <span className="text-blue-400 font-bold ml-1">SMA100: {(ind["price_sma100"] ?? 0).toLocaleString()}</span>
+          <span className="text-emerald-400 font-bold ml-1">SMA200: {(ind["price_sma200"] ?? 0).toLocaleString()}</span>
+        </div>
+      ) : config.id === "stockbee_mm" ? (
+        <><span className="text-red-400 font-bold">MM: {ind["stockbee_mm"] ?? 0}</span><span className="text-emerald-400 font-bold ml-2">Above 40MA: {ind["above_sma40"] ?? 0}%</span></>
+      ) : config.id === "high52_low52" ? (
+        <><span className="text-red-400 font-bold">H52: {ind["high52sum"] ?? 0}</span><span className="text-blue-400 font-bold ml-1">L52: {ind["low52sum"] ?? 0}</span></>
+      ) : config.id === "high52_low52_net" ? (
+        <span className="text-emerald-400 font-bold">H-L Net: {ind["high52_low52"] ?? (ind["high52sum"] !== undefined && ind["low52sum"] !== undefined ? ind["high52sum"] - ind["low52sum"] : 0)}</span>
+      ) : config.id === "vix_fix" ? (
+        <span className="text-emerald-400 font-bold">VIX FIX: {ind["vix_fix"] ?? 0}</span>
+      ) : config.id === "mmt_r" ? (
+        <span className="text-emerald-400 font-bold">MMT Ratio: {ind["mmt_r"] ?? ind["above_sma40"] ?? 0}%</span>
+      ) : config.id === "mmt" ? (
+        <span className="text-emerald-400 font-bold">MMT: {ind["mmt"] ?? ind["adv"] ?? 0}</span>
+      ) : config.id === "adl" ? (
+        <span className="text-emerald-400 font-bold">ADL: {ind["adl"] !== undefined ? Number(ind["adl"]).toLocaleString() : "-"}</span>
+      ) : config.id === "bam" ? (
+        <span className="text-emerald-400 font-bold">BAM(ADR10): {ind["bam"] ?? 0}</span>
+      ) : config.id === "adr14" ? (
+        <span className="text-emerald-400 font-bold">ADR14: {ind["adr14"] ?? "-"}</span>
+      ) : config.id === "above_sma_short" ? (
+        <><span className="text-red-500 font-bold">10: {ind["above_sma10"] ?? 0}%</span><span className="text-green-500 font-bold ml-1">20: {ind["above_sma20"] ?? 0}%</span><span className="text-yellow-500 font-bold ml-1">40: {ind["above_sma40"] ?? 0}%</span><span className="text-blue-500 font-bold ml-1">50: {ind["above_sma50"] ?? 0}%</span></>
+      ) : config.id === "above_sma200" ? (
+        <span className="text-emerald-400 font-bold">200: {ind["above_sma200"] ?? 0}%</span>
+      ) : config.id === "market_amount" ? (
+        <><span className="text-red-400 font-bold">KS대금: {ind["kospi_amount"] ?? 0}천억</span><span className="text-blue-400 font-bold ml-1">KQ대금: {ind["kosdaq_amount"] ?? 0}천억</span></>
+      ) : config.id === "market_volume" ? (
+        <><span className="text-red-400 font-bold">KS량: {ind["kospi_volume"] ?? 0}천만</span><span className="text-blue-400 font-bold ml-1">KQ량: {ind["kosdaq_volume"] ?? 0}천만</span></>
+      ) : config.id === "rsi" ? (
+        <span className="text-emerald-400 font-bold">RSI_14: {ind["rsi"] ?? 0}</span>
+      ) : config.id === "macd" ? (
+        <><span className="text-blue-400 font-bold">MACD: {ind["macd"] ?? 0}</span><span className="text-orange-400 font-bold ml-1">Sig: {ind["macd_signal"] ?? 0}</span></>
+      ) : config.id === "zbt" ? (
+        <span className="text-emerald-400 font-bold">ZBT: {ind["zbt"] ?? 0}</span>
+      ) : config.id === "mcclellan_oscilator" ? (
+        <span className="text-emerald-400 font-bold">McC OSC: {ind["mcclellan_oscilator"] ?? 0}</span>
+      ) : config.id === "mcclellan_summation" ? (
+        <span className="text-emerald-400 font-bold">McC SUM: {ind["mcclellan_summation"] ?? ind["mcclellan_summation_indicator"] ?? 0}</span>
+      ) : config.id === "saito_ratio" ? (
+        <span className="text-emerald-400 font-bold">Saito: {ind["saito_ratio"] ?? 0}</span>
+      ) : (
+        <span className="text-emerald-400 font-bold">{ind[config.id] ?? "-"}</span>
+      )}
+    </div>
+  );
+});
+
 
   return (
     <div ref={containerRef} className="relative flex flex-col w-full h-[calc(100vh-3.5rem)] md:h-full min-h-0 bg-slate-950 overflow-hidden border-t border-slate-800">
@@ -798,7 +825,7 @@ export function KospiWeatherChart() {
 
         {WEATHER_20PANEL_CONFIGS.map((config) => (
           <div key={config.id} className="relative w-full border-b border-slate-800/80 group">
-            {renderTooltip(config)}
+            <WeatherPanelTooltip config={config} hoveredData={hoveredData} />
             <div data-chart-id={config.id} className="w-full" />
           </div>
         ))}

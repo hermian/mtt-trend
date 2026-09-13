@@ -1,5 +1,6 @@
 "use client";
 
+import React, { memo } from "react";
 import { type ColorScale } from "@/app/heatmap/_lib/colors";
 import { buildSectionGroups } from "../_lib/sections";
 import { type MarketKey } from "../_lib/links";
@@ -16,7 +17,7 @@ interface HeatmapSectionBlockProps {
   onSelectEtf?: (etf: ETFItem) => void;
 }
 
-export function HeatmapSectionBlock({
+export const HeatmapSectionBlock = memo(function HeatmapSectionBlock({
   section,
   groups,
   period,
@@ -50,4 +51,4 @@ export function HeatmapSectionBlock({
       </div>
     </section>
   );
-}
+});

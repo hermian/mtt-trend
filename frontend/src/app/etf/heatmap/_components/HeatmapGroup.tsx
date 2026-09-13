@@ -1,5 +1,6 @@
 "use client";
 
+import React, { memo } from "react";
 import { type ColorScale } from "@/app/heatmap/_lib/colors";
 import { HeatmapCell } from "./HeatmapCell";
 import { type MarketKey } from "../_lib/links";
@@ -17,7 +18,7 @@ interface HeatmapGroupProps {
 }
 
 /** 서브카테고리 라벨(좌) + 타일 행(우) — 스노우볼72 스타일 */
-export function HeatmapGroup({
+export const HeatmapGroup = memo(function HeatmapGroup({
   label,
   etfs,
   period,
@@ -59,4 +60,4 @@ export function HeatmapGroup({
       </div>
     </div>
   );
-}
+});

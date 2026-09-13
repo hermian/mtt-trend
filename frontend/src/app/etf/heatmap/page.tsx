@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { apiClient } from "@/lib/apiClient";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { fetchEtfHeatmap, useEtfHeatmap } from "@/hooks/useEtfHeatmap";
 import { buildETFColorScale } from "./_lib/colors";
 import { HeatmapCell } from "./_components/HeatmapCell";
 import { HeatmapSectionBlock } from "./_components/HeatmapSectionBlock";
@@ -12,7 +13,7 @@ import { GlobalMapHeatmap } from "./_components/GlobalMapHeatmap";
 import { ETFTreemapView } from "./_components/ETFTreemapView";
 import { ETFDetailModal } from "./_components/ETFDetailModal";
 import { KR_SECTIONS, US_SECTIONS } from "./_lib/sections";
-import type { ETFItem, HeatmapData, PeriodKey } from "./_lib/types";
+import type { ETFItem, PeriodKey } from "./_lib/types";
 
 const TABS = [
   { id: "KR" as const, label: "한국 ETF", enabled: true },
@@ -24,38 +25,38 @@ export default function ETFHeatmapPage() {
   const [activeTab, setActiveTab] = useState<"KR" | "US" | "GLOBAL">("KR");
   const [viewMode, setViewMode] = useState<"section" | "treemap">("section");
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>("1D");
-  const [data, setData] = useState<HeatmapData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [hoveredEtf, setHoveredEtf] = useState<ETFItem | null>(null);
   const [selectedModalEtf, setSelectedModalEtf] = useState<ETFItem | null>(null);
 
+  const queryClient = useQueryClient();
+  const { data, isLoading: loading, error: queryError } = useEtfHeatmap(activeTab);
+
+  // Background prefetch other markets
   useEffect(() => {
-    if (activeTab !== "KR" && activeTab !== "US" && activeTab !== "GLOBAL") return;
-    setLoading(true);
-    setData(null); // Clear previous market's data to prevent flashing old layouts
-    apiClient
-      .get<HeatmapData>(`/api/etf/heatmap?market=${activeTab}`)
-      .then((res) => {
-        if (
-          res.data &&
-          Array.isArray(res.data.indexes) &&
-          Array.isArray(res.data.groups)
-        ) {
-          setData(res.data);
-          setError(null);
-        } else {
-          setError("올바르지 않은 데이터 형식입니다.");
-        }
-      })
-      .catch((err) => {
-        console.error(err);
-        setError("데이터를 불러오는 중 오류가 발생했습니다.");
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [activeTab]);
+    for (const tab of TABS) {
+      if (tab.id !== activeTab && tab.enabled) {
+        queryClient.prefetchQuery({
+          queryKey: ["etfHeatmap", tab.id],
+          queryFn: () => fetchEtfHeatmap(tab.id),
+          staleTime: 5 * 60 * 1000,
+        });
+      }
+    }
+  }, [queryClient, activeTab]);
+
+  const handleHover = useCallback((etf: ETFItem | null) => {
+    setHoveredEtf(etf);
+  }, []);
+
+  const handleSelectEtf = useCallback((etf: ETFItem) => {
+    setSelectedModalEtf(etf);
+  }, []);
+
+  const error = queryError
+    ? queryError instanceof Error
+      ? queryError.message
+      : "데이터를 불러오는 중 오류가 발생했습니다."
+    : null;
 
   const scale = useMemo(() => {
     if (!data || !data.groups) {
@@ -176,8 +177,8 @@ export default function ETFHeatmapPage() {
               data={data}
               period={selectedPeriod}
               scale={scale}
-              onHover={setHoveredEtf}
-              onSelectEtf={setSelectedModalEtf}
+              onHover={handleHover}
+              onSelectEtf={handleSelectEtf}
             />
           ) : viewMode === "treemap" ? (
             <ETFTreemapView
@@ -185,8 +186,8 @@ export default function ETFHeatmapPage() {
               period={selectedPeriod}
               market={activeTab}
               scale={scale}
-              onHover={setHoveredEtf}
-              onSelectEtf={setSelectedModalEtf}
+              onHover={handleHover}
+              onSelectEtf={handleSelectEtf}
             />
           ) : (
             <>
@@ -203,8 +204,8 @@ export default function ETFHeatmapPage() {
                         scale={scale}
                         label={idx.name}
                         market={activeTab}
-                        onHover={setHoveredEtf}
-                        onSelectEtf={setSelectedModalEtf}
+                        onHover={handleHover}
+                        onSelectEtf={handleSelectEtf}
                       />
                     ))}
                   </div>
@@ -222,8 +223,8 @@ export default function ETFHeatmapPage() {
                       period={selectedPeriod}
                       scale={scale}
                       market={activeTab}
-                      onHover={setHoveredEtf}
-                      onSelectEtf={setSelectedModalEtf}
+                      onHover={handleHover}
+                      onSelectEtf={handleSelectEtf}
                     />
                   ))}
                 </div>
@@ -236,8 +237,8 @@ export default function ETFHeatmapPage() {
                       period={selectedPeriod}
                       scale={scale}
                       market={activeTab}
-                      onHover={setHoveredEtf}
-                      onSelectEtf={setSelectedModalEtf}
+                      onHover={handleHover}
+                      onSelectEtf={handleSelectEtf}
                     />
                   ))}
                 </div>
@@ -256,8 +257,8 @@ export default function ETFHeatmapPage() {
                         period={selectedPeriod}
                         scale={scale}
                         market={activeTab}
-                        onHover={setHoveredEtf}
-                        onSelectEtf={setSelectedModalEtf}
+                        onHover={handleHover}
+                        onSelectEtf={handleSelectEtf}
                       />
                     ))}
                 </div>

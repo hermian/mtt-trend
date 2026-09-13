@@ -87,3 +87,30 @@ def test_etf_heatmap_1w_return(mock_etf_db):
     assert found_etf is not None
     # 1W return: (110.0 - 100.0) / 100.0 * 100 = 10.0%
     assert found_etf["returns"]["1W"] == 10.0
+
+
+def test_etf_heatmap_marcap_from_parquet(mock_etf_db, tmp_path):
+    # Create mock etf_krx.parquet
+    import pandas as pd
+    df = pd.DataFrame([
+        {
+            "날짜": pd.to_datetime("2026-08-10"),
+            "종목코드": "069500",
+            "종목명": "KODEX 200",
+            "시가총액": 25_000_000_000_000.0, # 25조원 = 250000 억원
+        }
+    ])
+    df.to_parquet(tmp_path / "etf_krx.parquet")
+
+    res = client.get("/api/etf/heatmap?market=KR&date=2026-08-10")
+    assert res.status_code == 200
+    data = res.json()
+    found = None
+    for group in data["groups"]:
+        for etf in group["etfs"]:
+            if etf["code"] == "069500":
+                found = etf
+                break
+    assert found is not None
+    assert found.get("marcap") == 250000
+

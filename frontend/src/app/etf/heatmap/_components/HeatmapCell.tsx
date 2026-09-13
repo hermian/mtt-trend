@@ -1,5 +1,6 @@
 "use client";
 
+import React, { memo } from "react";
 import { heatColor, type ColorScale } from "@/app/heatmap/_lib/colors";
 import { formatReturn } from "../_lib/colors";
 import { etfLink, type MarketKey } from "../_lib/links";
@@ -16,7 +17,7 @@ interface HeatmapCellProps {
   onSelectEtf?: (etf: ETFItem) => void;
 }
 
-export function HeatmapCell({
+export const HeatmapCell = memo(function HeatmapCell({
   etf,
   period,
   scale,
@@ -64,4 +65,4 @@ export function HeatmapCell({
       </span>
     </a>
   );
-}
+});

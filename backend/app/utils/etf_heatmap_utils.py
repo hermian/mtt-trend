@@ -1,10 +1,13 @@
 from __future__ import annotations
+import logging
 import sqlite3
 import datetime
 from pathlib import Path
 import pandas as pd
 
 from app.utils.etf_heatmap_config import ETF_HEATMAP_LAYOUT
+
+logger = logging.getLogger(__name__)
 
 def get_db_paths():
     db_dir = Path.home() / ".cache" / "db"
@@ -21,7 +24,52 @@ def etf_heatmap_sources(market: str = "KR") -> list[Path]:
     if market in ("US", "GLOBAL"):
         db_dir = etf_price_db.parent
         return [db_dir / "etf_us_price.db", db_dir / "etf_us_master.db", macro_db]
-    return [etf_price_db, macro_db]
+    krx_parquet = etf_price_db.parent / "etf_krx.parquet"
+    sources = [etf_price_db, macro_db]
+    if krx_parquet.exists():
+        sources.append(krx_parquet)
+    return sources
+
+
+def get_kr_etf_marcap_map(target_date_str: str | None = None) -> dict[str, int]:
+    """Fetch market caps in 억원 from etf_krx.parquet via DuckDB."""
+    etf_price_db, _ = get_db_paths()
+    parquet_path = etf_price_db.parent / "etf_krx.parquet"
+    if not parquet_path.exists():
+        return {}
+    try:
+        import duckdb
+        con = duckdb.connect()
+        target_dt_prefix = target_date_str.split(" ")[0] if target_date_str else None
+        if target_dt_prefix:
+            query = """
+                WITH target AS (
+                    SELECT MAX(날짜) as max_date FROM read_parquet(?) WHERE 날짜 <= ?
+                )
+                SELECT 종목코드, 시가총액 
+                FROM read_parquet(?)
+                WHERE 날짜 = (SELECT max_date FROM target)
+            """
+            rows = con.execute(query, [str(parquet_path), target_dt_prefix, str(parquet_path)]).fetchall()
+        else:
+            query = """
+                WITH latest AS (
+                    SELECT MAX(날짜) as max_date FROM read_parquet(?)
+                )
+                SELECT 종목코드, 시가총액 
+                FROM read_parquet(?)
+                WHERE 날짜 = (SELECT max_date FROM latest)
+            """
+            rows = con.execute(query, [str(parquet_path), str(parquet_path)]).fetchall()
+
+        return {
+            row[0]: int(row[1] / 100_000_000)
+            for row in rows
+            if row[1] is not None and row[1] > 0
+        }
+    except Exception as e:
+        logger.warning("Failed to load KR ETF marcap from parquet: %s", e)
+        return {}
 
 
 def get_index_close_price(conn: sqlite3.Connection, index_name: str, target_date_str: str) -> float | None:
@@ -50,8 +98,8 @@ def get_etf_close_price(conn: sqlite3.Connection, etf_code: str, target_date_str
     cursor = conn.cursor()
     target_dt_prefix = target_date_str.split(" ")[0]
     cursor.execute(
-        "SELECT 종가 FROM etf_price WHERE 종목코드 = ? AND (날짜 <= ? OR 날짜 <= ?) ORDER BY 날짜 DESC LIMIT 1",
-        (etf_code, f"{target_dt_prefix} 23:59:59", target_dt_prefix)
+        "SELECT 종가 FROM etf_price WHERE 종목코드 = ? AND 날짜 <= ? ORDER BY 날짜 DESC LIMIT 1",
+        (etf_code, f"{target_dt_prefix} 23:59:59")
     )
     row = cursor.fetchone()
     if row:
@@ -77,8 +125,8 @@ def get_us_etf_close_price(conn: sqlite3.Connection, etf_code: str, target_date_
     cursor = conn.cursor()
     target_dt_prefix = target_date_str.split(" ")[0]
     cursor.execute(
-        "SELECT Close, Date FROM etf_us_price WHERE Code = ? AND (Date <= ? OR Date <= ?) ORDER BY Date DESC LIMIT 1",
-        (etf_code, f"{target_dt_prefix} 23:59:59", f"{target_dt_prefix} 00:00:00")
+        "SELECT Close, Date FROM etf_us_price WHERE Code = ? AND Date <= ? ORDER BY Date DESC LIMIT 1",
+        (etf_code, f"{target_dt_prefix} 23:59:59")
     )
     row = cursor.fetchone()
     if row:
@@ -321,14 +369,8 @@ def load_etf_heatmap_data(market: str = "KR", target_date_str: str | None = None
                 }
             })
 
-        # Fetch MarCap mapping for KR ETFs
-        marcap_map = {}
-        try:
-            import FinanceDataReader as fdr
-            fdr_df = fdr.StockListing('ETF/KR')
-            marcap_map = dict(zip(fdr_df['Symbol'], fdr_df['MarCap']))
-        except Exception as e:
-            print("Failed to fetch FDR MarCap:", e)
+        # Fetch MarCap mapping for KR ETFs from etf_krx.parquet
+        marcap_map = get_kr_etf_marcap_map(target_date_str)
 
         # Construct Groups Structure
         groups_data = []

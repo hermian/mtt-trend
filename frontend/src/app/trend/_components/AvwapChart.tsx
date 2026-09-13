@@ -152,6 +152,27 @@ export function AvwapChart() {
   const { data: chartData, isLoading, error } = useAvwapChart(chartMarket, interval, symbol);
   const queryClient = useQueryClient();
 
+  // Hover 및 검색 자동완성 시 백그라운드 사전 페칭 (체감 지연 0ms화)
+  const prefetchTarget = useCallback(
+    (targetMarket: string, targetSymbol?: string | null) => {
+      queryClient.prefetchQuery({
+        queryKey: ["avwapChart", targetMarket, interval, targetSymbol || ""],
+        queryFn: () => api.getAvwapChartData(targetMarket, interval, targetSymbol),
+        staleTime: 60 * 1000,
+      });
+    },
+    [queryClient, interval]
+  );
+
+  // 검색 드롭다운 결과 표시 시 1위 항목 자동 백그라운드 프리페치
+  useEffect(() => {
+    if (searchResults && searchResults.length > 0 && showDropdown) {
+      const top = searchResults[0];
+      const targetM = top.market?.toLowerCase().includes("us") ? "nasdaq100" : "kospi";
+      prefetchTarget(targetM, top.code);
+    }
+  }, [searchResults, showDropdown, prefetchTarget]);
+
 
   const containerRef = useRef<HTMLDivElement>(null);
   const verticalGuideRef = useRef<HTMLDivElement>(null);
@@ -2719,6 +2740,7 @@ export function AvwapChart() {
                 <button
                   key={m.id}
                   onClick={() => handleClearStock(m.id)}
+                  onMouseEnter={() => prefetchTarget(m.id, null)}
                   className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
                     isSelected
                       ? "bg-blue-600 text-white shadow-md"
@@ -2913,7 +2935,11 @@ export function AvwapChart() {
                       <button
                         key={stk.code}
                         onClick={() => handleSelectStock(stk)}
-                        onMouseEnter={() => setSelectedIndex(idx)}
+                        onMouseEnter={() => {
+                          setSelectedIndex(idx);
+                          const targetM = stk.market?.toLowerCase().includes("us") ? "nasdaq100" : "kospi";
+                          prefetchTarget(targetM, stk.code);
+                        }}
                         className={`w-full text-left px-3 py-2 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors ${
                           selectedIndex === idx ? "bg-gray-800" : "hover:bg-gray-800/60"
                         }`}

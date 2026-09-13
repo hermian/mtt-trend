@@ -1,6 +1,7 @@
 import logging
 import os
 import re
+import gzip
 import sqlite3
 import duckdb
 from pathlib import Path
@@ -156,15 +157,37 @@ _AVWAP_CACHE: Dict[str, Any] = {}
 _ETF_MASTER_CACHE: Optional[List[Tuple[str, str]]] = None
 _US_STOCK_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
 _US_ETF_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
+_MARCAP_DUCKDB_CON: Optional[Any] = None
+
+
+def _get_marcap_duckdb_con():
+    """marcap.duckdb 전역 읽기 전용 커넥션을 반환합니다 (연결 생성 비용 15ms 제거)."""
+    global _MARCAP_DUCKDB_CON
+    m_path = os.path.expanduser("~/.cache/db/marcap.duckdb")
+    if not os.path.exists(m_path):
+        return None
+    if _MARCAP_DUCKDB_CON is None:
+        try:
+            _MARCAP_DUCKDB_CON = duckdb.connect(m_path, read_only=True)
+        except Exception as e:
+            logger.warning(f"Failed to open singleton read-only duckdb connection: {e}")
+            return duckdb.connect(m_path, read_only=True)
+    return _MARCAP_DUCKDB_CON
 
 
 def invalidate_avwap_cache():
     """Clear in-memory AVWAP cache when custom anchors change."""
-    global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE
+    global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE, _MARCAP_DUCKDB_CON
     _AVWAP_CACHE.clear()
     _ETF_MASTER_CACHE = None
     _US_STOCK_MASTER_CACHE = None
     _US_ETF_MASTER_CACHE = None
+    if _MARCAP_DUCKDB_CON is not None:
+        try:
+            _MARCAP_DUCKDB_CON.close()
+        except Exception:
+            pass
+        _MARCAP_DUCKDB_CON = None
 
 
 def _get_macro_db_path() -> Path:
@@ -325,6 +348,121 @@ def _calculate_vwap_series(df: pd.DataFrame, start_idx: Optional[int] = None) ->
     full_series = pd.Series(index=df.index, dtype=float)
     full_series.iloc[start_idx if start_idx is not None else 0:] = vwap_sub
     return full_series
+
+
+def _build_anchor_values_fast(dates_str: List[str], a_series: pd.Series, start_pos: int) -> List[AvwapAnchorValue]:
+    """고속 앵커 VWAP 포인트 리스트 생성 (NumPy 1D 배열 및 model_construct 활용)."""
+    a_vals = a_series.to_numpy(dtype=float)
+    n = len(dates_str)
+    val_list: List[AvwapAnchorValue] = []
+    for i in range(start_pos, n):
+        v = a_vals[i]
+        if not np.isnan(v) and np.isfinite(v):
+            val_list.append(AvwapAnchorValue.model_construct(
+                date=dates_str[i],
+                value=round(float(v), 2)
+            ))
+    return val_list
+
+
+def _build_avwap_points_fast(
+    df: pd.DataFrame,
+    dates_str: List[str],
+    ma_dict: Dict[str, pd.Series],
+    vol_ma_series: pd.Series,
+    amount_series: pd.Series,
+    amount_sma50_series: pd.Series,
+    bb_upper_series: Optional[pd.Series],
+    vix_fix_series: pd.Series,
+    rsi_series: pd.Series,
+    mdd_series: pd.Series,
+    h52_chg_series: pd.Series,
+    dd_3y_series: pd.Series,
+    vwap_series: pd.Series,
+    hvwap_series: pd.Series,
+    lvwap_series: pd.Series,
+) -> List[AvwapPoint]:
+    """고속 AVWAP 일별/주기별 포인트 리스트 생성 (NumPy 1D 배열 직접 인덱싱 및 model_construct)."""
+    n = len(df)
+    if n == 0:
+        return []
+
+    c_arr = df["Close"].to_numpy(dtype=float)
+    o_arr = df["Open"].to_numpy(dtype=float)
+    h_arr = df["High"].to_numpy(dtype=float)
+    l_arr = df["Low"].to_numpy(dtype=float)
+    v_arr = df["Volume"].to_numpy(dtype=float)
+
+    ma_arrs = {k: s.to_numpy(dtype=float) for k, s in ma_dict.items()}
+    vol_ma_arr = vol_ma_series.to_numpy(dtype=float)
+    amt_arr = amount_series.to_numpy(dtype=float)
+    amt_sma_arr = amount_sma50_series.to_numpy(dtype=float)
+    bb_u_arr = bb_upper_series.to_numpy(dtype=float) if bb_upper_series is not None else None
+    vix_arr = vix_fix_series.to_numpy(dtype=float)
+    rsi_arr = rsi_series.to_numpy(dtype=float)
+    mdd_arr = mdd_series.to_numpy(dtype=float)
+    h52_arr = h52_chg_series.to_numpy(dtype=float)
+    dd_3y_arr = dd_3y_series.to_numpy(dtype=float)
+    vwap_arr = vwap_series.to_numpy(dtype=float)
+    hvwap_arr = hvwap_series.to_numpy(dtype=float)
+    lvwap_arr = lvwap_series.to_numpy(dtype=float)
+
+    points: List[AvwapPoint] = []
+    for i in range(n):
+        c = c_arr[i]
+        chg = round((c / c_arr[i - 1] - 1.0) * 100.0, 2) if i > 0 and c_arr[i - 1] > 0 else None
+        pt_ma = {k: round(float(arr[i]), 2) if not np.isnan(arr[i]) else None for k, arr in ma_arrs.items()}
+
+        points.append(AvwapPoint.model_construct(
+            date=dates_str[i],
+            open=round(float(o_arr[i]), 2),
+            high=round(float(h_arr[i]), 2),
+            low=round(float(l_arr[i]), 2),
+            close=round(float(c), 2),
+            volume=round(float(v_arr[i]), 2),
+            change_pct=chg,
+            ma=pt_ma,
+            vol_ma=round(float(vol_ma_arr[i]), 2) if not np.isnan(vol_ma_arr[i]) else None,
+            amount=round(float(amt_arr[i]), 2) if not np.isnan(amt_arr[i]) else None,
+            amount_sma50=round(float(amt_sma_arr[i]), 2) if not np.isnan(amt_sma_arr[i]) else None,
+            bb_upper=round(float(bb_u_arr[i]), 2) if bb_u_arr is not None and not np.isnan(bb_u_arr[i]) else None,
+            vix_fix=round(float(vix_arr[i]), 2) if not np.isnan(vix_arr[i]) else None,
+            rsi=round(float(rsi_arr[i]), 2) if not np.isnan(rsi_arr[i]) else None,
+            mdd=round(float(mdd_arr[i]), 2) if not np.isnan(mdd_arr[i]) else None,
+            h52_chg=round(float(h52_arr[i]), 2) if not np.isnan(h52_arr[i]) else None,
+            dd_52w=round(float(h52_arr[i]), 2) if not np.isnan(h52_arr[i]) else None,
+            dd_3y=round(float(dd_3y_arr[i]), 2) if not np.isnan(dd_3y_arr[i]) else None,
+            vwap=round(float(vwap_arr[i]), 2) if not np.isnan(vwap_arr[i]) else None,
+            hvwap=round(float(hvwap_arr[i]), 2) if not np.isnan(hvwap_arr[i]) else None,
+            lvwap=round(float(lvwap_arr[i]), 2) if not np.isnan(lvwap_arr[i]) else None,
+        ))
+    return points
+
+
+def load_avwap_chart_bytes(
+    market: str = "kospi",
+    interval: str = "1D",
+    symbol: Optional[str] = None,
+) -> Tuple[Optional[bytes], Optional[bytes]]:
+    """
+    AVWAP 차트 응답 데이터를 (raw_bytes, gz_bytes) 형태로 반환합니다.
+    캐시된 데이터 모델에 압축 바이트를 메모이제이션하여 웜 요청 시 수 ms 이내로 응답합니다.
+    """
+    data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
+    if data is None:
+        return None, None
+
+    raw_bytes = getattr(data, "_cached_raw_bytes", None)
+    gz_bytes = getattr(data, "_cached_gz_bytes", None)
+    if raw_bytes is None or gz_bytes is None:
+        raw_bytes = data.model_dump_json(by_alias=True).encode("utf-8")
+        gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+        try:
+            object.__setattr__(data, "_cached_raw_bytes", raw_bytes)
+            object.__setattr__(data, "_cached_gz_bytes", gz_bytes)
+        except Exception:
+            pass
+    return raw_bytes, gz_bytes
 
 
 def load_avwap_chart_data(
@@ -502,6 +640,7 @@ def load_avwap_chart_data(
             logger.warning(f"Failed to load custom/suppressed anchors for {market_key}: {e}")
 
         seen_dates = set()
+        dates_str = df.index.strftime("%Y-%m-%d").tolist()
 
         # Dynamic YTD Anchor for index (first trading bar of current year)
         ytd_candidates = df[df.index >= f"{df.index.max().year}-01-01"]
@@ -517,14 +656,7 @@ def load_avwap_chart_data(
                     if isinstance(start_pos, slice):
                         start_pos = start_pos.start
                     a_series = _calculate_vwap_series(df, start_idx=start_pos)
-                    val_list: List[AvwapAnchorValue] = []
-                    for i in range(start_pos, len(df)):
-                        v = a_series.iloc[i]
-                        if pd.notna(v) and np.isfinite(v):
-                            val_list.append(AvwapAnchorValue(
-                                date=df.index[i].strftime("%Y-%m-%d"),
-                                value=round(float(v), 2)
-                            ))
+                    val_list = _build_anchor_values_fast(dates_str, a_series, start_pos)
                     anchors_list.append(AvwapAnchorSeries(
                         id=f"anchor_ytd_{ytd_str.replace('-', '')}",
                         name=f"YTD ({ytd_str})",
@@ -545,16 +677,7 @@ def load_avwap_chart_data(
             if isinstance(start_pos, slice):
                 start_pos = start_pos.start
             a_series = _calculate_vwap_series(df, start_idx=start_pos)
-            
-            val_list: List[AvwapAnchorValue] = []
-            for i in range(start_pos, len(df)):
-                v = a_series.iloc[i]
-                if pd.notna(v) and np.isfinite(v):
-                    val_list.append(AvwapAnchorValue(
-                        date=df.index[i].strftime("%Y-%m-%d"),
-                        value=round(float(v), 2)
-                    ))
-                    
+            val_list = _build_anchor_values_fast(dates_str, a_series, start_pos)
             anchors_list.append(AvwapAnchorSeries(
                 id=f"anchor_{ad_str.replace('-', '')}",
                 name=f"AVWAP ({ad_str})",
@@ -579,14 +702,7 @@ def load_avwap_chart_data(
             if isinstance(start_pos, slice):
                 start_pos = start_pos.start
             a_series = _calculate_vwap_series(df, start_idx=start_pos)
-            val_list: List[AvwapAnchorValue] = []
-            for i in range(start_pos, len(df)):
-                v = a_series.iloc[i]
-                if pd.notna(v) and np.isfinite(v):
-                    val_list.append(AvwapAnchorValue(
-                        date=df.index[i].strftime("%Y-%m-%d"),
-                        value=round(float(v), 2)
-                    ))
+            val_list = _build_anchor_values_fast(dates_str, a_series, start_pos)
             display_name_anc = ca.label if ca.label and ca.label.strip() else f"AVWAP ({ad_str})"
             anchors_list.append(AvwapAnchorSeries(
                 id=ca.id,
@@ -596,63 +712,24 @@ def load_avwap_chart_data(
                 values=val_list
             ))
 
-
         # 8. Build response points
-        points: List[AvwapPoint] = []
-        for idx, dt in enumerate(df.index):
-            d_str = dt.strftime("%Y-%m-%d")
-            c = float(df["Close"].iloc[idx])
-            o = float(df["Open"].iloc[idx])
-            h = float(df["High"].iloc[idx])
-            l = float(df["Low"].iloc[idx])
-            v = float(df["Volume"].iloc[idx])
-            
-            chg: Optional[float] = None
-            if idx > 0 and df["Close"].iloc[idx - 1] > 0:
-                chg = round((c / df["Close"].iloc[idx - 1] - 1.0) * 100.0, 2)
-                
-            pt_ma: Dict[str, Optional[float]] = {}
-            for ma_name, s in ma_dict.items():
-                val = s.iloc[idx]
-                pt_ma[ma_name] = round(float(val), 2) if pd.notna(val) and np.isfinite(val) else None
-                
-            v_ma = vol_ma_series.iloc[idx]
-            amt_val = amount_series.iloc[idx]
-            amt_sma = amount_sma50_series.iloc[idx]
-            bb_u = bb_upper_series.iloc[idx] if bb_upper_series is not None else None
-            vix = vix_fix_series.iloc[idx]
-            rsi_val = rsi_series.iloc[idx]
-            mdd_val = mdd_series.iloc[idx]
-            h52_val = h52_chg_series.iloc[idx]
-            dd_3y_val = dd_3y_series.iloc[idx]
-            
-            vwap_val = vwap_series.iloc[idx]
-            hvwap_val = hvwap_series.iloc[idx]
-            lvwap_val = lvwap_series.iloc[idx]
-            
-            points.append(AvwapPoint(
-                date=d_str,
-                open=round(o, 2),
-                high=round(h, 2),
-                low=round(l, 2),
-                close=round(c, 2),
-                volume=round(v, 2),
-                change_pct=chg,
-                ma=pt_ma,
-                vol_ma=round(float(v_ma), 2) if pd.notna(v_ma) and np.isfinite(v_ma) else None,
-                amount=round(float(amt_val), 2) if pd.notna(amt_val) and np.isfinite(amt_val) else None,
-                amount_sma50=round(float(amt_sma), 2) if pd.notna(amt_sma) and np.isfinite(amt_sma) else None,
-                bb_upper=round(float(bb_u), 2) if pd.notna(bb_u) and np.isfinite(bb_u) else None,
-                vix_fix=round(float(vix), 2) if pd.notna(vix) and np.isfinite(vix) else None,
-                rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
-                mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
-                h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
-                dd_52w=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
-                dd_3y=round(float(dd_3y_val), 2) if pd.notna(dd_3y_val) and np.isfinite(dd_3y_val) else None,
-                vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
-                hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
-                lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,
-            ))
+        points = _build_avwap_points_fast(
+            df=df,
+            dates_str=dates_str,
+            ma_dict=ma_dict,
+            vol_ma_series=vol_ma_series,
+            amount_series=amount_series,
+            amount_sma50_series=amount_sma50_series,
+            bb_upper_series=bb_upper_series,
+            vix_fix_series=vix_fix_series,
+            rsi_series=rsi_series,
+            mdd_series=mdd_series,
+            h52_chg_series=h52_chg_series,
+            dd_3y_series=dd_3y_series,
+            vwap_series=vwap_series,
+            hvwap_series=hvwap_series,
+            lvwap_series=lvwap_series,
+        )
             
         display_name = INDEX_DISPLAY_NAMES.get(market_key, f"{market_key.upper()} 지수")
         amount_unit = INDEX_AMOUNT_UNITS.get(market_key, "조원")
@@ -1206,6 +1283,7 @@ def _compute_asset_avwap_chart(
         logger.warning(f"Failed to load custom/suppressed anchors for asset {code}: {e}")
 
     seen_dates: set = set()
+    dates_str = df.index.strftime("%Y-%m-%d").tolist()
     for a_id, a_label, a_dt, a_color in raw_anchors:
         if a_dt is None:
             continue
@@ -1223,12 +1301,7 @@ def _compute_asset_avwap_chart(
         if isinstance(start_pos, slice):
             start_pos = start_pos.start
         a_series = _calculate_vwap_series(df, start_idx=start_pos)
-
-        vals: List[AvwapAnchorValue] = []
-        for i in range(start_pos, len(df)):
-            v = a_series.iloc[i]
-            if pd.notna(v) and np.isfinite(v):
-                vals.append(AvwapAnchorValue(date=df.index[i].strftime("%Y-%m-%d"), value=round(float(v), 2)))
+        vals = _build_anchor_values_fast(dates_str, a_series, start_pos)
 
         anchors_list.append(AvwapAnchorSeries(
             id=f"anchor_{a_id}_{d_str.replace('-', '')}",
@@ -1254,11 +1327,7 @@ def _compute_asset_avwap_chart(
         if isinstance(start_pos, slice):
             start_pos = start_pos.start
         a_series = _calculate_vwap_series(df, start_idx=start_pos)
-        vals_custom: List[AvwapAnchorValue] = []
-        for i in range(start_pos, len(df)):
-            v = a_series.iloc[i]
-            if pd.notna(v) and np.isfinite(v):
-                vals_custom.append(AvwapAnchorValue(date=df.index[i].strftime("%Y-%m-%d"), value=round(float(v), 2)))
+        vals_custom = _build_anchor_values_fast(dates_str, a_series, start_pos)
         display_name_anc = ca.label if ca.label and ca.label.strip() else f"AVWAP ({ad_str})"
         anchors_list.append(AvwapAnchorSeries(
             id=ca.id,
@@ -1268,63 +1337,24 @@ def _compute_asset_avwap_chart(
             values=vals_custom
         ))
 
-
     # 8. Build points list
-    points: List[AvwapPoint] = []
-    for idx, dt in enumerate(df.index):
-        d_str = dt.strftime("%Y-%m-%d")
-        c = float(df["Close"].iloc[idx])
-        o = float(df["Open"].iloc[idx])
-        h = float(df["High"].iloc[idx])
-        l = float(df["Low"].iloc[idx])
-        v = float(df["Volume"].iloc[idx])
-
-        chg: Optional[float] = None
-        if idx > 0 and df["Close"].iloc[idx - 1] > 0:
-            chg = round((c / df["Close"].iloc[idx - 1] - 1.0) * 100.0, 2)
-
-        pt_ma: Dict[str, Optional[float]] = {}
-        for ma_name, s in ma_dict.items():
-            val = s.iloc[idx]
-            pt_ma[ma_name] = round(float(val), 2) if pd.notna(val) and np.isfinite(val) else None
-
-        v_ma = vol_ma_series.iloc[idx]
-        amt_val = amount_series.iloc[idx]
-        amt_sma = amount_sma50_series.iloc[idx]
-        bb_u = bb_upper_series.iloc[idx] if bb_upper_series is not None else None
-        vix = vix_fix_series.iloc[idx]
-        rsi_val = rsi_series.iloc[idx]
-        mdd_val = mdd_series.iloc[idx]
-        h52_val = h52_chg_series.iloc[idx]
-        dd_3y_val = dd_3y_series.iloc[idx]
-
-        vwap_val = vwap_series.iloc[idx]
-        hvwap_val = hvwap_series.iloc[idx]
-        lvwap_val = lvwap_series.iloc[idx]
-
-        points.append(AvwapPoint(
-            date=d_str,
-            open=round(o, 2),
-            high=round(h, 2),
-            low=round(l, 2),
-            close=round(c, 2),
-            volume=round(v, 2),
-            change_pct=chg,
-            ma=pt_ma,
-            vol_ma=round(float(v_ma), 2) if pd.notna(v_ma) and np.isfinite(v_ma) else None,
-            amount=round(float(amt_val), 2) if pd.notna(amt_val) and np.isfinite(amt_val) else None,
-            amount_sma50=round(float(amt_sma), 2) if pd.notna(amt_sma) and np.isfinite(amt_sma) else None,
-            bb_upper=round(float(bb_u), 2) if pd.notna(bb_u) and np.isfinite(bb_u) else None,
-            vix_fix=round(float(vix), 2) if pd.notna(vix) and np.isfinite(vix) else None,
-            rsi=round(float(rsi_val), 2) if pd.notna(rsi_val) and np.isfinite(rsi_val) else None,
-            mdd=round(float(mdd_val), 2) if pd.notna(mdd_val) and np.isfinite(mdd_val) else None,
-            h52_chg=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
-            dd_52w=round(float(h52_val), 2) if pd.notna(h52_val) and np.isfinite(h52_val) else None,
-            dd_3y=round(float(dd_3y_val), 2) if pd.notna(dd_3y_val) and np.isfinite(dd_3y_val) else None,
-            vwap=round(float(vwap_val), 2) if pd.notna(vwap_val) and np.isfinite(vwap_val) else None,
-            hvwap=round(float(hvwap_val), 2) if pd.notna(hvwap_val) and np.isfinite(hvwap_val) else None,
-            lvwap=round(float(lvwap_val), 2) if pd.notna(lvwap_val) and np.isfinite(lvwap_val) else None,
-        ))
+    points = _build_avwap_points_fast(
+        df=df,
+        dates_str=dates_str,
+        ma_dict=ma_dict,
+        vol_ma_series=vol_ma_series,
+        amount_series=amount_series,
+        amount_sma50_series=amount_sma50_series,
+        bb_upper_series=bb_upper_series,
+        vix_fix_series=vix_fix_series,
+        rsi_series=rsi_series,
+        mdd_series=mdd_series,
+        h52_chg_series=h52_chg_series,
+        dd_3y_series=dd_3y_series,
+        vwap_series=vwap_series,
+        hvwap_series=hvwap_series,
+        lvwap_series=lvwap_series,
+    )
 
     return AvwapChartResponse(
         market=market_type,
@@ -1370,9 +1400,11 @@ def load_stock_avwap_chart_data(
             return cached["data"]
 
     try:
-        con = duckdb.connect(m_path, read_only=True)
+        con = _get_marcap_duckdb_con()
+        if con is None:
+            return None
         raw_df = con.execute(
-            "SELECT Date, Open, High, Low, Close, Volume, Amount FROM marcap_adj WHERE Code = ? ORDER BY Date ASC",
+            "SELECT Date, Open, High, Low, Close, Volume, Amount FROM marcap_adj WHERE Date >= '2000-01-01' AND Code = ? ORDER BY Date ASC",
             [code]
         ).fetchdf()
 

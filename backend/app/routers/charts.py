@@ -49,7 +49,7 @@ from app.utils.above_ma_utils import load_above_ma_data
 from app.utils.foreign_flow_utils import load_foreign_flow_data, foreign_flow_sources
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
 from app.utils.stockbee_mm_utils import load_stockbee_mm
-from app.utils.avwap_utils import load_avwap_chart_data, search_stocks_db
+from app.utils.avwap_utils import load_avwap_chart_data, load_avwap_chart_bytes, search_stocks_db
 from app.utils.sugeub_utils import (
     DEFAULT_SUM_PERIOD,
     load_supply_demand_analysis,
@@ -1391,21 +1391,34 @@ def get_supply_demand_price_profile(
 
 @router.get("/avwap", response_model=AvwapChartResponse)
 def get_avwap_chart_data(
+    request: Request,
     market: str = Query("kospi", description="kospi | kosdaq | sp500 | nasdaq100 | dow | sox | etf"),
     interval: str = Query("1D", description="1D | 1W | 1M | 1Y"),
     symbol: Optional[str] = Query(None, description="개별 종목코드 또는 종목명 (예: 005930, 삼성전자, 069500, KODEX 200)"),
 ):
     """
     KOSPI / KOSDAQ / S&P500 / NASDAQ100 / DOW / SOX 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
+    사전 압축(pre-compressed gzip) 캐시를 적용하여 응답 지연을 최소화합니다.
     """
-    data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
-    if not data:
+    raw_bytes, gz_bytes = load_avwap_chart_bytes(market=market, interval=interval, symbol=symbol)
+    if raw_bytes is None:
         target_desc = f"symbol '{symbol}'" if symbol else f"market '{market}'"
         raise HTTPException(
             status_code=404,
             detail=f"AVWAP chart data not found for {target_desc} with interval '{interval}'."
         )
-    return data
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding and gz_bytes:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
 
 
 @router.get("/avwap/anchors", response_model=List[CustomAnchorResponse])

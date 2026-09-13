@@ -124,12 +124,33 @@ async def lifespan(app: FastAPI):
             set_watchdog_active(False)
             logger.warning(f"Data directory not found: {data_dir}")
 
+    async def run_avwap_prewarm():
+        """서버 시작 시 주요 지수 및 대표 종목의 AVWAP 데이터를 사전 웜업하여 사용자 첫 접속 시 0ms 체감 제공"""
+        try:
+            from app.utils.avwap_utils import load_avwap_chart_bytes
+            targets = [
+                ("kospi", "1D", None),
+                ("kosdaq", "1D", None),
+                ("sp500", "1D", None),
+                ("sox", "1D", None),
+                ("nasdaq100", "1D", None),
+                ("kospi", "1D", "005930"),
+            ]
+            for m, inv, sym in targets:
+                await asyncio.to_thread(load_avwap_chart_bytes, market=m, interval=inv, symbol=sym)
+            logger.info("AVWAP startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"AVWAP startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
+    _prewarm_task = asyncio.create_task(run_avwap_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _prewarm_task and not _prewarm_task.done():
+        _prewarm_task.cancel()
     if _initial_sync_task and not _initial_sync_task.done():
         _initial_sync_task.cancel()
         try:

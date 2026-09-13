@@ -50,7 +50,7 @@ from app.utils.chart_utils import load_chart_data, load_chart_bytes
 from app.utils.above_ma_utils import load_above_ma_data, get_above_ma_db_path
 from app.utils.foreign_flow_utils import load_foreign_flow_data, foreign_flow_sources
 from app.utils.trend_up_breadth_utils import load_trend_up_breadth_data
-from app.utils.stockbee_mm_utils import load_stockbee_mm
+from app.utils.stockbee_mm_utils import load_stockbee_mm, get_stockbee_mm_db_path
 from app.utils.avwap_utils import load_avwap_chart_data, load_avwap_chart_bytes, search_stocks_db
 from app.utils.sugeub_utils import (
     DEFAULT_SUM_PERIOD,
@@ -180,8 +180,14 @@ def get_above_ma_chart_data(
     )
 
 
+# /stockbee-mm 응답 캐시 (mtime 기준 무효화)
+_STOCKBEE_MM_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
+_STOCKBEE_MM_CACHE_MAX = 8
+
+
 @router.get("/stockbee-mm", response_model=StockbeeMmResponse)
 def get_stockbee_mm_data(
+    request: Request,
     year: Optional[int] = Query(
         None, ge=1990, le=2100, description="연도(YYYY). 미지정 시 DB 최신일 기준 최근 1년"
     ),
@@ -193,11 +199,49 @@ def get_stockbee_mm_data(
     ~/.cache/db/stockbee_mm.db 의 한국 Stockbee Market Monitor 일별 지표를 반환합니다.
     기본: 최근 1년. year 지정 시 해당 연도 전체.
     """
+    db_path = get_stockbee_mm_db_path()
+    current_mtime = file_mtime(db_path)
+    cache_key = (str(db_path), year, limit)
+    cached = _STOCKBEE_MM_CACHE.get(cache_key)
+    if cached is not None and cached[0] == current_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+        accept_encoding = request.headers.get("accept-encoding", "")
+        if "gzip" in accept_encoding:
+            return Response(
+                content=gz_bytes,
+                media_type="application/json",
+                headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+            )
+        return Response(
+            content=raw_bytes,
+            media_type="application/json",
+        )
+
     result = load_stockbee_mm(year=year, limit=limit)
     if result is None:
-        return StockbeeMmResponse(data=[], years=[])
-    rows, years = result
-    return StockbeeMmResponse(data=[StockbeeMmRow(**r) for r in rows], years=years)
+        resp_model = StockbeeMmResponse(data=[], years=[])
+    else:
+        rows, years = result
+        resp_model = StockbeeMmResponse(data=[StockbeeMmRow(**r) for r in rows], years=years)
+
+    raw_bytes = resp_model.model_dump_json().encode("utf-8")
+    gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+
+    if len(_STOCKBEE_MM_CACHE) >= _STOCKBEE_MM_CACHE_MAX:
+        _STOCKBEE_MM_CACHE.clear()
+    _STOCKBEE_MM_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
 
 @router.get("/trend-up-breadth", response_model=TrendUpBreadthResponse)
 def get_trend_up_breadth_endpoint(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { api, StockbeeMmRow } from "@/lib/api";
 
@@ -130,7 +130,14 @@ const COLUMNS: Array<{
   { key: "kospi", label: "KOSPI", format: "2" },
 ];
 
-function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
+const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
+  const rowsWithTones = useMemo(() => {
+    return rows.map((row) => ({
+      row,
+      tones: cellTones(row),
+    }));
+  }, [rows]);
+
   if (rows.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-gray-300 p-12 text-center">
@@ -157,8 +164,7 @@ function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => {
-            const tones = cellTones(row);
+          {rowsWithTones.map(({ row, tones }) => {
             return (
               <tr key={row.date} className="border-b border-gray-200 hover:brightness-95">
                 {COLUMNS.map((c) => {
@@ -191,9 +197,9 @@ function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
       </table>
     </div>
   );
-}
+});
 
-function UsIframe({ year }: { year: number }) {
+const UsIframe = memo(function UsIframe({ year }: { year: number }) {
   const url = getStockbeeMmUsUrl(year);
   return (
     <div className="flex flex-col gap-2 flex-1 min-h-0 h-full pb-6">
@@ -218,7 +224,7 @@ function UsIframe({ year }: { year: number }) {
       </div>
     </div>
   );
-}
+});
 
 const US_YEARS = Object.keys(STOCKBEE_MM_US_YEAR_GIDS)
   .map(Number)

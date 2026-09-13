@@ -230,6 +230,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"WICS ranking startup pre-warm encountered non-fatal error: {e}")
 
+    async def run_stockbee_mm_prewarm():
+        """서버 시작 시 Stockbee MM 기본 데이터(최근 1년)를 사전 웜업하여 0ms 체감 제공"""
+        try:
+            from fastapi import Request
+            from app.routers.charts import get_stockbee_mm_data
+            req = Request(scope={"type": "http", "headers": [(b"accept-encoding", b"gzip")]})
+            await asyncio.to_thread(get_stockbee_mm_data, req)
+            logger.info("Stockbee MM startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"Stockbee MM startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
     _prewarm_task = asyncio.create_task(run_avwap_prewarm())
@@ -240,10 +251,13 @@ async def lifespan(app: FastAPI):
     _valuation_prewarm_task = asyncio.create_task(run_valuation_prewarm())
     _foreign_flow_prewarm_task = asyncio.create_task(run_foreign_flow_prewarm())
     _wics_ranking_prewarm_task = asyncio.create_task(run_wics_ranking_prewarm())
+    _stockbee_mm_prewarm_task = asyncio.create_task(run_stockbee_mm_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _stockbee_mm_prewarm_task and not _stockbee_mm_prewarm_task.done():
+        _stockbee_mm_prewarm_task.cancel()
     if _wics_ranking_prewarm_task and not _wics_ranking_prewarm_task.done():
         _wics_ranking_prewarm_task.cancel()
     if _foreign_flow_prewarm_task and not _foreign_flow_prewarm_task.done():

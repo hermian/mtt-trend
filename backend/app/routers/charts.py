@@ -41,6 +41,7 @@ from app.schemas import (
 )
 from app.utils.returns_utils import compute_return_comparison
 from app.utils.mtime_utils import file_mtime, newest_mtime
+from app.utils.cache_utils import cached_by_mtime
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
     default_lookback_start,
@@ -116,26 +117,8 @@ def _normalize_ism_observations(
 # 데이터는 장 마감 후 1회 갱신되므로 원본 파일의 mtime 을 무효화 키로 쓰면 충분하다
 # (_CHART_CACHE / _AVWAP_CACHE / _MACRO_CACHE 와 동일한 프로젝트 표준 패턴).
 # 캐시별 상한을 두어 무한 증가를 막는다.
-# `file_mtime`/`newest_mtime` 은 stocks.py 와 공유하므로 utils 로 분리했다.
-
-
-def _cached(cache: dict, cache_max: int, key, mtime: float, compute, should_cache=None):
-    """mtime 키 캐시 조회. 미스면 compute() 실행 후 저장하고, 상한을 넘으면 가장 오래된 항목을 버린다.
-
-    should_cache 를 주면 그 결과가 False 일 때 저장하지 않는다. 일시적 오류(DB 락 등)로
-    만들어진 빈 응답이 다음 mtime 변경까지 눌러앉는 것을 막기 위한 것으로, compute() 는
-    실패 시 None 을 돌려주고 호출부가 빈 응답으로 폴백한다.
-    """
-    hit = cache.get(key)
-    if hit is not None and hit[0] == mtime:
-        return hit[1]
-    value = compute()
-    if should_cache is not None and not should_cache(value):
-        return value
-    if len(cache) >= cache_max:
-        cache.pop(next(iter(cache)))
-    cache[key] = (mtime, value)
-    return value
+# `file_mtime`/`newest_mtime` 은 stocks.py 와, `cached_by_mtime` 은 etf/top30 라우터와
+# 공유하므로 utils 로 분리했다.
 
 
 @router.get("/data", response_model=ChartDataResponse)
@@ -690,7 +673,7 @@ def get_foreign_flow_chart_data(
             data=[ForeignFlowPoint(**row) for row in rows],
         )
 
-    return _cached(
+    return cached_by_mtime(
         _FOREIGN_FLOW_CACHE,
         _FOREIGN_FLOW_CACHE_MAX,
         (start_date, end_date, etf),
@@ -1147,7 +1130,7 @@ def _load_wics_index_meta() -> Optional[WicsIndexMetaResponse]:
 def get_wics_index_meta():
     """wics_daily_index 섹터 목록 및 날짜 범위."""
     empty = WicsIndexMetaResponse(sectors=[], min_date=None, max_date=None)
-    result = _cached(
+    result = cached_by_mtime(
         _WICS_INDEX_META_CACHE,
         1,
         (),

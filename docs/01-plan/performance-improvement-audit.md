@@ -690,6 +690,61 @@ ORDER BY 날짜 DESC LIMIT 1
 `etf_price` 를 전체 이력으로 읽는 경로(ETF AVWAP, 콜드 284 ms)는 인덱스 이득이 **1.2배뿐**이다
 (모든 행을 읽어야 하므로). 그 경로는 별도 과제다.
 
+#### ✅ 해소 (2026-09-13 21:13) — P0 적용 확인 + P1/P2/P3 구현
+
+**P0 적용 확인** — 사용자가 직접 인덱스를 추가했다.
+
+| DB | 인덱스 | 확인 |
+|---|---|---|
+| `etf_price` | `ix_price_code_date (종목코드, 날짜)` | ✅ |
+| `etf_us_price` | `ix_price_code_date (Code, Date)` | ✅ |
+
+`EXPLAIN QUERY PLAN` 에서 **`USE TEMP B-TREE FOR ORDER BY` 가 양쪽 모두 사라졌다.** 이제
+`SEARCH ... USING INDEX ix_price_code_date (종목코드=?)` 만 남는다 — seek 로 끝나고 정렬이 없다.
+이 줄의 소멸이 인덱스가 실제로 먹었다는 결정적 증거다.
+
+| 엔드포인트 | 이전 | 이후 | 배수 |
+|---|---|---|---|
+| `etf/heatmap` KR | 2,043 ms | **107.5 ms** | **19×** |
+| `etf/heatmap` US | 944 ms | **111.3 ms** | **8.5×** |
+
+예상치(~100 ms)와 일치한다. P2 의 근거였던 "이벤트 루프 2초 정지"도 0.1초 규모로 줄었다.
+
+**P1 — `etf/heatmap` mtime 응답 캐시.** `_ETF_HEATMAP_CACHE`(상한 4, 키 `(market, date)`,
+무효화 키 `newest_mtime(*etf_heatmap_sources(market))`). 소스 경로는
+`etf_heatmap_utils.etf_heatmap_sources()` 로 노출했다 — 라우터가 경로를 중복 나열하면 원본
+목록이 바뀔 때 캐시 키가 어긋나기 때문(`foreign_flow_sources()` 와 같은 이유).
+`should_cache=bool` 로 **빈 응답이 다음 mtime 변경까지 눌러앉는 것을 막았다.**
+
+**P2 — 5개 핸들러 `async def` → `def`.** 전 라우터 재스캔 결과 **잔여 0건**.
+판정 기준은 하나다: `async def` 인데 본문에 `await` 가 없으면 이벤트 루프에서 블로킹 IO 를
+돌린다는 뜻이다(동기 헬퍼에 위임하는 유형도 동일).
+
+**P3 — `top30` / `top30/matrix` mtime 캐시.** `_TOP30_CACHE`(상한 16),
+`_TOP30_MATRIX_CACHE`(상한 8), 무효화 키 `file_mtime(rs_dir)`.
+키는 **해석 후 값**을 쓴다 — `date` 미지정이면 `reference` 가 최근일로 해석되므로
+요청 파라미터가 아니라 해석 결과를 키로 넣었다.
+
+**공용 헬퍼 추출.** `charts.py` 의 사설 `_cached` → `app/utils/cache_utils.py:cached_by_mtime`.
+세 라우터가 공유한다. `charts.py` 는 호출부 2곳만 개명했고 로직은 그대로다.
+
+**검증**
+
+- **응답 동등성 11/11 바이트 일치** — 개정 전 라이브 서버에서 받아둔 baseline 과 sha256 비교.
+- 콜드 → 웜: `etf/heatmap` KR 107.6 → **2.7 ms(40×)**, `top30` 46.3 → 0.7 ms,
+  `top30/matrix` 17.7 → 1.3 ms.
+- 캐시 상한 준수(etf 4≤4, top30 5≤16, matrix 8≤8), 파라미터가 다르면 키가 분리되는지 확인.
+- mtime 무효화: 같은 mtime → 재계산 0회, mtime 변경 → 재계산 1회.
+- **P2 해소 확인**: `etf/heatmap`(콜드)과 겹칠 때 `/top30/dates` 최대 **1.8 ms**
+  (전환 전 2,119 ms — 2,383배 밀리던 정지가 사라짐).
+- `pytest tests/ -q` → **237 passed**.
+
+⚠️ **인덱스는 아직 영구적이지 않다.** `etf_price.db` 를 만드는 외부 `screener` 적재 코드에
+`CREATE INDEX IF NOT EXISTS` 를 넣어야 한다. 그 전까지는 DB 재생성 시 인덱스가 사라진다.
+
+**잔여**: `etf_price` **전체 이력**을 읽는 경로(ETF AVWAP, 콜드 284 ms)는 이번 인덱스로
+**1.2배**밖에 줄지 않았다. 점조회가 아니라 범위 스캔이라 성격이 다르다 → 별도 과제.
+
 ### 운영 규칙 (확정)
 
 - **빌드·배포는 에이전트가 실행하지 않는다.** 필요 시 사용자에게 실행을 요청한다.

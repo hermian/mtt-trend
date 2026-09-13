@@ -10,6 +10,20 @@ def get_db_paths():
     db_dir = Path.home() / ".cache" / "db"
     return db_dir / "etf_price.db", db_dir / "macro.db"
 
+
+def etf_heatmap_sources(market: str = "KR") -> list[Path]:
+    """load_etf_heatmap_data 가 읽는 원본 파일 목록. 캐시 무효화 키(최신 mtime) 산출용.
+
+    경로를 라우터가 중복 나열하면 이 함수가 바뀔 때 어긋나므로, 데이터를 소유한
+    이 모듈에서 노출한다(foreign_flow_utils.foreign_flow_sources 와 같은 이유).
+    """
+    etf_price_db, macro_db = get_db_paths()
+    if market in ("US", "GLOBAL"):
+        db_dir = etf_price_db.parent
+        return [db_dir / "etf_us_price.db", db_dir / "etf_us_master.db", macro_db]
+    return [etf_price_db, macro_db]
+
+
 def get_index_close_price(conn: sqlite3.Connection, index_name: str, target_date_str: str) -> float | None:
     """Find the close price of the closest trading date <= target_date_str for a specific index.
     Fallback to the earliest available price if listed after target_date_str."""

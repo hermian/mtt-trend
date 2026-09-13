@@ -14,7 +14,7 @@ router = APIRouter(prefix="/heatmap", tags=["heatmap"])
 
 
 @router.get("/stocks", response_model=StockHeatmapResponse)
-async def get_stock_heatmap(
+def get_stock_heatmap(
     grouping: str = Query(
         "sector",
         description="그룹 기준: sector | industry | theme | kospi | kosdaq",

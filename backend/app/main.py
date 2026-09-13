@@ -217,6 +217,19 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             logger.warning(f"Foreign flow startup pre-warm encountered non-fatal error: {e}")
 
+    async def run_wics_ranking_prewarm():
+        """서버 시작 시 WICS 월별/주별 랭킹 메타 및 기본 랭킹 데이터를 사전 웜업하여 0ms 체감 제공"""
+        try:
+            from fastapi import Request
+            from app.routers.charts import get_wics_months, get_wics_weeks, get_wics_rankings
+            await asyncio.to_thread(get_wics_months)
+            await asyncio.to_thread(get_wics_weeks)
+            req = Request(scope={"type": "http", "headers": [(b"accept-encoding", b"gzip")]})
+            await asyncio.to_thread(get_wics_rankings, req)
+            logger.info("WICS ranking startup pre-warm completed successfully.")
+        except Exception as e:
+            logger.warning(f"WICS ranking startup pre-warm encountered non-fatal error: {e}")
+
     # 백그라운드 비동기 태스크로 즉시 기동하여 Uvicorn 서버가 즉시 응답 가능하게 처리
     _initial_sync_task = asyncio.create_task(run_initial_sync_and_start_watcher())
     _prewarm_task = asyncio.create_task(run_avwap_prewarm())
@@ -226,10 +239,13 @@ async def lifespan(app: FastAPI):
     _macro_prewarm_task = asyncio.create_task(run_macro_prewarm())
     _valuation_prewarm_task = asyncio.create_task(run_valuation_prewarm())
     _foreign_flow_prewarm_task = asyncio.create_task(run_foreign_flow_prewarm())
+    _wics_ranking_prewarm_task = asyncio.create_task(run_wics_ranking_prewarm())
 
     yield
 
     # lifespan 종료 시 백그라운드 동기화 및 감시자 기동 태스크를 안전하게 취소하고 정리
+    if _wics_ranking_prewarm_task and not _wics_ranking_prewarm_task.done():
+        _wics_ranking_prewarm_task.cancel()
     if _foreign_flow_prewarm_task and not _foreign_flow_prewarm_task.done():
         _foreign_flow_prewarm_task.cancel()
     if _valuation_prewarm_task and not _valuation_prewarm_task.done():

@@ -896,30 +896,50 @@ def get_stock_master_db_path() -> str:
         return os.path.expanduser(override)
     return os.path.expanduser("~/.cache/db/stock_master.db")
 
+_WICS_MONTHS_CACHE: dict[tuple, tuple[float, WicsMonthResponse]] = {}
+_WICS_MONTHS_CACHE_MAX = 4
+
+_WICS_RANKINGS_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
+_WICS_RANKINGS_CACHE_MAX = 16
+
+
 @router.get("/wics-months", response_model=WicsMonthResponse)
 def get_wics_months():
     """
     wics_monthly_rankings 테이블에서 고유한 YearMonth 목록을 시간 오름차순으로 반환합니다.
     """
     db_path = get_stock_master_db_path()
-    if not os.path.exists(db_path):
-        return WicsMonthResponse(months=[])
+    current_mtime = file_mtime(db_path)
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT DISTINCT YearMonth FROM wics_monthly_rankings ORDER BY YearMonth ASC")
-        rows = cursor.fetchall()
-        months = [row[0] for row in rows if row[0]]
-        return WicsMonthResponse(months=months)
-    except Exception as e:
-        print(f"Error loading WICS months: {e}")
-        return WicsMonthResponse(months=[])
-    finally:
-        conn.close()
+    def _compute() -> WicsMonthResponse:
+        if not os.path.exists(db_path):
+            return WicsMonthResponse(months=[])
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT DISTINCT YearMonth FROM wics_monthly_rankings ORDER BY YearMonth ASC")
+            rows = cursor.fetchall()
+            months = [row[0] for row in rows if row[0]]
+            return WicsMonthResponse(months=months)
+        except Exception as e:
+            logger.error(f"Error loading WICS months: {e}")
+            return WicsMonthResponse(months=[])
+        finally:
+            conn.close()
+
+    return cached_by_mtime(
+        _WICS_MONTHS_CACHE,
+        _WICS_MONTHS_CACHE_MAX,
+        (db_path,),
+        current_mtime,
+        _compute,
+    )
+
 
 @router.get("/wics-rankings", response_model=WicsRankingsResponse)
 def get_wics_rankings(
+    request: Request,
     start_month: Optional[str] = Query(None, description="시작월 (YYYY-MM)"),
     end_month: Optional[str] = Query(None, description="종료월 (YYYY-MM)")
 ):
@@ -929,100 +949,131 @@ def get_wics_rankings(
     """
     db_path = get_stock_master_db_path()
     if not os.path.exists(db_path):
-        return WicsRankingsResponse(months=[])
+        empty = WicsRankingsResponse(months=[])
+        return Response(content=empty.model_dump_json(by_alias=True).encode("utf-8"), media_type="application/json")
 
-    conn = sqlite3.connect(db_path)
-    # Row factory to easily access columns by name
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    current_mtime = file_mtime(db_path)
+    cache_key = (db_path, start_month, end_month)
 
-    query = """
-        SELECT date, YearMonth, WICS, EW_12m_Return, MC_12m_Return, 
-               Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
-        FROM wics_monthly_rankings
-        WHERE 1=1
-    """
-    params = []
-    if start_month:
-        query += " AND YearMonth >= ?"
-        params.append(start_month)
-    if end_month:
-        query += " AND YearMonth <= ?"
-        params.append(end_month)
+    cached = _WICS_RANKINGS_CACHE.get(cache_key)
+    if cached is not None and cached[0] == current_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+    else:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
 
-    # Note: Sorting here is just for retrieving items, we will sort rankings inside each month's list later if needed.
-    query += " ORDER BY YearMonth ASC"
-
-    try:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # Query top stocks for the same range
-        top_stocks_query = """
-            SELECT YearMonth, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
-            FROM wics_monthly_rankings_top_stocks
+        query = """
+            SELECT date, YearMonth, WICS, EW_12m_Return, MC_12m_Return, 
+                   Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
+            FROM wics_monthly_rankings
             WHERE 1=1
         """
-        top_params = []
+        params = []
         if start_month:
-            top_stocks_query += " AND YearMonth >= ?"
-            top_params.append(start_month)
+            query += " AND YearMonth >= ?"
+            params.append(start_month)
         if end_month:
-            top_stocks_query += " AND YearMonth <= ?"
-            top_params.append(end_month)
-        
-        top_stocks_query += " ORDER BY YearMonth ASC, WICS ASC, rank_in_sector ASC"
-        cursor.execute(top_stocks_query, top_params)
-        top_rows = cursor.fetchall()
+            query += " AND YearMonth <= ?"
+            params.append(end_month)
 
-        from collections import defaultdict
-        top_stocks_map = defaultdict(list)
-        for r in top_rows:
-            key = (r["YearMonth"], r["WICS"])
-            top_stocks_map[key].append({
-                "stock_name": r["stock_name"],
-                "stock_code": r["stock_code"],
-                "stock_12m_return": r["stock_12m_return"],
-                "sector_weight": r["sector_weight"],
-                "marcap": r["marcap"],
-                "rank_in_sector": r["rank_in_sector"]
-            })
+        query += " ORDER BY YearMonth ASC"
 
-        # Group by YearMonth
-        grouped = defaultdict(list)
+        try:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
 
-        for row in rows:
-            ym = row["YearMonth"]
-            wics_name = row["WICS"]
-            t_stocks = top_stocks_map.get((ym, wics_name))
+            top_stocks_query = """
+                SELECT YearMonth, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
+                FROM wics_monthly_rankings_top_stocks
+                WHERE 1=1
+            """
+            top_params = []
+            if start_month:
+                top_stocks_query += " AND YearMonth >= ?"
+                top_params.append(start_month)
+            if end_month:
+                top_stocks_query += " AND YearMonth <= ?"
+                top_params.append(end_month)
 
-            item = WicsRankingItem(
-                WICS=wics_name,
-                Rank_EW=row["Rank_EW"],
-                Rank_MC=row["Rank_MC"],
-                EW_12m_Return=row["EW_12m_Return"],
-                MC_12m_Return=row["MC_12m_Return"],
-                Top2_Share=row["Top2_Share"],
-                Display_EW=row["Display_EW"],
-                Display_MC=row["Display_MC"],
-                top_stocks=t_stocks
-            )
-            grouped[ym].append(item)
+            top_stocks_query += " ORDER BY YearMonth ASC, WICS ASC, rank_in_sector ASC"
+            cursor.execute(top_stocks_query, top_params)
+            top_rows = cursor.fetchall()
 
-        months_list = []
-        for ym in sorted(grouped.keys()):
-            # rankings inside a month will be sorted by frontend depending on active rank type (EW or MC)
-            months_list.append(WicsMonthRankings(
-                YearMonth=ym,
-                rankings=grouped[ym]
-            ))
+            from collections import defaultdict
+            top_stocks_map = defaultdict(list)
+            for r in top_rows:
+                key = (r["YearMonth"], r["WICS"])
+                top_stocks_map[key].append({
+                    "stock_name": r["stock_name"],
+                    "stock_code": r["stock_code"],
+                    "stock_12m_return": r["stock_12m_return"],
+                    "sector_weight": r["sector_weight"],
+                    "marcap": r["marcap"],
+                    "rank_in_sector": r["rank_in_sector"]
+                })
 
-        return WicsRankingsResponse(months=months_list)
-    except Exception as e:
-        print(f"Error loading WICS rankings: {e}")
-        return WicsRankingsResponse(months=[])
-    finally:
-        conn.close()
+            grouped = defaultdict(list)
+
+            for row in rows:
+                ym = row["YearMonth"]
+                wics_name = row["WICS"]
+                t_stocks = top_stocks_map.get((ym, wics_name))
+
+                item = WicsRankingItem(
+                    WICS=wics_name,
+                    Rank_EW=row["Rank_EW"],
+                    Rank_MC=row["Rank_MC"],
+                    EW_12m_Return=row["EW_12m_Return"],
+                    MC_12m_Return=row["MC_12m_Return"],
+                    Top2_Share=row["Top2_Share"],
+                    Display_EW=row["Display_EW"],
+                    Display_MC=row["Display_MC"],
+                    top_stocks=t_stocks
+                )
+                grouped[ym].append(item)
+
+            months_list = []
+            for ym in sorted(grouped.keys()):
+                months_list.append(WicsMonthRankings(
+                    YearMonth=ym,
+                    rankings=grouped[ym]
+                ))
+
+            resp = WicsRankingsResponse(months=months_list)
+            raw_bytes = resp.model_dump_json(by_alias=True).encode("utf-8")
+            gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+            if len(_WICS_RANKINGS_CACHE) >= _WICS_RANKINGS_CACHE_MAX:
+                _WICS_RANKINGS_CACHE.pop(next(iter(_WICS_RANKINGS_CACHE)))
+            _WICS_RANKINGS_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
+        except Exception as e:
+            logger.error(f"Error loading WICS rankings: {e}")
+            empty = WicsRankingsResponse(months=[])
+            return Response(content=empty.model_dump_json(by_alias=True).encode("utf-8"), media_type="application/json")
+        finally:
+            conn.close()
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
+
+_WICS_WEEKS_CACHE: dict[tuple, tuple[float, WicsWeekResponse]] = {}
+_WICS_WEEKS_CACHE_MAX = 4
+
+_WICS_WEEKLY_RANKINGS_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
+_WICS_WEEKLY_RANKINGS_CACHE_MAX = 16
+
+_WICS_INDEX_CACHE: dict[tuple, tuple[float, WicsIndexResponse]] = {}
+_WICS_INDEX_CACHE_MAX = 64
+
 
 @router.get("/wics-weeks", response_model=WicsWeekResponse)
 def get_wics_weeks():
@@ -1030,25 +1081,37 @@ def get_wics_weeks():
     wics_weekly_rankings 테이블에서 고유한 YearWeek 목록을 시간 오름차순으로 반환합니다.
     """
     db_path = get_stock_master_db_path()
-    if not os.path.exists(db_path):
-        return WicsWeekResponse(weeks=[])
+    current_mtime = file_mtime(db_path)
 
-    conn = sqlite3.connect(db_path)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek ASC")
-        rows = cursor.fetchall()
-        weeks = [row[0] for row in rows if row[0]]
-        return WicsWeekResponse(weeks=weeks)
-    except Exception as e:
-        print(f"Error loading WICS weeks: {e}")
-        return WicsWeekResponse(weeks=[])
-    finally:
-        conn.close()
+    def _compute() -> WicsWeekResponse:
+        if not os.path.exists(db_path):
+            return WicsWeekResponse(weeks=[])
+
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        try:
+            cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek ASC")
+            rows = cursor.fetchall()
+            weeks = [row[0] for row in rows if row[0]]
+            return WicsWeekResponse(weeks=weeks)
+        except Exception as e:
+            logger.error(f"Error loading WICS weeks: {e}")
+            return WicsWeekResponse(weeks=[])
+        finally:
+            conn.close()
+
+    return cached_by_mtime(
+        _WICS_WEEKS_CACHE,
+        _WICS_WEEKS_CACHE_MAX,
+        (db_path,),
+        current_mtime,
+        _compute,
+    )
 
 
 @router.get("/wics-rankings/weekly", response_model=WicsRankingsResponse)
 def get_wics_weekly_rankings(
+    request: Request,
     start_week: Optional[str] = Query(None, description="시작주차 (YYYY-Www)"),
     end_week: Optional[str] = Query(None, description="종료주차 (YYYY-Www)")
 ):
@@ -1058,108 +1121,135 @@ def get_wics_weekly_rankings(
     """
     db_path = get_stock_master_db_path()
     if not os.path.exists(db_path):
-        return WicsRankingsResponse(months=[])
+        empty = WicsRankingsResponse(months=[])
+        return Response(content=empty.model_dump_json(by_alias=True).encode("utf-8"), media_type="application/json")
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
+    current_mtime = file_mtime(db_path)
+    cache_key = (db_path, start_week, end_week)
 
-    # 기본값 처리 (최근 26주치 범위 추출)
-    if not start_week and not end_week:
-        try:
-            cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek DESC LIMIT 26")
-            latest_weeks = [r[0] for r in cursor.fetchall() if r[0]]
-            if latest_weeks:
-                latest_weeks.reverse()
-                start_week = latest_weeks[0]
-                end_week = latest_weeks[-1]
-        except Exception as e:
-            print(f"Error resolving default weeks: {e}")
+    cached = _WICS_WEEKLY_RANKINGS_CACHE.get(cache_key)
+    if cached is not None and cached[0] == current_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+    else:
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
 
-    query = """
-        SELECT date, YearWeek, WICS, EW_12m_Return, MC_12m_Return, 
-               Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
-        FROM wics_weekly_rankings
-        WHERE 1=1
-    """
-    params = []
-    if start_week:
-        query += " AND YearWeek >= ?"
-        params.append(start_week)
-    if end_week:
-        query += " AND YearWeek <= ?"
-        params.append(end_week)
+        # 기본값 처리 (최근 26주치 범위 추출)
+        resolved_start = start_week
+        resolved_end = end_week
+        if not resolved_start and not resolved_end:
+            try:
+                cursor.execute("SELECT DISTINCT YearWeek FROM wics_weekly_rankings ORDER BY YearWeek DESC LIMIT 26")
+                latest_weeks = [r[0] for r in cursor.fetchall() if r[0]]
+                if latest_weeks:
+                    latest_weeks.reverse()
+                    resolved_start = latest_weeks[0]
+                    resolved_end = latest_weeks[-1]
+            except Exception as e:
+                logger.error(f"Error resolving default weeks: {e}")
 
-    query += " ORDER BY YearWeek ASC"
-
-    try:
-        cursor.execute(query, params)
-        rows = cursor.fetchall()
-
-        # Query top stocks for the same range
-        top_stocks_query = """
-            SELECT YearWeek, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
-            FROM wics_weekly_rankings_top_stocks
+        query = """
+            SELECT date, YearWeek, WICS, EW_12m_Return, MC_12m_Return, 
+                   Rank_EW, Rank_MC, Top2_Share, Display_EW, Display_MC
+            FROM wics_weekly_rankings
             WHERE 1=1
         """
-        top_params = []
-        if start_week:
-            top_stocks_query += " AND YearWeek >= ?"
-            top_params.append(start_week)
-        if end_week:
-            top_stocks_query += " AND YearWeek <= ?"
-            top_params.append(end_week)
-        
-        top_stocks_query += " ORDER BY YearWeek ASC, WICS ASC, rank_in_sector ASC"
-        cursor.execute(top_stocks_query, top_params)
-        top_rows = cursor.fetchall()
+        params = []
+        if resolved_start:
+            query += " AND YearWeek >= ?"
+            params.append(resolved_start)
+        if resolved_end:
+            query += " AND YearWeek <= ?"
+            params.append(resolved_end)
 
-        from collections import defaultdict
-        top_stocks_map = defaultdict(list)
-        for r in top_rows:
-            key = (r["YearWeek"], r["WICS"])
-            top_stocks_map[key].append({
-                "stock_name": r["stock_name"],
-                "stock_code": r["stock_code"],
-                "stock_12m_return": r["stock_12m_return"],
-                "sector_weight": r["sector_weight"],
-                "marcap": r["marcap"],
-                "rank_in_sector": r["rank_in_sector"]
-            })
+        query += " ORDER BY YearWeek ASC"
 
-        grouped = defaultdict(list)
+        try:
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
 
-        for row in rows:
-            yw = row["YearWeek"]
-            wics_name = row["WICS"]
-            t_stocks = top_stocks_map.get((yw, wics_name))
+            top_stocks_query = """
+                SELECT YearWeek, WICS, stock_name, stock_code, stock_12m_return, sector_weight, marcap, rank_in_sector
+                FROM wics_weekly_rankings_top_stocks
+                WHERE 1=1
+            """
+            top_params = []
+            if resolved_start:
+                top_stocks_query += " AND YearWeek >= ?"
+                top_params.append(resolved_start)
+            if resolved_end:
+                top_stocks_query += " AND YearWeek <= ?"
+                top_params.append(resolved_end)
 
-            item = WicsRankingItem(
-                WICS=wics_name,
-                Rank_EW=row["Rank_EW"],
-                Rank_MC=row["Rank_MC"],
-                EW_12m_Return=row["EW_12m_Return"],
-                MC_12m_Return=row["MC_12m_Return"],
-                Top2_Share=row["Top2_Share"],
-                Display_EW=row["Display_EW"],
-                Display_MC=row["Display_MC"],
-                top_stocks=t_stocks
-            )
-            grouped[yw].append(item)
+            top_stocks_query += " ORDER BY YearWeek ASC, WICS ASC, rank_in_sector ASC"
+            cursor.execute(top_stocks_query, top_params)
+            top_rows = cursor.fetchall()
 
-        months_list = []
-        for yw in sorted(grouped.keys()):
-            months_list.append(WicsMonthRankings(
-                YearMonth=yw,  # Option A: 필드명 호환 (YearWeek 값이 들어감)
-                rankings=grouped[yw]
-            ))
+            from collections import defaultdict
+            top_stocks_map = defaultdict(list)
+            for r in top_rows:
+                key = (r["YearWeek"], r["WICS"])
+                top_stocks_map[key].append({
+                    "stock_name": r["stock_name"],
+                    "stock_code": r["stock_code"],
+                    "stock_12m_return": r["stock_12m_return"],
+                    "sector_weight": r["sector_weight"],
+                    "marcap": r["marcap"],
+                    "rank_in_sector": r["rank_in_sector"]
+                })
 
-        return WicsRankingsResponse(months=months_list)
-    except Exception as e:
-        print(f"Error loading WICS weekly rankings: {e}")
-        return WicsRankingsResponse(months=[])
-    finally:
-        conn.close()
+            grouped = defaultdict(list)
+
+            for row in rows:
+                yw = row["YearWeek"]
+                wics_name = row["WICS"]
+                t_stocks = top_stocks_map.get((yw, wics_name))
+
+                item = WicsRankingItem(
+                    WICS=wics_name,
+                    Rank_EW=row["Rank_EW"],
+                    Rank_MC=row["Rank_MC"],
+                    EW_12m_Return=row["EW_12m_Return"],
+                    MC_12m_Return=row["MC_12m_Return"],
+                    Top2_Share=row["Top2_Share"],
+                    Display_EW=row["Display_EW"],
+                    Display_MC=row["Display_MC"],
+                    top_stocks=t_stocks
+                )
+                grouped[yw].append(item)
+
+            months_list = []
+            for yw in sorted(grouped.keys()):
+                months_list.append(WicsMonthRankings(
+                    YearMonth=yw,
+                    rankings=grouped[yw]
+                ))
+
+            resp = WicsRankingsResponse(months=months_list)
+            raw_bytes = resp.model_dump_json(by_alias=True).encode("utf-8")
+            gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+            if len(_WICS_WEEKLY_RANKINGS_CACHE) >= _WICS_WEEKLY_RANKINGS_CACHE_MAX:
+                _WICS_WEEKLY_RANKINGS_CACHE.pop(next(iter(_WICS_WEEKLY_RANKINGS_CACHE)))
+            _WICS_WEEKLY_RANKINGS_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
+        except Exception as e:
+            logger.error(f"Error loading WICS weekly rankings: {e}")
+            empty = WicsRankingsResponse(months=[])
+            return Response(content=empty.model_dump_json(by_alias=True).encode("utf-8"), media_type="application/json")
+        finally:
+            conn.close()
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
+    )
 
 
 @router.get("/wics-index", response_model=WicsIndexResponse)
@@ -1173,52 +1263,63 @@ def get_wics_index(
     테이블이 없으면 빈 data를 반환합니다.
     """
     db_path = get_stock_master_db_path()
-    if not os.path.exists(db_path):
-        return WicsIndexResponse(WICS=wics, data=[])
+    current_mtime = file_mtime(db_path)
 
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='wics_daily_index'"
-        )
-        if cursor.fetchone() is None:
+    def _compute() -> WicsIndexResponse:
+        if not os.path.exists(db_path):
             return WicsIndexResponse(WICS=wics, data=[])
 
-        clauses = ["WICS = ?"]
-        params: list = [wics]
-        if start_date:
-            clauses.append("date >= ?")
-            params.append(start_date)
-        if end_date:
-            clauses.append("date <= ?")
-            params.append(end_date)
-        where = " AND ".join(clauses)
-        cursor.execute(
-            f"""
-            SELECT date, EW_Index, MC_Index
-            FROM wics_daily_index
-            WHERE {where}
-            ORDER BY date ASC
-            """,
-            params,
-        )
-        rows = cursor.fetchall()
-        data = [
-            WicsIndexPoint(
-                date=row["date"],
-                EW_Index=row["EW_Index"],
-                MC_Index=row["MC_Index"],
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='wics_daily_index'"
             )
-            for row in rows
-        ]
-        return WicsIndexResponse(WICS=wics, data=data)
-    except Exception as e:
-        print(f"Error loading WICS index: {e}")
-        return WicsIndexResponse(WICS=wics, data=[])
-    finally:
-        conn.close()
+            if cursor.fetchone() is None:
+                return WicsIndexResponse(WICS=wics, data=[])
+
+            clauses = ["WICS = ?"]
+            params: list = [wics]
+            if start_date:
+                clauses.append("date >= ?")
+                params.append(start_date)
+            if end_date:
+                clauses.append("date <= ?")
+                params.append(end_date)
+            where = " AND ".join(clauses)
+            cursor.execute(
+                f"""
+                SELECT date, EW_Index, MC_Index
+                FROM wics_daily_index
+                WHERE {where}
+                ORDER BY date ASC
+                """,
+                params,
+            )
+            rows = cursor.fetchall()
+            data = [
+                WicsIndexPoint(
+                    date=row["date"],
+                    EW_Index=row["EW_Index"],
+                    MC_Index=row["MC_Index"],
+                )
+                for row in rows
+            ]
+            return WicsIndexResponse(WICS=wics, data=data)
+        except Exception as e:
+            logger.error(f"Error loading WICS index: {e}")
+            return WicsIndexResponse(WICS=wics, data=[])
+        finally:
+            conn.close()
+
+    return cached_by_mtime(
+        _WICS_INDEX_CACHE,
+        _WICS_INDEX_CACHE_MAX,
+        (db_path, wics, start_date, end_date),
+        current_mtime,
+        _compute,
+    )
 
 
 # /wics-index/meta 응답 캐시 (파라미터 없음 → 단일 엔트리).

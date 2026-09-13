@@ -328,30 +328,24 @@ export const WicsRankingPanel: React.FC = () => {
     if (!latestPeriodObj || !latestPeriodObj.rankings) return sectors;
 
     const targetPeriods = processedMonths.slice(-3);
+    const targetPeriodMaps = targetPeriods.map((p) => {
+      const map = new Map<string, number>();
+      p.rankings.forEach((r) => {
+        const ret = rankType === "MC" ? r.MC_12m_Return : r.EW_12m_Return;
+        if (ret !== undefined && ret !== null) {
+          map.set(r.WICS, ret);
+        }
+      });
+      return map;
+    });
 
     for (const item of latestPeriodObj.rankings) {
       const wicsName = item.WICS;
-      const rets: number[] = [];
-      let valid = true;
-
-      for (const m of targetPeriods) {
-        const rItem = m.rankings.find((r) => r.WICS === wicsName);
-        if (!rItem) {
-          valid = false;
-          break;
-        }
-        const ret = rankType === "MC" ? rItem.MC_12m_Return : rItem.EW_12m_Return;
-        if (ret === undefined || ret === null) {
-          valid = false;
-          break;
-        }
-        rets.push(ret);
-      }
-
-      if (valid && rets.length === 3) {
-        if (rets[2] > rets[1] && rets[1] > rets[0]) {
-          sectors.add(wicsName);
-        }
+      const r0 = targetPeriodMaps[0].get(wicsName);
+      const r1 = targetPeriodMaps[1].get(wicsName);
+      const r2 = targetPeriodMaps[2].get(wicsName);
+      if (r0 !== undefined && r1 !== undefined && r2 !== undefined && r2 > r1 && r1 > r0) {
+        sectors.add(wicsName);
       }
     }
 
@@ -367,32 +361,24 @@ export const WicsRankingPanel: React.FC = () => {
     if (!latestPeriodObj || !latestPeriodObj.rankings) return sectors;
 
     const targetPeriods = processedMonths.slice(-2);
+    const targetPeriodMaps = targetPeriods.map((p) => {
+      const map = new Map<string, number>();
+      p.rankings.forEach((r) => {
+        const ret = rankType === "MC" ? r.MC_12m_Return : r.EW_12m_Return;
+        if (ret !== undefined && ret !== null) {
+          map.set(r.WICS, ret);
+        }
+      });
+      return map;
+    });
 
     for (const item of latestPeriodObj.rankings) {
       const wicsName = item.WICS;
       if (risingSectors3M.has(wicsName)) continue;
-
-      const rets: number[] = [];
-      let valid = true;
-
-      for (const m of targetPeriods) {
-        const rItem = m.rankings.find((r) => r.WICS === wicsName);
-        if (!rItem) {
-          valid = false;
-          break;
-        }
-        const ret = rankType === "MC" ? rItem.MC_12m_Return : rItem.EW_12m_Return;
-        if (ret === undefined || ret === null) {
-          valid = false;
-          break;
-        }
-        rets.push(ret);
-      }
-
-      if (valid && rets.length === 2) {
-        if (rets[1] > rets[0]) {
-          sectors.add(wicsName);
-        }
+      const r0 = targetPeriodMaps[0].get(wicsName);
+      const r1 = targetPeriodMaps[1].get(wicsName);
+      if (r0 !== undefined && r1 !== undefined && r1 > r0) {
+        sectors.add(wicsName);
       }
     }
 

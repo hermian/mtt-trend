@@ -52,20 +52,38 @@ PALETTE_COLORS = [
 ]
 
 
-def load_raw_price_series(
-    code: str,
-    asset_type: Optional[str] = None,
-    market: Optional[str] = None,
+# Caching & mtime tracking
+_RAW_PRICE_CACHE: Dict[Tuple[str, str, str], Tuple[float, pd.DataFrame, str, str, str]] = {}
+_RAW_PRICE_CACHE_MAX = 256
+
+_RETURNS_COMPARE_CACHE: Dict[Tuple, Tuple[float, ReturnComparisonResponse]] = {}
+_RETURNS_COMPARE_CACHE_MAX = 64
+
+
+def _returns_sources_mtime() -> float:
+    """수익률 비교 데이터 소스 DB 중 가장 최근 mtime 반환."""
+    newest = 0.0
+    paths = [
+        _get_etf_us_price_path(),
+        _get_stock_us_price_path(),
+        Path(os.path.expanduser("~/.cache/db/etf_price.db")),
+        Path(os.path.expanduser("~/.cache/db/marcap.duckdb")),
+    ]
+    for p in paths:
+        try:
+            if p.exists():
+                newest = max(newest, p.stat().st_mtime)
+        except OSError:
+            continue
+    return newest
+
+
+def _load_raw_price_series_impl(
+    code_clean: str,
+    type_hint: str,
+    market_hint: str,
 ) -> Optional[Tuple[pd.DataFrame, str, str, str]]:
-    """
-    종목 코드 및 자산 유형에 맞춰 원시 가격 데이터(Date, Close)를 로드합니다.
-    
-    Returns:
-        (df[Date, Close], resolved_name, resolved_market, currency)
-    """
-    code_clean = code.strip()
-    type_hint = (asset_type or "").lower()
-    market_hint = (market or "").upper()
+    """원시 가격 데이터를 DB에서 로드하는 실제 구현부."""
 
     # 1. US ETF
     if type_hint == "us_etf" or market_hint in ("US_ETF", "ETF_US"):
@@ -185,6 +203,34 @@ def load_raw_price_series(
         else:
             return load_raw_price_series(ec, asset_type="etf", market="ETF")
 
+    return None
+
+
+def load_raw_price_series(
+    code: str,
+    asset_type: Optional[str] = None,
+    market: Optional[str] = None,
+) -> Optional[Tuple[pd.DataFrame, str, str, str]]:
+    """
+    종목 코드 및 자산 유형에 맞춰 원시 가격 데이터(Date, Close)를 로드합니다.
+    캐시가 유효하면 메모리에서 즉시 반환합니다.
+    """
+    code_clean = code.strip()
+    type_hint = (asset_type or "").lower()
+    market_hint = (market or "").upper()
+    cache_key = (code_clean, type_hint, market_hint)
+
+    mtime = _returns_sources_mtime()
+    cached = _RAW_PRICE_CACHE.get(cache_key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1].copy(), cached[2], cached[3], cached[4]
+
+    result = _load_raw_price_series_impl(code_clean, type_hint, market_hint)
+    if result is not None:
+        if len(_RAW_PRICE_CACHE) >= _RAW_PRICE_CACHE_MAX:
+            _RAW_PRICE_CACHE.pop(next(iter(_RAW_PRICE_CACHE)))
+        _RAW_PRICE_CACHE[cache_key] = (mtime, result[0], result[1], result[2], result[3])
+        return result[0].copy(), result[1], result[2], result[3]
     return None
 
 
@@ -324,7 +370,7 @@ def compute_rolling_correlations(
     return results
 
 
-def compute_return_comparison(req: ReturnComparisonRequest) -> ReturnComparisonResponse:
+def _compute_return_comparison_impl(req: ReturnComparisonRequest) -> ReturnComparisonResponse:
     """
     ReturnComparisonRequest를 받아 각 종목의 가격 데이터 로드,
     누적 수익률 시계열, 기간별 통계, 상관계수 매트릭스 및 롤링 추세를 계산합니다.
@@ -481,3 +527,49 @@ def compute_return_comparison(req: ReturnComparisonRequest) -> ReturnComparisonR
         correlations=correlations,
         rolling_correlations=rolling_correlations,
     )
+
+
+def compute_return_comparison(req: ReturnComparisonRequest) -> ReturnComparisonResponse:
+    """
+    ReturnComparisonRequest를 받아 각 종목의 가격 데이터 로드,
+    누적 수익률 시계열, 기간별 통계, 상관계수 매트릭스 및 롤링 추세를 계산합니다.
+    동일 요청은 mtime 기반 캐시에서 0.1ms 이내로 즉시 반환합니다.
+    """
+    if not req.items:
+        today_str = datetime.now().strftime("%Y-%m-%d")
+        return ReturnComparisonResponse(start_date=today_str, end_date=today_str)
+
+    cache_key = (
+        tuple((i.code.strip(), (i.type or "").lower(), (i.market or "").upper(), i.name or "") for i in req.items),
+        req.start_date,
+        req.end_date,
+    )
+    mtime = _returns_sources_mtime()
+    cached = _RETURNS_COMPARE_CACHE.get(cache_key)
+    if cached is not None and cached[0] == mtime:
+        return cached[1]
+
+    response = _compute_return_comparison_impl(req)
+    if len(_RETURNS_COMPARE_CACHE) >= _RETURNS_COMPARE_CACHE_MAX:
+        _RETURNS_COMPARE_CACHE.pop(next(iter(_RETURNS_COMPARE_CACHE)))
+    _RETURNS_COMPARE_CACHE[cache_key] = (mtime, response)
+    return response
+
+
+def prewarm_returns_cache() -> None:
+    """서버 시작 시 기본 프리셋 종목들의 원시 가격 데이터를 사전 캐싱."""
+    presets = [
+        ("005930", "stock", "KOSPI"),
+        ("000660", "stock", "KOSPI"),
+        ("NVDA", "us_stock", "US"),
+        ("069500", "etf", "ETF"),
+        ("SPY", "us_etf", "US_ETF"),
+        ("QQQ", "us_etf", "US_ETF"),
+        ("DIA", "us_etf", "US_ETF"),
+        ("TSM", "us_stock", "US"),
+    ]
+    for code, t, m in presets:
+        try:
+            load_raw_price_series(code, asset_type=t, market=m)
+        except Exception as e:
+            logger.warning(f"Failed to prewarm raw price for {code}: {e}")

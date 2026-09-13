@@ -329,18 +329,23 @@ export function ReturnComparisonPanel() {
 
     chartApiRef.current = chart;
 
+    let resizeTimer: number | null = null;
     const handleResize = () => {
-      if (chartContainerRef.current && chartApiRef.current) {
-        chartApiRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-          height: chartContainerRef.current.clientHeight || 450,
-        });
-      }
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
+      resizeTimer = requestAnimationFrame(() => {
+        if (chartContainerRef.current && chartApiRef.current) {
+          chartApiRef.current.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+            height: chartContainerRef.current.clientHeight || 450,
+          });
+        }
+      });
     };
 
     window.addEventListener("resize", handleResize);
 
     return () => {
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
       window.removeEventListener("resize", handleResize);
       chart.remove();
       chartApiRef.current = null;
@@ -413,34 +418,52 @@ export function ReturnComparisonPanel() {
 
     chart.timeScale().fitContent();
 
-    // Tooltip handler
+    // Pre-index by date for O(1) crosshair lookup
+    const dateMap = new Map<string, Array<{ name: string; code: string; color: string; ret: number; close: number; currency: string }>>();
+    returnData.series.forEach((ser, idx) => {
+      if (hiddenSeries.has(ser.code)) return;
+      const color = ser.color || COLOR_PALETTE[idx % COLOR_PALETTE.length];
+      ser.data.forEach((pt) => {
+        let arr = dateMap.get(pt.date);
+        if (!arr) {
+          arr = [];
+          dateMap.set(pt.date, arr);
+        }
+        arr.push({
+          name: ser.name,
+          code: ser.code,
+          color,
+          ret: pt.return_pct,
+          close: pt.close,
+          currency: ser.currency,
+        });
+      });
+    });
+
+    const lastHoveredDateRef = { current: null as string | null };
+
+    // Tooltip handler with O(1) dateMap lookup and deduplication
     chart.subscribeCrosshairMove((param) => {
       if (!param.time || !param.point) {
-        setHoveredPoint(null);
+        if (lastHoveredDateRef.current !== null) {
+          lastHoveredDateRef.current = null;
+          setHoveredPoint(null);
+        }
         return;
       }
 
-      const dateStr = typeof param.time === "string" ? param.time : (param.time as any).year ? `${(param.time as any).year}-${String((param.time as any).month).padStart(2, "0")}-${String((param.time as any).day).padStart(2, "0")}` : "";
-      
-      const hoveredValues: { name: string; code: string; color: string; ret: number; close: number; currency: string }[] = [];
+      const dateStr =
+        typeof param.time === "string"
+          ? param.time
+          : (param.time as any).year
+          ? `${(param.time as any).year}-${String((param.time as any).month).padStart(2, "0")}-${String((param.time as any).day).padStart(2, "0")}`
+          : "";
 
-      returnData.series.forEach((ser, idx) => {
-        if (hiddenSeries.has(ser.code)) return;
-        const color = ser.color || COLOR_PALETTE[idx % COLOR_PALETTE.length];
-        const pt = ser.data.find((d) => d.date === dateStr);
-        if (pt) {
-          hoveredValues.push({
-            name: ser.name,
-            code: ser.code,
-            color,
-            ret: pt.return_pct,
-            close: pt.close,
-            currency: ser.currency,
-          });
-        }
-      });
+      if (dateStr === lastHoveredDateRef.current) return;
+      lastHoveredDateRef.current = dateStr;
 
-      if (hoveredValues.length > 0) {
+      const hoveredValues = dateMap.get(dateStr);
+      if (hoveredValues && hoveredValues.length > 0) {
         setHoveredPoint({ date: dateStr, values: hoveredValues });
       } else {
         setHoveredPoint(null);
@@ -485,17 +508,22 @@ export function ReturnComparisonPanel() {
 
     rollingApiRef.current = chart;
 
+    let resizeTimer: number | null = null;
     const handleResize = () => {
-      if (rollingContainerRef.current && rollingApiRef.current) {
-        rollingApiRef.current.applyOptions({
-          width: rollingContainerRef.current.clientWidth,
-          height: rollingContainerRef.current.clientHeight || 320,
-        });
-      }
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
+      resizeTimer = requestAnimationFrame(() => {
+        if (rollingContainerRef.current && rollingApiRef.current) {
+          rollingApiRef.current.applyOptions({
+            width: rollingContainerRef.current.clientWidth,
+            height: rollingContainerRef.current.clientHeight || 320,
+          });
+        }
+      });
     };
     window.addEventListener("resize", handleResize);
 
     return () => {
+      if (resizeTimer) cancelAnimationFrame(resizeTimer);
       window.removeEventListener("resize", handleResize);
       chart.remove();
       rollingApiRef.current = null;

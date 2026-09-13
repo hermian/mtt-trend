@@ -208,6 +208,9 @@ dist-ssr/
 .firebase/
 
 # User Custom Patterns (preserved by moai update)
+# 테스트 실행 시 워크스페이스 안에 만드는 TMPDIR (샌드박스에서 /private/var 를 못 쓰는 경우 대비)
+backend/.pytest-tmp/
+frontend/.vitest-tmp/
 !backend/data/.gitkeep
 !backend/db/.gitkeep
 backend/data/*.html

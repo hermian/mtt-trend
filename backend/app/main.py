@@ -137,7 +137,16 @@ async def lifespan(app: FastAPI):
                 ("kospi", "1D", "005930"),
             ]
             for m, inv, sym in targets:
-                await asyncio.to_thread(load_avwap_chart_bytes, market=m, interval=inv, symbol=sym)
+                # need_raw=False: 캐시에는 gz 바이트만 남긴다. 프리웜 대상 6건의 raw 는
+                # 엔트리당 ~3.3MB 인데, 브라우저는 항상 Accept-Encoding: gzip 을 보내므로
+                # 실사용 경로가 없다(비압축 클라이언트만 요청 시 직렬화).
+                await asyncio.to_thread(
+                    load_avwap_chart_bytes,
+                    market=m,
+                    interval=inv,
+                    symbol=sym,
+                    need_raw=False,
+                )
             logger.info("AVWAP startup pre-warm completed successfully.")
         except Exception as e:
             logger.warning(f"AVWAP startup pre-warm encountered non-fatal error: {e}")
@@ -195,7 +204,10 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # GZip – 대용량 차트 JSON(수급 ~5MB, AVWAP ~3MB) 응답 압축
 # ---------------------------------------------------------------------------
-app.add_middleware(GZipMiddleware, minimum_size=1024)
+# compresslevel 은 Starlette 기본값이 9 인데, 실측(2.58MB JSON) L9 106.3ms/489,605B 대비
+# L6 43.9ms/487,527B 로 2.4배 빠르고 크기는 0.4% 만 늘어난다(921KB 는 39.8→17.5ms, +1.2%).
+# 대용량 응답이 많아 CPU 가 지배적이므로 6 을 쓴다.
+app.add_middleware(GZipMiddleware, minimum_size=1024, compresslevel=6)
 
 # ---------------------------------------------------------------------------
 # Routers

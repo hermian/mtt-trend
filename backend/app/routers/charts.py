@@ -40,6 +40,7 @@ from app.schemas import (
     TrendUpBreadthResponse,
 )
 from app.utils.returns_utils import compute_return_comparison
+from app.utils.mtime_utils import file_mtime, newest_mtime
 from app.utils.wics_index_utils import (
     aggregate_closes_to_ohlc,
     default_lookback_start,
@@ -115,21 +116,7 @@ def _normalize_ism_observations(
 # 데이터는 장 마감 후 1회 갱신되므로 원본 파일의 mtime 을 무효화 키로 쓰면 충분하다
 # (_CHART_CACHE / _AVWAP_CACHE / _MACRO_CACHE 와 동일한 프로젝트 표준 패턴).
 # 캐시별 상한을 두어 무한 증가를 막는다.
-
-
-def _file_mtime(path) -> float:
-    try:
-        return os.path.getmtime(path)
-    except OSError:
-        return 0.0
-
-
-def _newest_mtime(*paths) -> float:
-    """여러 원본 파일 중 가장 최근 mtime. 하나라도 갱신되면 캐시가 무효화된다."""
-    newest = 0.0
-    for p in paths:
-        newest = max(newest, _file_mtime(p))
-    return newest
+# `file_mtime`/`newest_mtime` 은 stocks.py 와 공유하므로 utils 로 분리했다.
 
 
 def _cached(cache: dict, cache_max: int, key, mtime: float, compute, should_cache=None):
@@ -707,7 +694,7 @@ def get_foreign_flow_chart_data(
         _FOREIGN_FLOW_CACHE,
         _FOREIGN_FLOW_CACHE_MAX,
         (start_date, end_date, etf),
-        _newest_mtime(*foreign_flow_sources()),
+        newest_mtime(*foreign_flow_sources()),
         _compute,
     )
 
@@ -1164,7 +1151,7 @@ def get_wics_index_meta():
         _WICS_INDEX_META_CACHE,
         1,
         (),
-        _file_mtime(get_stock_master_db_path()),
+        file_mtime(get_stock_master_db_path()),
         _load_wics_index_meta,
         should_cache=lambda v: v is not None,
     )
@@ -1280,7 +1267,7 @@ def get_wics_index_all(
         weight_u = "MC"
 
     cache_key = (start_date, end_date, tf_u, weight_u)
-    current_mtime = _file_mtime(get_stock_master_db_path())
+    current_mtime = file_mtime(get_stock_master_db_path())
 
     cached = _WICS_INDEX_ALL_CACHE.get(cache_key)
     if cached is not None and cached[0] == current_mtime:
@@ -1300,11 +1287,14 @@ def get_wics_index_all(
         _WICS_INDEX_ALL_CACHE[cache_key] = (current_mtime, raw_bytes, gz_bytes)
 
     accept_encoding = request.headers.get("accept-encoding", "")
+    # 핸들러가 Content-Encoding 을 직접 설정하면 GZipMiddleware 가 이 응답을 건너뛰므로
+    # Vary 가 자동으로 붙지 않는다 → 여기서 직접 붙인다.
+    # (비압축 경로는 미들웨어가 Vary 를 붙여주므로 중복을 피해 생략한다.)
     if "gzip" in accept_encoding:
         return Response(
             content=gz_bytes,
             media_type="application/json",
-            headers={"Content-Encoding": "gzip"},
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
     return Response(
         content=raw_bytes,
@@ -1400,20 +1390,26 @@ def get_avwap_chart_data(
     KOSPI / KOSDAQ / S&P500 / NASDAQ100 / DOW / SOX 지수, 개별 주식 또는 ETF의 AVWAP(Anchored VWAP) 및 다중 주기(1D/1W/1M/1Y) 기술 지표 차트 데이터를 반환합니다.
     사전 압축(pre-compressed gzip) 캐시를 적용하여 응답 지연을 최소화합니다.
     """
-    raw_bytes, gz_bytes = load_avwap_chart_bytes(market=market, interval=interval, symbol=symbol)
-    if raw_bytes is None:
+    wants_gzip = "gzip" in request.headers.get("accept-encoding", "")
+    # 비압축 클라이언트일 때만 raw 를 직렬화한다(캐시에는 gz 만 보관 → 엔트리당 3.3MB 절약).
+    raw_bytes, gz_bytes = load_avwap_chart_bytes(
+        market=market, interval=interval, symbol=symbol, need_raw=not wants_gzip
+    )
+    if gz_bytes is None:
         target_desc = f"symbol '{symbol}'" if symbol else f"market '{market}'"
         raise HTTPException(
             status_code=404,
             detail=f"AVWAP chart data not found for {target_desc} with interval '{interval}'."
         )
 
-    accept_encoding = request.headers.get("accept-encoding", "")
-    if "gzip" in accept_encoding and gz_bytes:
+    if wants_gzip:
+        # 핸들러가 Content-Encoding 을 직접 설정하면 GZipMiddleware 가 이 응답을 건너뛰므로
+        # Vary 가 자동으로 붙지 않는다 → 여기서 직접 붙인다.
+        # (비압축 경로는 미들웨어가 Vary 를 붙여주므로 중복을 피해 생략한다.)
         return Response(
             content=gz_bytes,
             media_type="application/json",
-            headers={"Content-Encoding": "gzip"},
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
         )
     return Response(
         content=raw_bytes,

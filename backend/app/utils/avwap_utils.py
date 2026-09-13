@@ -158,36 +158,107 @@ _ETF_MASTER_CACHE: Optional[List[Tuple[str, str]]] = None
 _US_STOCK_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
 _US_ETF_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
 _MARCAP_DUCKDB_CON: Optional[Any] = None
+_MARCAP_DUCKDB_CON_MTIME: float = 0.0
+
+# AVWAP 계산에 쓰는 최소 날짜. `marcap_adj` 는 1995-05-02 부터 있지만 2000년 이전 행이
+# 전체의 9.5%(1,296,263건)를 차지하고, AVWAP 출력에는 쓰이지 않는다. 이 컷은 리팩터링
+# 이전부터 있던 동작이며(당시엔 pandas 인덱스 슬라이싱 2곳), SQL 술어로 밀어내면
+# DuckDB Zone Map pruning 으로 조회가 264ms → 26ms 로 줄어든다. 세 곳이 같은 값을 써야
+# 하므로 상수로 둔다(경로마다 다른 컷을 쓰면 같은 종목이 경로에 따라 다른 길이가 된다).
+_AVWAP_MIN_DATE = "2000-01-01"
 
 
 def _get_marcap_duckdb_con():
-    """marcap.duckdb 전역 읽기 전용 커넥션을 반환합니다 (연결 생성 비용 15ms 제거)."""
-    global _MARCAP_DUCKDB_CON
+    """marcap.duckdb 읽기 전용 커넥션을 반환합니다 (연결 생성 비용 제거).
+
+    커넥션은 최초 오픈 시점의 파일에 고정되므로, 수집기가 파일을 교체(rename)하면
+    재시작 전까지 옛 데이터를 계속 읽는다. 파일 mtime 이 바뀌면 재오픈해 이를 막는다.
+    """
+    global _MARCAP_DUCKDB_CON, _MARCAP_DUCKDB_CON_MTIME
     m_path = os.path.expanduser("~/.cache/db/marcap.duckdb")
     if not os.path.exists(m_path):
         return None
-    if _MARCAP_DUCKDB_CON is None:
-        try:
-            _MARCAP_DUCKDB_CON = duckdb.connect(m_path, read_only=True)
-        except Exception as e:
-            logger.warning(f"Failed to open singleton read-only duckdb connection: {e}")
-            return duckdb.connect(m_path, read_only=True)
-    return _MARCAP_DUCKDB_CON
+    try:
+        mtime = os.path.getmtime(m_path)
+    except OSError:
+        mtime = 0.0
 
+    if _MARCAP_DUCKDB_CON is not None and _MARCAP_DUCKDB_CON_MTIME == mtime:
+        return _MARCAP_DUCKDB_CON
 
-def invalidate_avwap_cache():
-    """Clear in-memory AVWAP cache when custom anchors change."""
-    global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE, _MARCAP_DUCKDB_CON
-    _AVWAP_CACHE.clear()
-    _ETF_MASTER_CACHE = None
-    _US_STOCK_MASTER_CACHE = None
-    _US_ETF_MASTER_CACHE = None
     if _MARCAP_DUCKDB_CON is not None:
         try:
             _MARCAP_DUCKDB_CON.close()
         except Exception:
             pass
         _MARCAP_DUCKDB_CON = None
+
+    try:
+        _MARCAP_DUCKDB_CON = duckdb.connect(m_path, read_only=True)
+    except Exception as e:
+        logger.warning(f"Failed to open read-only duckdb connection: {e}")
+        _MARCAP_DUCKDB_CON_MTIME = 0.0
+        return None
+    _MARCAP_DUCKDB_CON_MTIME = mtime
+    return _MARCAP_DUCKDB_CON
+
+
+def _marcap_query_df(sql: str, params: list):
+    """marcap.duckdb 에서 읽기 전용 조회 후 DataFrame 을 반환합니다.
+
+    공유 커넥션을 그대로 쓰면 안 된다: `con.execute()` 는 self 를 반환하고 `fetchdf()` 는
+    그 커넥션의 '가장 최근 쿼리' 결과를 가져오므로, sync 핸들러가 threadpool 에서 동시에
+    돌면 execute→fetch 사이에 다른 스레드의 쿼리가 끼어들어 다른 결과나 None 을 받는다
+    (8스레드 실측 오염 30.3%, None 반환 61/320). 스레드마다 `cursor()` 로 분리한다.
+    """
+    con = _get_marcap_duckdb_con()
+    if con is None:
+        return None
+    cur = con.cursor()
+    try:
+        return cur.execute(sql, params).fetchdf()
+    finally:
+        cur.close()
+
+
+def invalidate_avwap_cache():
+    """Clear in-memory AVWAP cache when custom anchors change.
+
+    marcap.duckdb 커넥션은 닫지 않는다. 앵커 변경은 sqlite 쪽 데이터이고, 여기서 닫으면
+    threadpool 에서 조회 중인 다른 요청의 커서가 깨진다. 데이터 갱신은 mtime 재오픈이 처리한다.
+    """
+    global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE
+    _AVWAP_CACHE.clear()
+    _ETF_MASTER_CACHE = None
+    _US_STOCK_MASTER_CACHE = None
+    _US_ETF_MASTER_CACHE = None
+
+
+# AVWAP 응답은 엔트리당 실측 ~7.9MB(모델 7.2 + gz 0.67)로 매우 크다. 키가
+# `stock_{code}_{interval}` 이라 심볼 열람 수에 비례해 무한 증가하므로 상한을 둔다.
+# 10개면 pre-warm 6건 + 사용자가 열어본 종목 몇 건을 담을 수 있다(~79MB).
+_AVWAP_CACHE_MAX = 10
+
+
+def _avwap_cache_get(cache_key: str, mtime: float) -> Optional[Any]:
+    """mtime 이 일치하면 캐시된 응답을 반환한다. 조회 시 순서를 갱신해 LRU 로 동작한다.
+
+    (FIFO 로 두면 pre-warm 한 지수들이 가장 먼저 밀려나 재방문이 잦은 항목이 손실된다.)
+    """
+    cached = _AVWAP_CACHE.get(cache_key)
+    if cached is None or cached["last_mtime"] != mtime:
+        return None
+    _AVWAP_CACHE.pop(cache_key)
+    _AVWAP_CACHE[cache_key] = cached
+    return cached["data"]
+
+
+def _avwap_cache_put(cache_key: str, response: Any, mtime: float) -> None:
+    """캐시에 저장한다. 상한을 넘으면 가장 오래전에 쓰이거나 조회된 항목을 버린다."""
+    _AVWAP_CACHE.pop(cache_key, None)
+    if len(_AVWAP_CACHE) >= _AVWAP_CACHE_MAX:
+        _AVWAP_CACHE.pop(next(iter(_AVWAP_CACHE)))
+    _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": mtime}
 
 
 def _get_macro_db_path() -> Path:
@@ -443,25 +514,32 @@ def load_avwap_chart_bytes(
     market: str = "kospi",
     interval: str = "1D",
     symbol: Optional[str] = None,
+    *,
+    need_raw: bool = True,
 ) -> Tuple[Optional[bytes], Optional[bytes]]:
     """
     AVWAP 차트 응답 데이터를 (raw_bytes, gz_bytes) 형태로 반환합니다.
     캐시된 데이터 모델에 압축 바이트를 메모이제이션하여 웜 요청 시 수 ms 이내로 응답합니다.
+
+    gz 바이트만 모델에 보관한다. raw 는 엔트리당 ~3.3MB 로, 브라우저가 항상
+    `Accept-Encoding: gzip` 을 보내므로 실사용 경로가 없는 사망분이다.
+    비압축 클라이언트(curl 등)만 `need_raw=True` 로 호출해 그때 직렬화한다.
     """
     data = load_avwap_chart_data(market=market, interval=interval, symbol=symbol)
     if data is None:
         return None, None
 
-    raw_bytes = getattr(data, "_cached_raw_bytes", None)
     gz_bytes = getattr(data, "_cached_gz_bytes", None)
-    if raw_bytes is None or gz_bytes is None:
-        raw_bytes = data.model_dump_json(by_alias=True).encode("utf-8")
-        gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+    if gz_bytes is None:
+        gz_bytes = gzip.compress(
+            data.model_dump_json(by_alias=True).encode("utf-8"), compresslevel=6
+        )
         try:
-            object.__setattr__(data, "_cached_raw_bytes", raw_bytes)
             object.__setattr__(data, "_cached_gz_bytes", gz_bytes)
         except Exception:
             pass
+
+    raw_bytes = data.model_dump_json(by_alias=True).encode("utf-8") if need_raw else None
     return raw_bytes, gz_bytes
 
 
@@ -514,10 +592,9 @@ def load_avwap_chart_data(
 
     df_raw, current_mtime = df_raw_res
     cache_key = f"{market_key}_{interval_key}"
-    if cache_key in _AVWAP_CACHE:
-        cached = _AVWAP_CACHE[cache_key]
-        if cached["last_mtime"] == current_mtime:
-            return cached["data"]
+    cached_data = _avwap_cache_get(cache_key, current_mtime)
+    if cached_data is not None:
+        return cached_data
 
     try:
         if "Date" not in df_raw.columns:
@@ -526,7 +603,7 @@ def load_avwap_chart_data(
             
         df_raw["Date"] = pd.to_datetime(df_raw["Date"].astype(str).str[:10])
         df_raw = df_raw.sort_values("Date").drop_duplicates("Date").set_index("Date")
-        df_raw = df_raw[df_raw.index >= "2000-01-01"]
+        df_raw = df_raw[df_raw.index >= _AVWAP_MIN_DATE]
 
         if "Amount" not in df_raw.columns or df_raw["Amount"].isnull().all():
             df_raw["Amount"] = df_raw["Close"] * df_raw["Volume"]
@@ -744,7 +821,7 @@ def load_avwap_chart_data(
             preset_dates=preset_dates
         )
         
-        _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+        _avwap_cache_put(cache_key, response, current_mtime)
         return response
 
     except Exception as e:
@@ -1157,7 +1234,7 @@ def _compute_asset_avwap_chart(
 
     raw_df["Date"] = pd.to_datetime(raw_df["Date"])
     raw_df = raw_df.sort_values("Date").drop_duplicates("Date").set_index("Date")
-    raw_df = raw_df[raw_df.index >= "2000-01-01"]
+    raw_df = raw_df[raw_df.index >= _AVWAP_MIN_DATE]
 
     if "Amount" not in raw_df.columns:
         raw_df["Amount"] = raw_df["Close"] * raw_df["Volume"]
@@ -1394,19 +1471,21 @@ def load_stock_avwap_chart_data(
 
     current_mtime = os.path.getmtime(m_path)
     cache_key = f"stock_{code}_{interval_key}"
-    if cache_key in _AVWAP_CACHE:
-        cached = _AVWAP_CACHE[cache_key]
-        if cached["last_mtime"] == current_mtime:
-            return cached["data"]
+    cached_data = _avwap_cache_get(cache_key, current_mtime)
+    if cached_data is not None:
+        return cached_data
 
     try:
-        con = _get_marcap_duckdb_con()
-        if con is None:
+        raw_df = _marcap_query_df(
+            "SELECT Date, Open, High, Low, Close, Volume, Amount FROM marcap_adj "
+            # 값을 bind 파라미터로 넘기지 않고 리터럴로 박아 넣는다. 파라미터로 바꾸면
+            # DuckDB 의 Zone Map pruning 이 걸리지 않아 이 술어의 이득(264ms → 26ms)이 사라진다.
+            # 상수는 모듈 내부 리터럴이라 주입 위험은 없다.
+            f"WHERE Date >= '{_AVWAP_MIN_DATE}' AND Code = ? ORDER BY Date ASC",
+            [code],
+        )
+        if raw_df is None:
             return None
-        raw_df = con.execute(
-            "SELECT Date, Open, High, Low, Close, Volume, Amount FROM marcap_adj WHERE Date >= '2000-01-01' AND Code = ? ORDER BY Date ASC",
-            [code]
-        ).fetchdf()
 
         if raw_df.empty:
             logger.warning(f"No price data for stock code: {code}")
@@ -1414,7 +1493,7 @@ def load_stock_avwap_chart_data(
 
         response = _compute_asset_avwap_chart(raw_df, code, name, market_type, interval_key)
         if response:
-            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+            _avwap_cache_put(cache_key, response, current_mtime)
         return response
 
     except Exception as e:
@@ -1448,10 +1527,9 @@ def load_etf_avwap_chart_data(
 
     current_mtime = os.path.getmtime(e_path)
     cache_key = f"etf_{code}_{interval_key}"
-    if cache_key in _AVWAP_CACHE:
-        cached = _AVWAP_CACHE[cache_key]
-        if cached["last_mtime"] == current_mtime:
-            return cached["data"]
+    cached_data = _avwap_cache_get(cache_key, current_mtime)
+    if cached_data is not None:
+        return cached_data
 
     try:
         conn = sqlite3.connect(e_path)
@@ -1471,7 +1549,7 @@ def load_etf_avwap_chart_data(
 
         response = _compute_asset_avwap_chart(raw_df, code, name, "ETF", interval_key)
         if response:
-            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+            _avwap_cache_put(cache_key, response, current_mtime)
         return response
     except Exception as e:
         logger.error(f"Error computing ETF AVWAP chart data for {symbol_or_name} ({interval}): {e}", exc_info=True)
@@ -1506,10 +1584,9 @@ def load_us_stock_avwap_chart_data(
 
     current_mtime = os.path.getmtime(sp_path)
     cache_key = f"us_stock_{code}_{interval_key}"
-    if cache_key in _AVWAP_CACHE:
-        cached = _AVWAP_CACHE[cache_key]
-        if cached["last_mtime"] == current_mtime:
-            return cached["data"]
+    cached_data = _avwap_cache_get(cache_key, current_mtime)
+    if cached_data is not None:
+        return cached_data
 
     try:
         conn = sqlite3.connect(f"file:{sp_path.resolve()}?mode=ro", uri=True)
@@ -1537,7 +1614,7 @@ def load_us_stock_avwap_chart_data(
             raw_df, code, name, market_type, interval_key, amount_unit="백만$", amount_divisor=1e6
         )
         if response:
-            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+            _avwap_cache_put(cache_key, response, current_mtime)
         return response
 
     except Exception as e:
@@ -1574,10 +1651,9 @@ def load_us_etf_avwap_chart_data(
 
     current_mtime = os.path.getmtime(ep_path)
     cache_key = f"us_etf_{code}_{interval_key}"
-    if cache_key in _AVWAP_CACHE:
-        cached = _AVWAP_CACHE[cache_key]
-        if cached["last_mtime"] == current_mtime:
-            return cached["data"]
+    cached_data = _avwap_cache_get(cache_key, current_mtime)
+    if cached_data is not None:
+        return cached_data
 
     candidates = []
     us_etfs = _get_us_etf_master_list()
@@ -1621,7 +1697,7 @@ def load_us_etf_avwap_chart_data(
             raw_df, code, name, "US_ETF", interval_key, amount_unit="백만$", amount_divisor=1e6
         )
         if response:
-            _AVWAP_CACHE[cache_key] = {"data": response, "last_mtime": current_mtime}
+            _avwap_cache_put(cache_key, response, current_mtime)
         return response
 
     except Exception as e:

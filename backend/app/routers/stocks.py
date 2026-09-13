@@ -6,7 +6,6 @@ Routes:
     GET /api/stocks/group-action?date=YYYY-MM-DD
 """
 
-import os
 from collections import defaultdict
 from pathlib import Path
 from typing import List, Optional
@@ -17,6 +16,7 @@ from sqlalchemy import func
 
 from app.database import get_db
 from app.models import ThemeDaily, ThemeStockDaily, SOURCE_52W, SOURCE_MTT
+from app.utils.mtime_utils import newest_mtime
 from app.schemas import (
     GroupActionItem,
     GroupActionResponse,
@@ -37,17 +37,11 @@ _PERSISTENT_STOCKS_CACHE: dict[tuple, tuple[float, PersistentStocksResponse]] = 
 _PERSISTENT_STOCKS_CACHE_MAX = 32
 
 
-def _file_mtime(path) -> float:
-    try:
-        return os.path.getmtime(path)
-    except OSError:
-        return 0.0
-
-
 def _trends_db_mtime() -> float:
     from app.database import DB_PATH
     p = str(DB_PATH)
-    return max(_file_mtime(p), _file_mtime(p + "-wal"))
+    # sqlite WAL 모드에서는 -wal 파일이 실제 최신 쓰기를 담으므로 함께 본다.
+    return newest_mtime(p, p + "-wal")
 
 
 # ---------------------------------------------------------------------------

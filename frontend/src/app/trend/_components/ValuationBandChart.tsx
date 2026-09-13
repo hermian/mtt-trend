@@ -117,13 +117,23 @@ export const ValuationBandChart: React.FC = () => {
   const startDate = useMemo(() => displayStartFor(period), [period]);
   const { data, isLoading, error } = useValuationBands(index, mode, startDate);
 
+  const dateMap = useMemo(() => {
+    const map = new Map<string, ValuationBandPoint>();
+    if (data?.data) {
+      data.data.forEach((p) => map.set(p.date, p));
+    }
+    return map;
+  }, [data]);
+
+  const lastHoveredDateRef = useRef<string | null>(null);
+
   const legendItems = useMemo(() => {
     if (!data?.data?.length) return [] as LegendItem[];
     const row =
-      (hoverDate && data.data.find((p) => p.date === hoverDate)) ||
+      (hoverDate && dateMap.get(hoverDate)) ||
       data.data[data.data.length - 1];
     return buildLegendItems(row, mode, data.multiples);
-  }, [data, mode, hoverDate]);
+  }, [data, mode, hoverDate, dateMap]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -148,16 +158,25 @@ export const ValuationBandChart: React.FC = () => {
     });
     chartRef.current = chart;
 
+    let animationFrameId: number | null = null;
     const ro = new ResizeObserver(() => {
-      if (!containerRef.current || !chartRef.current) return;
-      chartRef.current.applyOptions({
-        width: containerRef.current.clientWidth,
-        height: Math.max(containerRef.current.clientHeight, 420),
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
+      animationFrameId = requestAnimationFrame(() => {
+        if (!containerRef.current || !chartRef.current) return;
+        chartRef.current.applyOptions({
+          width: containerRef.current.clientWidth,
+          height: Math.max(containerRef.current.clientHeight, 420),
+        });
       });
     });
     ro.observe(el);
 
     return () => {
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+      }
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
@@ -221,18 +240,20 @@ export const ValuationBandChart: React.FC = () => {
     chart.timeScale().fitContent();
 
     const onMove = (param: { time?: unknown }) => {
-      if (!param.time) {
+      const d = param.time ? String(param.time) : null;
+      if (d === lastHoveredDateRef.current) return;
+      lastHoveredDateRef.current = d;
+      if (d === null) {
         setHoverDate(null);
         return;
       }
-      const d = String(param.time);
-      setHoverDate(data.data.some((p) => p.date === d) ? d : null);
+      setHoverDate(dateMap.has(d) ? d : null);
     };
     chart.subscribeCrosshairMove(onMove as never);
     return () => {
       chart.unsubscribeCrosshairMove(onMove as never);
     };
-  }, [data, mode]);
+  }, [data, mode, dateMap]);
 
   const subtitle = useMemo(() => {
     if (!data?.data?.length) return "BPS≈Close/PBR · EPS≈Close/PER · 결측 구간 보간 없음";

@@ -614,8 +614,13 @@ def get_macro_chart_data(
     )
 
 
+_VALUATION_BANDS_CACHE: dict[tuple, tuple[float, bytes, bytes]] = {}
+_VALUATION_BANDS_CACHE_MAX = 32
+
+
 @router.get("/valuation-bands", response_model=ValuationBandsResponse)
 def get_valuation_bands(
+    request: Request,
     index: str = Query("kospi", description="kospi | kospi200 | kosdaq | kosdaq150"),
     mode: str = Query("pbr", description="pbr | per"),
     multiples: Optional[str] = Query(
@@ -647,52 +652,87 @@ def get_valuation_bands(
 
     db_path = os.path.expanduser("~/.cache/db/macro.db")
     if not os.path.exists(db_path):
-        return ValuationBandsResponse(
+        empty = ValuationBandsResponse(
             index_name=index_name, mode=mode_norm, multiples=mults, data=[]
         )
-
-    query = """
-        SELECT date, close, per, pbr, div_yd
-        FROM index_fundamental
-        WHERE index_name = ?
-    """
-    params: list = [index_name]
-    if start_date:
-        query += " AND date >= ?"
-        params.append(start_date)
-    if end_date:
-        query += " AND date <= ?"
-        params.append(end_date)
-    query += " ORDER BY date ASC"
+        return Response(
+            content=empty.model_dump_json(by_alias=True).encode("utf-8"),
+            media_type="application/json",
+        )
 
     try:
-        with sqlite3.connect(db_path) as conn:
-            rows = conn.execute(query, params).fetchall()
-    except sqlite3.OperationalError:
-        # 테이블 미생성 등
-        return ValuationBandsResponse(
-            index_name=index_name, mode=mode_norm, multiples=mults, data=[]
-        )
+        db_mtime = os.path.getmtime(db_path)
+    except OSError:
+        db_mtime = 0.0
 
-    points: list[ValuationBandPoint] = []
-    for date_s, close, per, pbr, div_yd in rows:
-        bands = compute_band_levels(close, per, pbr, mode_norm, mults)
-        points.append(
-            ValuationBandPoint(
-                date=date_s,
-                close=close,
-                per=per,
-                pbr=pbr,
-                div_yd=div_yd,
-                bands=bands,
+    cache_key = (db_path, index_name, mode_norm, tuple(mults), start_date, end_date)
+    cached = _VALUATION_BANDS_CACHE.get(cache_key)
+    if cached is not None and cached[0] == db_mtime:
+        raw_bytes, gz_bytes = cached[1], cached[2]
+    else:
+        query = """
+            SELECT date, close, per, pbr, div_yd
+            FROM index_fundamental
+            WHERE index_name = ?
+        """
+        params: list = [index_name]
+        if start_date:
+            query += " AND date >= ?"
+            params.append(start_date)
+        if end_date:
+            query += " AND date <= ?"
+            params.append(end_date)
+        query += " ORDER BY date ASC"
+
+        try:
+            with sqlite3.connect(db_path) as conn:
+                rows = conn.execute(query, params).fetchall()
+        except sqlite3.OperationalError:
+            # 테이블 미생성 등
+            empty = ValuationBandsResponse(
+                index_name=index_name, mode=mode_norm, multiples=mults, data=[]
             )
-        )
+            return Response(
+                content=empty.model_dump_json(by_alias=True).encode("utf-8"),
+                media_type="application/json",
+            )
 
-    return ValuationBandsResponse(
-        index_name=index_name,
-        mode=mode_norm,
-        multiples=mults,
-        data=points,
+        points: list[ValuationBandPoint] = []
+        for date_s, close, per, pbr, div_yd in rows:
+            bands = compute_band_levels(close, per, pbr, mode_norm, mults)
+            points.append(
+                ValuationBandPoint(
+                    date=date_s,
+                    close=close,
+                    per=per,
+                    pbr=pbr,
+                    div_yd=div_yd,
+                    bands=bands,
+                )
+            )
+
+        response = ValuationBandsResponse(
+            index_name=index_name,
+            mode=mode_norm,
+            multiples=mults,
+            data=points,
+        )
+        raw_bytes = response.model_dump_json(by_alias=True).encode("utf-8")
+        gz_bytes = gzip.compress(raw_bytes, compresslevel=6)
+        if len(_VALUATION_BANDS_CACHE) >= _VALUATION_BANDS_CACHE_MAX:
+            _VALUATION_BANDS_CACHE.pop(next(iter(_VALUATION_BANDS_CACHE)))
+        _VALUATION_BANDS_CACHE[cache_key] = (db_mtime, raw_bytes, gz_bytes)
+
+    accept_encoding = request.headers.get("accept-encoding", "")
+    if "gzip" in accept_encoding:
+        return Response(
+            content=gz_bytes,
+            media_type="application/json",
+            headers={"Content-Encoding": "gzip", "Vary": "Accept-Encoding"},
+        )
+    return Response(
+        content=raw_bytes,
+        media_type="application/json",
     )
 
 

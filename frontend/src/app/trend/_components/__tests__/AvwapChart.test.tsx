@@ -21,6 +21,13 @@ let lastSubscribeCrosshairMoveCallback: ((param: any) => void) | null = null;
 
 vi.mock("@/hooks/useDebounce", () => ({
   useDebounce: vi.fn((val) => val),
+  // 컴포넌트는 hover 프리페치를 useDebouncedCallback 으로 감싼다. 테스트에서는
+  // 타이머에 의존하지 않도록 지연 없이 즉시 실행한다(debounce 동작 자체는
+  // hooks/__tests__/useDebounce.test.ts 에서 검증한다).
+  useDebouncedCallback: (cb: (...args: any[]) => void) => ({
+    run: cb,
+    cancel: vi.fn(),
+  }),
 }));
 
 vi.mock("next/navigation", () => ({

@@ -19,7 +19,7 @@ import {
   createSeriesMarkers,
 } from "lightweight-charts";
 import { useAvwapChart, useStockSearch } from "@/hooks/useAvwapChart";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useDebounce, useDebouncedCallback } from "@/hooks/useDebounce";
 import { api, type AvwapPoint, type StockSearchResult } from "@/lib/api";
 import { toChartTime, toFiniteNumber } from "./_lib/chartTime";
 import { AvwapQuickAnchorPopover } from "./AvwapQuickAnchorPopover";
@@ -41,6 +41,11 @@ import { SupertrendBandPrimitive, type SupertrendBandItem } from "@/lib/supertre
 import { SupertrendSettingsPopover } from "./SupertrendSettingsPopover";
 import { StockNameLink } from "@/components/StockNameLink";
 import { syncTrendStockUrl } from "@/app/_lib/trendTabHref";
+
+// 드롭다운 행·시장 버튼 hover 프리페치 지연(ms).
+// AVWAP 응답은 최대 ~3MB 라 즉시 요청하면 마우스를 훑는 것만으로 대량 전송이 발생한다.
+// 200ms 면 "의도적으로 머무른" 대상만 걸러내고 체감 지연은 남지 않는다.
+const HOVER_PREFETCH_DELAY_MS = 200;
 
 const MA_COLORS: Record<string, string> = {
   EMA_10: "#c084fc", // Purple
@@ -162,6 +167,15 @@ export function AvwapChart() {
       });
     },
     [queryClient, interval]
+  );
+
+  // 마우스가 드롭다운 행 위를 스치기만 해도 요청이 나가면, 30행을 훑는 것만으로
+  // 행당 ~3MB × 30 = ~90MB 를 전송하게 된다(백엔드 캐시도 함께 압박).
+  // 잠깐 머무른 대상만 프리페치하고, 벗어나면 취소한다.
+  const { run: prefetchSoon, cancel: cancelPrefetch } = useDebouncedCallback(
+    (targetMarket: string, targetSymbol?: string | null) =>
+      prefetchTarget(targetMarket, targetSymbol),
+    HOVER_PREFETCH_DELAY_MS
   );
 
   // 검색 드롭다운 결과 표시 시 1위 항목 자동 백그라운드 프리페치
@@ -2740,7 +2754,8 @@ export function AvwapChart() {
                 <button
                   key={m.id}
                   onClick={() => handleClearStock(m.id)}
-                  onMouseEnter={() => prefetchTarget(m.id, null)}
+                  onMouseEnter={() => prefetchSoon(m.id, null)}
+                  onMouseLeave={cancelPrefetch}
                   className={`px-2.5 py-1 text-xs font-bold rounded-md transition-all ${
                     isSelected
                       ? "bg-blue-600 text-white shadow-md"
@@ -2938,8 +2953,9 @@ export function AvwapChart() {
                         onMouseEnter={() => {
                           setSelectedIndex(idx);
                           const targetM = stk.market?.toLowerCase().includes("us") ? "nasdaq100" : "kospi";
-                          prefetchTarget(targetM, stk.code);
+                          prefetchSoon(targetM, stk.code);
                         }}
+                        onMouseLeave={cancelPrefetch}
                         className={`w-full text-left px-3 py-2 flex items-center justify-between border-b border-gray-800/50 last:border-0 transition-colors ${
                           selectedIndex === idx ? "bg-gray-800" : "hover:bg-gray-800/60"
                         }`}

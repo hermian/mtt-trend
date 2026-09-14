@@ -1001,6 +1001,12 @@ export interface AvwapPoint {
   vwap: number | null;
   hvwap: number | null;
   lvwap: number | null;
+  // DD & FTD
+  is_dd?: boolean | null;
+  dd_count?: number | null;
+  dd_level?: "normal" | "caution" | "danger" | null;
+  is_ftd?: boolean | null;
+  ftd_status?: "confirmed" | "failed" | null;
 }
 
 export interface AvwapAnchorValue {

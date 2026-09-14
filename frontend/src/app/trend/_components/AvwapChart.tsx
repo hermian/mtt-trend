@@ -246,6 +246,15 @@ export function AvwapChart() {
     return DEFAULT_SUPERTREND_CONFIG;
   });
   const [showSupertrendPopover, setShowSupertrendPopover] = useState(false);
+  const [showDdFtd, setShowDdFtd] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_dd_ftd_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
 
   // Legend/HUD Header 접힘/늘임 상태 (기본값: false = 1줄로 접힘)
   const [isLegendExpanded, setIsLegendExpanded] = useState<boolean>(() => {
@@ -303,6 +312,7 @@ export function AvwapChart() {
   const supertrendBandPrimitiveRef = useRef<SupertrendBandPrimitive | null>(null);
   const supertrendUpMarkersRef = useRef<any>(null);
   const supertrendDnMarkersRef = useRef<any>(null);
+  const candleMarkersRef = useRef<any>(null);
 
   // Click-to-Anchor Picker Mode
   const [isPickerMode, setIsPickerMode] = useState(false);
@@ -640,6 +650,11 @@ export function AvwapChart() {
     khkLine?: number | null;
     macd?: { macd: number; signal: number; histogram: number; color: string } | null;
     stoch?: { short: number; mid: number; long: number } | null;
+    isDd?: boolean | null;
+    ddCount?: number | null;
+    ddLevel?: "normal" | "caution" | "danger" | null;
+    isFtd?: boolean | null;
+    ftdStatus?: "confirmed" | "failed" | null;
   } | null>(null);
 
   // Select stock from search
@@ -880,6 +895,7 @@ export function AvwapChart() {
       supertrendBandPrimitiveRef.current = null;
       supertrendUpMarkersRef.current = null;
       supertrendDnMarkersRef.current = null;
+      candleMarkersRef.current = null;
     };
     cleanup();
 
@@ -1462,6 +1478,9 @@ export function AvwapChart() {
             wickDownColor: "#3b82f6",
           });
           activeSeries.push(candleSeries);
+
+          const candleMarkers = createSeriesMarkers(candleSeries, []);
+          candleMarkersRef.current = candleMarkers;
 
           // Supertrend Band Highlighting (Background Shading Primitive)
           const stBand = new SupertrendBandPrimitive();
@@ -2264,6 +2283,11 @@ export function AvwapChart() {
               khkLine: khkVal,
               macd: macdInfo || null,
               stoch: stochInfo || null,
+              isDd: matchedPoint.is_dd,
+              ddCount: matchedPoint.dd_count,
+              ddLevel: matchedPoint.dd_level,
+              isFtd: matchedPoint.is_ftd,
+              ftdStatus: matchedPoint.ftd_status,
             });
           } else {
             setHoveredData(null);
@@ -2418,6 +2442,39 @@ export function AvwapChart() {
           if (supertrendDnMarkersRef.current) {
             const markers = showSupertrend && supertrendConfig.showSignals ? supertrendSeries?.sellMarkers || [] : [];
             supertrendDnMarkersRef.current.setMarkers(markers);
+          }
+
+          // DD (Distribution Day) & FTD (Follow-Through Day) Markers
+          if (candleMarkersRef.current) {
+            if (showDdFtd && interval === "1D" && chartData.points) {
+              const ddFtdMarkers: any[] = [];
+              for (const pt of chartData.points) {
+                const time = toChartTime(pt.date);
+                if (!time) continue;
+                if (pt.is_dd) {
+                  ddFtdMarkers.push({
+                    time,
+                    position: "aboveBar",
+                    color: pt.dd_level === "danger" ? "#f43f5e" : "#ef4444",
+                    shape: "arrowDown",
+                    text: "",
+                  });
+                }
+                if (pt.is_ftd) {
+                  ddFtdMarkers.push({
+                    time,
+                    position: "belowBar",
+                    color: pt.ftd_status === "failed" ? "#94a3b8" : "#10b981",
+                    shape: "arrowUp",
+                    text: pt.ftd_status === "failed" ? "FTD(실패)" : "FTD",
+                  });
+                }
+              }
+              ddFtdMarkers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+              candleMarkersRef.current.setMarkers(ddFtdMarkers);
+            } else {
+              candleMarkersRef.current.setMarkers([]);
+            }
           }
 
           // Anchors
@@ -2621,6 +2678,39 @@ export function AvwapChart() {
         supertrendDnMarkersRef.current.setMarkers(markers);
       }
 
+      // DD (Distribution Day) & FTD (Follow-Through Day) Markers
+      if (candleMarkersRef.current) {
+        if (showDdFtd && interval === "1D" && chartData.points) {
+          const ddFtdMarkers: any[] = [];
+          for (const pt of chartData.points) {
+            const time = toChartTime(pt.date);
+            if (!time) continue;
+            if (pt.is_dd) {
+              ddFtdMarkers.push({
+                time,
+                position: "aboveBar",
+                color: pt.dd_level === "danger" ? "#f43f5e" : "#ef4444",
+                shape: "arrowDown",
+                text: "",
+              });
+            }
+            if (pt.is_ftd) {
+              ddFtdMarkers.push({
+                time,
+                position: "belowBar",
+                color: pt.ftd_status === "failed" ? "#94a3b8" : "#10b981",
+                shape: "arrowUp",
+                text: pt.ftd_status === "failed" ? "FTD(실패)" : "FTD",
+              });
+            }
+          }
+          ddFtdMarkers.sort((a, b) => (a.time < b.time ? -1 : a.time > b.time ? 1 : 0));
+          candleMarkersRef.current.setMarkers(ddFtdMarkers);
+        } else {
+          candleMarkersRef.current.setMarkers([]);
+        }
+      }
+
       chartData.anchors?.forEach((anc) => {
         const aS = anchorSeriesMapRef.current.get(anc.id);
         if (aS) {
@@ -2640,7 +2730,7 @@ export function AvwapChart() {
         }
       });
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, enabledAnchors, chartData, hpResult, supertrendSeries, isKospi, showKhkLine, khkLineData]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, showDdFtd, interval, enabledAnchors, chartData, hpResult, supertrendSeries, isKospi, showKhkLine, khkLineData]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -2720,6 +2810,11 @@ export function AvwapChart() {
     khkLine: latestKhkInfo,
     macd: latestMacdInfo,
     stoch: latestStochInfo,
+    isDd: latestPoint.is_dd,
+    ddCount: latestPoint.dd_count,
+    ddLevel: latestPoint.dd_level,
+    isFtd: latestPoint.is_ftd,
+    ftdStatus: latestPoint.ftd_status,
   } : null);
 
   const formatAmountValue = (val: number | null | undefined) => {
@@ -3234,6 +3329,29 @@ export function AvwapChart() {
               강환국선
             </button>
           )}
+          <button
+            type="button"
+            disabled={interval !== "1D"}
+            onClick={() => {
+              setShowDdFtd((prev) => {
+                const next = !prev;
+                try {
+                  localStorage.setItem("mtt_dd_ftd_enabled", JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+            }}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              interval !== "1D"
+                ? "bg-gray-900 text-gray-600 border-gray-800 cursor-not-allowed opacity-50"
+                : showDdFtd
+                ? "bg-rose-500/20 text-rose-300 border-rose-500/50 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title={interval !== "1D" ? "분산일(DD) 및 FTD는 일봉(1D) 전용 지표입니다" : "분산일(DD: 빨강) 및 팔로스루데이(FTD: 초록) 마커 ON/OFF"}
+          >
+            📊 DD/FTD
+          </button>
           <div className="h-4 w-px bg-gray-700 mx-1" />
           <button
             onClick={() => toggleAllAnchors(enabledAnchors.size === 0)}
@@ -3454,6 +3572,47 @@ export function AvwapChart() {
                   <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
                 </span>
               )
+            )}
+            {/* DD & FTD Status Badges */}
+            {interval === "1D" && showDdFtd && (
+              <span className="flex items-center gap-1.5 shrink-0">
+                {activeDisplay.ddCount !== null && activeDisplay.ddCount !== undefined && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded font-bold text-[10px] sm:text-[11px] border ${
+                      activeDisplay.ddLevel === "danger"
+                        ? "bg-rose-950/80 text-rose-300 border-rose-600 animate-pulse"
+                        : activeDisplay.ddLevel === "caution"
+                        ? "bg-amber-950/80 text-amber-300 border-amber-600"
+                        : "bg-emerald-950/80 text-emerald-300 border-emerald-600"
+                    }`}
+                    title="최근 25거래일 누적 분산일 수 (1~2회: 정상, 3~4회: 경계, 5회 이상: 위험)"
+                  >
+                    DD {activeDisplay.ddCount}일
+                    {activeDisplay.isDd ? " (당일⚠️)" : ""}
+                    {activeDisplay.ddLevel === "danger"
+                      ? " [위험]"
+                      : activeDisplay.ddLevel === "caution"
+                      ? " [경계]"
+                      : " [정상]"}
+                  </span>
+                )}
+                {activeDisplay.isFtd && (
+                  <span
+                    className={`px-1.5 py-0.5 rounded font-bold text-[10px] sm:text-[11px] border ${
+                      activeDisplay.ftdStatus === "failed"
+                        ? "bg-gray-800 text-gray-400 border-gray-600 line-through"
+                        : "bg-emerald-900/90 text-emerald-200 border-emerald-500 shadow-sm"
+                    }`}
+                    title={
+                      activeDisplay.ftdStatus === "failed"
+                        ? "FTD 발생 후 5일 이내 Day 1 저점 이탈로 실패한 신호"
+                        : "팔로스루 데이(FTD) 발생 (Day 4~7 강력 반등 확인)"
+                    }
+                  >
+                    ⚡ FTD {activeDisplay.ftdStatus === "failed" ? "(실패)" : "(확인)"}
+                  </span>
+                )}
+              </span>
             )}
             {showAmount && activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
               <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>

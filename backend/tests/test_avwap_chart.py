@@ -427,3 +427,87 @@ def test_search_by_market_kr_and_us():
     assert len(data_us_etf) > 0
     assert all(item["market"] == "US_ETF" for item in data_us_etf)
     assert any(item["code"] == "QQQ" for item in data_us_etf)
+
+
+def test_dd_and_ftd_unit_logic():
+    import pandas as pd
+    from app.utils.avwap_utils import _calculate_distribution_days, _calculate_ftd
+
+    # Synthetic dataframe
+    dates = pd.date_range("2024-01-01", periods=30, freq="B")
+    # Day 0: base
+    # Day 1: volume up, close down -> DD!
+    df = pd.DataFrame({
+        "Open": [100.0] * 30,
+        "High": [105.0] * 30,
+        "Low": [95.0] * 30,
+        "Close": [100.0] * 30,
+        "Volume": [1000.0] * 30,
+    }, index=dates)
+
+    # Day 1: volume 1200 (>1000), close 98 (<100) -> DD
+    df.iloc[1, df.columns.get_loc("Volume")] = 1200.0
+    df.iloc[1, df.columns.get_loc("Close")] = 98.0
+    df.iloc[1, df.columns.get_loc("Low")] = 97.0
+    df.iloc[1, df.columns.get_loc("High")] = 101.0
+
+    is_dd, dd_cnt, dd_lvl = _calculate_distribution_days(df)
+    assert is_dd.iloc[1] == True
+    assert dd_cnt.iloc[1] == 1
+    assert dd_lvl.iloc[1] == "normal"
+
+    # FTD test setup
+    # Day 5: new low & bounce (Day 1)
+    df_ftd = pd.DataFrame({
+        "Open": [100.0] * 20,
+        "High": [102.0] * 20,
+        "Low": [98.0] * 20,
+        "Close": [99.0] * 20,
+        "Volume": [1000.0] * 20,
+    }, index=pd.date_range("2024-01-01", periods=20, freq="B"))
+
+    # Day 2: decline to 89.0
+    df_ftd.iloc[2, df_ftd.columns.get_loc("Close")] = 89.0
+    # Day 3: new lower low (88.0) and bounce to 92.0 (Close 92.0 > Close[2] 89.0) -> Attempted Rally Day 1!
+    df_ftd.iloc[3, df_ftd.columns.get_loc("Low")] = 88.0
+    df_ftd.iloc[3, df_ftd.columns.get_loc("Close")] = 92.0
+
+    # Day 7 (Rally Day 5, within Day 4~7): volume up (1500 > 1000), gain +2.5% (>= 1.7%)
+    df_ftd.iloc[7, df_ftd.columns.get_loc("Volume")] = 1500.0
+    df_ftd.iloc[7, df_ftd.columns.get_loc("Close")] = df_ftd.iloc[6]["Close"] * 1.025
+
+    is_ftd, ftd_stat = _calculate_ftd(df_ftd)
+    assert is_ftd.iloc[7] == True
+    assert ftd_stat.iloc[7] == "confirmed"
+
+
+def test_indices_dd_and_ftd_api():
+    indices = ["kospi", "kosdaq", "sp500", "nasdaq100", "dow", "sox"]
+    for idx in indices:
+        res = client.get(f"/api/charts/avwap?market={idx}&interval=1D")
+        assert res.status_code == 200, f"Failed for {idx}"
+        data = res.json()
+        points = data["points"]
+        assert len(points) > 0
+
+        # Check last point contains DD & FTD fields
+        last_pt = points[-1]
+        assert "is_dd" in last_pt
+        assert "dd_count" in last_pt
+        assert "dd_level" in last_pt
+        assert "is_ftd" in last_pt
+        assert "ftd_status" in last_pt
+
+        # Check that there are some DD occurrences in historical daily data
+        has_dd = any(pt.get("is_dd") is True for pt in points)
+        assert has_dd, f"Expected at least one DD in {idx}"
+
+
+def test_non_1d_no_dd_ftd():
+    res = client.get("/api/charts/avwap?market=kospi&interval=1W")
+    assert res.status_code == 200
+    data = res.json()
+    last_pt = data["points"][-1]
+    assert last_pt.get("is_dd") is None
+    assert last_pt.get("dd_count") is None
+    assert last_pt.get("is_ftd") is None

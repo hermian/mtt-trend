@@ -923,4 +923,42 @@ describe("AvwapChart Component", () => {
       expect(link.getAttribute("href")).toContain("search=%ED%95%9C%EC%98%A8%EC%8B%9C%EC%8A%A4%ED%85%9C");
     });
   });
+
+  it("renders DD/FTD toggle button and displays HUD badge for distribution days and follow-through days", () => {
+    const mockDdFtdData = {
+      ...mockChartData,
+      points: [
+        {
+          ...mockChartData.points[0],
+          is_dd: true,
+          dd_count: 4,
+          dd_level: "caution" as const,
+          is_ftd: true,
+          ftd_status: "confirmed" as const,
+        },
+      ],
+    };
+
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockDdFtdData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // DD/FTD toggle button exists
+    const ddFtdBtn = screen.getByRole("button", { name: /DD\/FTD/ });
+    expect(ddFtdBtn).toBeInTheDocument();
+
+    // HUD badges exist
+    expect(screen.getByText(/DD 4일/)).toBeInTheDocument();
+    expect(screen.getByText(/\[경계\]/)).toBeInTheDocument();
+    expect(screen.getByText(/⚡ FTD \(확인\)/)).toBeInTheDocument();
+
+    // Toggle button off
+    fireEvent.click(ddFtdBtn);
+    expect(screen.queryByText(/DD 4일/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/⚡ FTD \(확인\)/)).not.toBeInTheDocument();
+  });
 });

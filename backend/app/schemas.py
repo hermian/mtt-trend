@@ -396,6 +396,13 @@ class AvwapPoint(BaseModel):
     hvwap: Optional[float] = None
     lvwap: Optional[float] = None
 
+    # Distribution Day (DD) & Follow-Through Day (FTD)
+    is_dd: Optional[bool] = None
+    dd_count: Optional[int] = None
+    dd_level: Optional[str] = None  # "normal" | "caution" | "danger"
+    is_ftd: Optional[bool] = None
+    ftd_status: Optional[str] = None  # "confirmed" | "failed"
+
 
 class AvwapAnchorValue(BaseModel):
     date: str

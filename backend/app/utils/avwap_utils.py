@@ -157,8 +157,6 @@ _AVWAP_CACHE: Dict[str, Any] = {}
 _ETF_MASTER_CACHE: Optional[List[Tuple[str, str]]] = None
 _US_STOCK_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
 _US_ETF_MASTER_CACHE: Optional[List[Tuple[str, str, str, str]]] = None
-_MARCAP_DUCKDB_CON: Optional[Any] = None
-_MARCAP_DUCKDB_CON_MTIME: float = 0.0
 
 # AVWAP 계산에 쓰는 최소 날짜. `marcap_adj` 는 1995-05-02 부터 있지만 2000년 이전 행이
 # 전체의 9.5%(1,296,263건)를 차지하고, AVWAP 출력에는 쓰이지 않는다. 이 컷은 리팩터링
@@ -168,65 +166,29 @@ _MARCAP_DUCKDB_CON_MTIME: float = 0.0
 _AVWAP_MIN_DATE = "2000-01-01"
 
 
-def _get_marcap_duckdb_con():
-    """marcap.duckdb 읽기 전용 커넥션을 반환합니다 (연결 생성 비용 제거).
+def _marcap_query_df(sql: str, params: list):
+    """marcap.duckdb 에서 읽기 전용 조회 후 DataFrame 을 반환합니다.
 
-    커넥션은 최초 오픈 시점의 파일에 고정되므로, 수집기가 파일을 교체(rename)하면
-    재시작 전까지 옛 데이터를 계속 읽는다. 파일 mtime 이 바뀌면 재오픈해 이를 막는다.
+    DuckDB 는 파일 기반 임베디드 DB 이므로, 읽기 전용 커넥션이라도 상시 열어두면
+    외부 배치 파이프라인(imarcap_script_pl.sh)의 배타적 쓰기 락 획득이 차단됩니다.
+    따라서 쿼리 단위로 연결하고 즉시 닫습니다. (connect 비용은 ~10ms 수준)
     """
-    global _MARCAP_DUCKDB_CON, _MARCAP_DUCKDB_CON_MTIME
     m_path = os.path.expanduser("~/.cache/db/marcap.duckdb")
     if not os.path.exists(m_path):
         return None
     try:
-        mtime = os.path.getmtime(m_path)
-    except OSError:
-        mtime = 0.0
-
-    if _MARCAP_DUCKDB_CON is not None and _MARCAP_DUCKDB_CON_MTIME == mtime:
-        return _MARCAP_DUCKDB_CON
-
-    if _MARCAP_DUCKDB_CON is not None:
+        con = duckdb.connect(m_path, read_only=True)
         try:
-            _MARCAP_DUCKDB_CON.close()
-        except Exception:
-            pass
-        _MARCAP_DUCKDB_CON = None
-
-    try:
-        _MARCAP_DUCKDB_CON = duckdb.connect(m_path, read_only=True)
+            return con.execute(sql, params).fetchdf()
+        finally:
+            con.close()
     except Exception as e:
-        logger.warning(f"Failed to open read-only duckdb connection: {e}")
-        _MARCAP_DUCKDB_CON_MTIME = 0.0
+        logger.warning(f"Failed to query marcap.duckdb: {e}")
         return None
-    _MARCAP_DUCKDB_CON_MTIME = mtime
-    return _MARCAP_DUCKDB_CON
-
-
-def _marcap_query_df(sql: str, params: list):
-    """marcap.duckdb 에서 읽기 전용 조회 후 DataFrame 을 반환합니다.
-
-    공유 커넥션을 그대로 쓰면 안 된다: `con.execute()` 는 self 를 반환하고 `fetchdf()` 는
-    그 커넥션의 '가장 최근 쿼리' 결과를 가져오므로, sync 핸들러가 threadpool 에서 동시에
-    돌면 execute→fetch 사이에 다른 스레드의 쿼리가 끼어들어 다른 결과나 None 을 받는다
-    (8스레드 실측 오염 30.3%, None 반환 61/320). 스레드마다 `cursor()` 로 분리한다.
-    """
-    con = _get_marcap_duckdb_con()
-    if con is None:
-        return None
-    cur = con.cursor()
-    try:
-        return cur.execute(sql, params).fetchdf()
-    finally:
-        cur.close()
 
 
 def invalidate_avwap_cache():
-    """Clear in-memory AVWAP cache when custom anchors change.
-
-    marcap.duckdb 커넥션은 닫지 않는다. 앵커 변경은 sqlite 쪽 데이터이고, 여기서 닫으면
-    threadpool 에서 조회 중인 다른 요청의 커서가 깨진다. 데이터 갱신은 mtime 재오픈이 처리한다.
-    """
+    """Clear in-memory AVWAP cache when custom anchors change."""
     global _AVWAP_CACHE, _ETF_MASTER_CACHE, _US_STOCK_MASTER_CACHE, _US_ETF_MASTER_CACHE
     _AVWAP_CACHE.clear()
     _ETF_MASTER_CACHE = None
@@ -436,6 +398,146 @@ def _build_anchor_values_fast(dates_str: List[str], a_series: pd.Series, start_p
     return val_list
 
 
+def _calculate_distribution_days(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series, pd.Series]:
+    """
+    책 《주린이를 위한 추세추종 투자 따라잡기》 기준 분산일(Distribution Day, DD) 산출
+    - 조건: 전일 대비 거래량이 증가(Volume > Volume_prev)한 상태에서
+            1) 시장 지수의 종가가 그날 거래 범위(High - Low)의 하단 25% 이내에서 마감하거나
+            2) 지수가 전일 대비 하락 마감(Close < Close_prev)할 때 발생
+    - 25거래일 윈도우: 발생한 분산일은 25거래일간 유효하며, 25거래일이 지나면 카운트에서 자동 제외
+    - 단계별 레벨:
+      - 1~2회: normal (정상적인 조정 범위)
+      - 3~4회: caution (경계 수위)
+      - 5회 이상: danger (시장 추세 전환 경고)
+    """
+    n = len(df)
+    if n < 2:
+        return (
+            pd.Series(False, index=df.index),
+            pd.Series(0, index=df.index, dtype=int),
+            pd.Series(None, index=df.index, dtype=object),
+        )
+
+    c = df["Close"].to_numpy(dtype=float)
+    h = df["High"].to_numpy(dtype=float)
+    l = df["Low"].to_numpy(dtype=float)
+    v = df["Volume"].to_numpy(dtype=float)
+
+    is_dd = np.zeros(n, dtype=bool)
+
+    for i in range(1, n):
+        vol_up = v[i] > v[i - 1]
+        hl_range = h[i] - l[i]
+        in_lower_25 = ((c[i] - l[i]) / hl_range <= 0.25) if hl_range > 0 else False
+        is_down = c[i] < c[i - 1]
+
+        if vol_up and (in_lower_25 or is_down):
+            is_dd[i] = True
+
+    # 25거래일 윈도우: 당일 포함 최근 25거래일 동안 발생한 분산일 수 합산
+    dd_counts = np.zeros(n, dtype=int)
+    for i in range(n):
+        start_j = max(0, i - 24)
+        dd_counts[i] = int(np.sum(is_dd[start_j : i + 1]))
+
+    is_dd_series = pd.Series(is_dd, index=df.index)
+    dd_count_series = pd.Series(dd_counts, index=df.index, dtype=int)
+
+    def _to_level(cnt: int) -> Optional[str]:
+        if cnt >= 5:
+            return "danger"
+        elif cnt >= 3:
+            return "caution"
+        elif cnt >= 1:
+            return "normal"
+        return None
+
+    dd_level_series = dd_count_series.map(_to_level)
+    return is_dd_series, dd_count_series, dd_level_series
+
+
+def _calculate_ftd(df: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
+    """
+    윌리엄 오닐 팔로스루 데이 (Follow-Through Day, FTD) 판정
+    - 조건 1: 시장이 신저가를 갱신하거나 최근 저점 영역에서 첫 반등하는 날을 'Attempted Rally Day 1'로 설정
+             (최근 10거래일 최저가를 기록하거나 전일 저점을 하향/저점 영역 도달 후 양봉/상승 마감: Close > Close_prev)
+    - 조건 2: Day 1 이후 4거래일~7거래일 사이에 거래량이 전일 대비 증가하며 1.5% 이상 강하게 상승하는 날을 'FTD'로 지정
+    - 조건 3 (실패 판단): FTD 신호 발생 후 5거래일 이내에 지수가 Day 1의 저점을 이탈(Low < Day 1 Low)하면
+                         FTD 신호를 실패(failed) 처리, 지켜내면 확인(confirmed) 유지.
+    """
+    n = len(df)
+    is_ftd_series = pd.Series(False, index=df.index)
+    ftd_status_series = pd.Series(None, index=df.index, dtype=object)
+
+    if n < 5:
+        return is_ftd_series, ftd_status_series
+
+    c = df["Close"].to_numpy(dtype=float)
+    h = df["High"].to_numpy(dtype=float)
+    l = df["Low"].to_numpy(dtype=float)
+    v = df["Volume"].to_numpy(dtype=float)
+
+    rally_day = 0
+    day1_low = 0.0
+    in_rally = False
+    ftd_idx = -1
+
+    for i in range(1, n):
+        lookback_window = min(i, 10)
+        lookback_min_low = np.min(l[i - lookback_window:i])
+
+        # 랠리 진행 중이 아닐 때 Day 1 탐색
+        if not in_rally:
+            is_at_low = (l[i] <= lookback_min_low) or (l[i - 1] <= lookback_min_low) or (l[i] < l[i - 1])
+            if is_at_low and c[i] > c[i - 1]:
+                in_rally = True
+                rally_day = 1
+                day1_low = min(l[i], l[i - 1])
+                ftd_idx = -1
+        else:
+            rally_day += 1
+
+            # Day 1 저점 이탈 검사
+            if l[i] < day1_low:
+                # FTD 발생 후 5거래일 이내 저점 이탈 시 실패 마킹
+                if ftd_idx != -1 and (i - ftd_idx) <= 5:
+                    ftd_status_series.iloc[ftd_idx] = "failed"
+                in_rally = False
+                rally_day = 0
+                ftd_idx = -1
+
+                # 이탈 당일 바로 새로운 Day 1 형성 가능한지 확인
+                lookback_window = min(i, 10)
+                lookback_min_low = np.min(l[i - lookback_window:i])
+                is_at_low = (l[i] <= lookback_min_low) or (l[i - 1] <= lookback_min_low) or (l[i] < l[i - 1])
+                if is_at_low and c[i] > c[i - 1]:
+                    in_rally = True
+                    rally_day = 1
+                    day1_low = min(l[i], l[i - 1])
+                continue
+
+            # Day 4 ~ Day 7 사이 FTD 탐지 (오닐 기준 1.5% 이상 상승 및 거래량 증가)
+            if 4 <= rally_day <= 7 and ftd_idx == -1:
+                vol_up = v[i] > v[i - 1]
+                gain_pct = (c[i] / c[i - 1] - 1.0) if c[i - 1] > 0 else 0.0
+                if vol_up and gain_pct >= 0.015:
+                    is_ftd_series.iloc[i] = True
+                    ftd_status_series.iloc[i] = "confirmed"
+                    ftd_idx = i
+
+            # FTD 발생 후 5거래일 검증 기간 경과 시 또는 Day 7 이후 FTD 미발생 시 랠리 사이클 리셋
+            if ftd_idx != -1:
+                if (i - ftd_idx) >= 5:
+                    in_rally = False
+                    rally_day = 0
+                    ftd_idx = -1
+            elif rally_day > 7:
+                in_rally = False
+                rally_day = 0
+
+    return is_ftd_series, ftd_status_series
+
+
 def _build_avwap_points_fast(
     df: pd.DataFrame,
     dates_str: List[str],
@@ -452,6 +554,11 @@ def _build_avwap_points_fast(
     vwap_series: pd.Series,
     hvwap_series: pd.Series,
     lvwap_series: pd.Series,
+    is_dd_series: Optional[pd.Series] = None,
+    dd_count_series: Optional[pd.Series] = None,
+    dd_level_series: Optional[pd.Series] = None,
+    is_ftd_series: Optional[pd.Series] = None,
+    ftd_status_series: Optional[pd.Series] = None,
 ) -> List[AvwapPoint]:
     """고속 AVWAP 일별/주기별 포인트 리스트 생성 (NumPy 1D 배열 직접 인덱싱 및 model_construct)."""
     n = len(df)
@@ -478,11 +585,23 @@ def _build_avwap_points_fast(
     hvwap_arr = hvwap_series.to_numpy(dtype=float)
     lvwap_arr = lvwap_series.to_numpy(dtype=float)
 
+    is_dd_arr = is_dd_series.to_numpy(dtype=bool) if is_dd_series is not None else None
+    dd_count_arr = dd_count_series.to_numpy(dtype=float) if dd_count_series is not None else None
+    dd_level_arr = dd_level_series.to_numpy(dtype=object) if dd_level_series is not None else None
+    is_ftd_arr = is_ftd_series.to_numpy(dtype=bool) if is_ftd_series is not None else None
+    ftd_status_arr = ftd_status_series.to_numpy(dtype=object) if ftd_status_series is not None else None
+
     points: List[AvwapPoint] = []
     for i in range(n):
         c = c_arr[i]
         chg = round((c / c_arr[i - 1] - 1.0) * 100.0, 2) if i > 0 and c_arr[i - 1] > 0 else None
         pt_ma = {k: round(float(arr[i]), 2) if not np.isnan(arr[i]) else None for k, arr in ma_arrs.items()}
+
+        is_dd_val = bool(is_dd_arr[i]) if is_dd_arr is not None else None
+        dd_count_val = int(dd_count_arr[i]) if dd_count_arr is not None and not np.isnan(dd_count_arr[i]) else None
+        dd_level_val = str(dd_level_arr[i]) if dd_level_arr is not None and dd_level_arr[i] is not None else None
+        is_ftd_val = bool(is_ftd_arr[i]) if is_ftd_arr is not None and bool(is_ftd_arr[i]) else None
+        ftd_status_val = str(ftd_status_arr[i]) if ftd_status_arr is not None and ftd_status_arr[i] is not None else None
 
         points.append(AvwapPoint.model_construct(
             date=dates_str[i],
@@ -506,6 +625,11 @@ def _build_avwap_points_fast(
             vwap=round(float(vwap_arr[i]), 2) if not np.isnan(vwap_arr[i]) else None,
             hvwap=round(float(hvwap_arr[i]), 2) if not np.isnan(hvwap_arr[i]) else None,
             lvwap=round(float(lvwap_arr[i]), 2) if not np.isnan(lvwap_arr[i]) else None,
+            is_dd=is_dd_val,
+            dd_count=dd_count_val,
+            dd_level=dd_level_val,
+            is_ftd=is_ftd_val,
+            ftd_status=ftd_status_val,
         ))
     return points
 
@@ -789,6 +913,14 @@ def load_avwap_chart_data(
                 values=val_list
             ))
 
+        # 7.2 DD (Distribution Day) & FTD (Follow-Through Day) for 1D
+        if interval_key == "1D":
+            is_dd_s, dd_cnt_s, dd_lvl_s = _calculate_distribution_days(df)
+            is_ftd_s, ftd_stat_s = _calculate_ftd(df)
+        else:
+            is_dd_s, dd_cnt_s, dd_lvl_s = None, None, None
+            is_ftd_s, ftd_stat_s = None, None
+
         # 8. Build response points
         points = _build_avwap_points_fast(
             df=df,
@@ -806,6 +938,11 @@ def load_avwap_chart_data(
             vwap_series=vwap_series,
             hvwap_series=hvwap_series,
             lvwap_series=lvwap_series,
+            is_dd_series=is_dd_s,
+            dd_count_series=dd_cnt_s,
+            dd_level_series=dd_lvl_s,
+            is_ftd_series=is_ftd_s,
+            ftd_status_series=ftd_stat_s,
         )
             
         display_name = INDEX_DISPLAY_NAMES.get(market_key, f"{market_key.upper()} 지수")
@@ -1020,17 +1157,20 @@ def resolve_stock_info(query: str, asset_type: Optional[str] = None) -> Optional
         if os.path.exists(m_path):
             try:
                 con = duckdb.connect(m_path, read_only=True)
-                if q.isdigit():
-                    code = q.zfill(6)
-                    row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Code = ? ORDER BY Date DESC LIMIT 1", [code]).fetchone()
+                try:
+                    if q.isdigit():
+                        code = q.zfill(6)
+                        row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Code = ? ORDER BY Date DESC LIMIT 1", [code]).fetchone()
+                        if row:
+                            return row[0], row[1], row[2] or "KOSPI"
+                    row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name = ? ORDER BY Date DESC LIMIT 1", [q]).fetchone()
                     if row:
                         return row[0], row[1], row[2] or "KOSPI"
-                row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name = ? ORDER BY Date DESC LIMIT 1", [q]).fetchone()
-                if row:
-                    return row[0], row[1], row[2] or "KOSPI"
-                row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name LIKE ? ORDER BY Date DESC LIMIT 1", [f"%{q}%"]).fetchone()
-                if row:
-                    return row[0], row[1], row[2] or "KOSPI"
+                    row = con.execute("SELECT Code, Name, Market FROM marcap_adj WHERE Name LIKE ? ORDER BY Date DESC LIMIT 1", [f"%{q}%"]).fetchone()
+                    if row:
+                        return row[0], row[1], row[2] or "KOSPI"
+                finally:
+                    con.close()
             except Exception as e:
                 logger.warning(f"Error querying marcap.duckdb for {query}: {e}")
 
@@ -1414,6 +1554,14 @@ def _compute_asset_avwap_chart(
             values=vals_custom
         ))
 
+    # 7.2 DD (Distribution Day) & FTD (Follow-Through Day) for 1D
+    if interval_key == "1D":
+        is_dd_s, dd_cnt_s, dd_lvl_s = _calculate_distribution_days(df)
+        is_ftd_s, ftd_stat_s = _calculate_ftd(df)
+    else:
+        is_dd_s, dd_cnt_s, dd_lvl_s = None, None, None
+        is_ftd_s, ftd_stat_s = None, None
+
     # 8. Build points list
     points = _build_avwap_points_fast(
         df=df,
@@ -1431,6 +1579,11 @@ def _compute_asset_avwap_chart(
         vwap_series=vwap_series,
         hvwap_series=hvwap_series,
         lvwap_series=lvwap_series,
+        is_dd_series=is_dd_s,
+        dd_count_series=dd_cnt_s,
+        dd_level_series=dd_lvl_s,
+        is_ftd_series=is_ftd_s,
+        ftd_status_series=ftd_stat_s,
     )
 
     return AvwapChartResponse(

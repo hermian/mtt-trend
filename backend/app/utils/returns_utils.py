@@ -173,10 +173,13 @@ def _load_raw_price_series_impl(
         if os.path.exists(m_path):
             try:
                 con = duckdb.connect(m_path, read_only=True)
-                raw_df = con.execute(
-                    "SELECT Date, Close FROM marcap_adj WHERE Code = ? ORDER BY Date ASC",
-                    [code_clean.zfill(6)],
-                ).fetchdf()
+                try:
+                    raw_df = con.execute(
+                        "SELECT Date, Close FROM marcap_adj WHERE Code = ? ORDER BY Date ASC",
+                        [code_clean.zfill(6)],
+                    ).fetchdf()
+                finally:
+                    con.close()
                 if not raw_df.empty:
                     info = resolve_stock_info(code_clean, asset_type="stock")
                     name = info[1] if info else code_clean

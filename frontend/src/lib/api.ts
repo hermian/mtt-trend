@@ -147,6 +147,14 @@ export interface MacroDataPoint {
   gdp_real?: number;
   /** 미국 GDP 대비 민간투자 비율 (%) — FRED A006RE1Q156NBEA */
   inv_gdp?: number;
+  /** 미국 실업률 (%) — FRED UNRATE */
+  unrate?: number;
+  /** 미국 CPI YoY (%) — FRED CPIAUCSL */
+  cpi?: number;
+  /** 미국 Core CPI YoY (%) — FRED CPILFESL */
+  core_cpi?: number;
+  /** 미국 Core Sticky CPI less Shelter YoY (%) — FRED CRESTKCPIXSLTRM159SFRBATL */
+  sticky_cpi?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

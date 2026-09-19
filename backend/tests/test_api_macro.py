@@ -211,6 +211,11 @@ def temp_macro_db(monkeypatch):
         ("2026-04-01", "GDP", 28000.0),
         ("2026-04-01", "GDPC1", 22500.0),
         ("2026-04-01", "A006RE1Q156NBEA", 17.6),
+        # US 실업률 및 물가지수 (월간 → ffill)
+        ("2026-06-01", "UNRATE", 4.1),
+        ("2026-06-01", "CPIAUCSL", 3.4),
+        ("2026-06-01", "CPILFESL", 2.5),
+        ("2026-06-01", "CRESTKCPIXSLTRM159SFRBATL", 2.3),
     ])
     
     cursor.executemany("""
@@ -304,6 +309,10 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["gdp"] == 28000.0
     assert pt["gdp_real"] == 22500.0
     assert pt["inv_gdp"] == 17.6
+    assert pt["unrate"] == 4.1
+    assert pt["cpi"] == 3.4
+    assert pt["core_cpi"] == 2.5
+    assert pt["sticky_cpi"] == 2.3
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5
@@ -343,6 +352,10 @@ def test_get_macro_chart_data(temp_macro_db):
     assert data_filtered["data"][0]["fed_funds"] == 4.33
     assert data_filtered["data"][0]["bok_base"] == 2.50
     assert data_filtered["data"][0]["ism_pmi"] == 48.5
+    assert data_filtered["data"][0]["unrate"] == 4.1
+    assert data_filtered["data"][0]["cpi"] == 3.4
+    assert data_filtered["data"][0]["core_cpi"] == 2.5
+    assert data_filtered["data"][0]["sticky_cpi"] == 2.3
 
 
 def test_ism_pmi_release_normalized_to_ref_month(temp_macro_db):

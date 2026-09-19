@@ -59,6 +59,10 @@ class MacroDataPoint(BaseModel):
     gdp: Optional[float] = None          # FRED GDP (명목 GDP, 십억 달러) → fred_macro
     gdp_real: Optional[float] = None     # FRED GDPC1 (실질 GDP, 십억 달러) → fred_macro
     inv_gdp: Optional[float] = None      # FRED A006RE1Q156NBEA (미국 GDP 대비 민간투자 비율, %) → fred_macro
+    unrate: Optional[float] = None       # FRED UNRATE (미국 실업률, %) → fred_macro
+    cpi: Optional[float] = None          # FRED CPIAUCSL pc1 (미국 CPI YoY, %) → fred_macro
+    core_cpi: Optional[float] = None     # FRED CPILFESL pc1 (미국 Core CPI YoY, %) → fred_macro
+    sticky_cpi: Optional[float] = None   # FRED CRESTKCPIXSLTRM159SFRBATL (미국 Core Sticky CPI less Shelter YoY, %) → fred_macro
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
     ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
     credit_kospi: Optional[float] = None       # KOSPI 신용잔고 (조원) — kofia_credit_loan

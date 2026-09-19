@@ -321,6 +321,10 @@ def get_macro_chart_data(
       export_avg kr_export_avg — FinJump 주간 일평균수출, 조회 시 ffill
       ism_pmi    fred_macro(ISM_PMI) — Investing 발표일 원본; 조회 시 참조월 정규화 후 ffill
       inv_gdp    fred_macro(A006RE1Q156NBEA) — GDP 대비 민간투자 비율 (%), 분기 발표, 조회 시 ffill
+      unrate     fred_macro(UNRATE) — 미국 실업률 (%), 월간 발표, 조회 시 ffill
+      cpi        fred_macro(CPIAUCSL) — 미국 CPI YoY (%), 월간 발표, 조회 시 ffill
+      core_cpi   fred_macro(CPILFESL) — 미국 Core CPI YoY (%), 월간 발표, 조회 시 ffill
+      sticky_cpi fred_macro(CRESTKCPIXSLTRM159SFRBATL) — 미국 Core Sticky CPI less Shelter YoY (%), 월간 발표, 조회 시 ffill
       credit_kospi / credit_kosdaq          kofia_credit_loan — 신용잔고 (조원)
       credit_kospi_pct / credit_kosdaq_pct  신용잔고 ÷ index_ohlcv.marcap (%)
       forced_sell / forced_sell_ratio       kofia_stock_money — 미수금 반대매매 (억원, %)
@@ -401,6 +405,10 @@ def get_macro_chart_data(
         "gdp": "GDP",
         "gdp_real": "GDPC1",
         "inv_gdp": "A006RE1Q156NBEA",
+        "unrate": "UNRATE",
+        "cpi": "CPIAUCSL",
+        "core_cpi": "CPILFESL",
+        "sticky_cpi": "CRESTKCPIXSLTRM159SFRBATL",
     }
     # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
     ism_ffill_series_id = "ISM_PMI"
@@ -627,6 +635,10 @@ def get_macro_chart_data(
             gdp=p.get("gdp"),
             gdp_real=p.get("gdp_real"),
             inv_gdp=p.get("inv_gdp"),
+            unrate=p.get("unrate"),
+            cpi=p.get("cpi"),
+            core_cpi=p.get("core_cpi"),
+            sticky_cpi=p.get("sticky_cpi"),
             export_avg=p.get("export_avg"),
             ism_pmi=p.get("ism_pmi"),
             credit_kospi=p.get("credit_kospi"),

@@ -815,6 +815,45 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/Stoc:/)).toBeInTheDocument();
   });
 
+  it("toggles ATR_M panel on and off and defaults to ON", () => {
+    // Generate 60 points so ATR_M has enough data for SMA50 and ATR14
+    const points60 = Array.from({ length: 60 }, (_, i) => ({
+      ...mockChartData.points[0],
+      date: `2024-01-${String((i % 28) + 1).padStart(2, "0")}`,
+      close: 2600 + i,
+      high: 2620 + i,
+      low: 2590 + i,
+    }));
+
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: { ...mockChartData, points: points60 },
+      isLoading: false,
+      error: null,
+    } as any);
+    vi.spyOn(useAvwapChartModule, "useStockSearch").mockReturnValue({
+      data: [],
+      isLoading: false,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // ATR_M panel and toggle button are enabled by default
+    const atrMBtn = screen.getByText("ATR_M");
+    expect(atrMBtn).toBeInTheDocument();
+    expect(screen.getByText("ATR_M (from 50MA)")).toBeInTheDocument();
+    expect(screen.getByText(/ATR_M:/)).toBeInTheDocument();
+
+    // Toggle off
+    fireEvent.click(atrMBtn);
+    expect(screen.queryByText("ATR_M (from 50MA)")).not.toBeInTheDocument();
+    expect(screen.queryByText(/ATR_M:/)).not.toBeInTheDocument();
+
+    // Toggle back on
+    fireEvent.click(atrMBtn);
+    expect(screen.getByText("ATR_M (from 50MA)")).toBeInTheDocument();
+    expect(screen.getByText(/ATR_M:/)).toBeInTheDocument();
+  });
+
   it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
     vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
       data: mockChartData,

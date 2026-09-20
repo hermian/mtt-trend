@@ -33,6 +33,11 @@ import { hpFilterSeries, getHpLambdaForInterval } from "@/lib/hpFilter";
 import { calculateMacd, type MacdResult } from "@/lib/macd";
 import { calculateMultiStochasticSlow, type MultiStochResult } from "@/lib/stochastic";
 import {
+  calculateAtrMultiple,
+  type AtrMultipleResult,
+  type AtrMultiplePoint,
+} from "@/lib/atrMultiple";
+import {
   calculateSupertrend,
   DEFAULT_SUPERTREND_CONFIG,
   type SupertrendConfig,
@@ -217,6 +222,15 @@ export function AvwapChart() {
   const [showAmount, setShowAmount] = useState(false);
   const [showMacd, setShowMacd] = useState(true);
   const [showStoc, setShowStoc] = useState(true);
+  const [showAtrM, setShowAtrM] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_atr_m_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
   const isKospi = market === "kospi" && !symbol;
   const [showKhkLine, setShowKhkLine] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
@@ -629,6 +643,38 @@ export function AvwapChart() {
     return stochMap.get(time) ?? null;
   }, [chartData?.points, stochMap]);
 
+  // ATR% Multiple from 50MA calculation (ATR_M)
+  const atrMResult = useMemo<AtrMultipleResult | null>(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const bars = chartData.points
+      .map((p) => {
+        const time = toChartTime(p.date);
+        const close = toFiniteNumber(p.close);
+        if (!time || close == null) return null;
+        const high = toFiniteNumber(p.high) ?? close;
+        const low = toFiniteNumber(p.low) ?? close;
+        return { time, high, low, close };
+      })
+      .filter((b): b is NonNullable<typeof b> => b !== null);
+    return calculateAtrMultiple(bars, { smaPeriod: 50, atrPeriod: 14 });
+  }, [chartData?.points]);
+
+  const atrMMap = useMemo(() => {
+    const map = new Map<string, AtrMultiplePoint>();
+    if (!atrMResult) return map;
+    for (const p of atrMResult.points) {
+      map.set(p.time, p);
+    }
+    return map;
+  }, [atrMResult]);
+
+  const latestAtrMInfo = useMemo(() => {
+    if (!chartData?.points || chartData.points.length === 0) return null;
+    const lastPt = chartData.points[chartData.points.length - 1];
+    const time = toChartTime(lastPt.date) || lastPt.date;
+    return atrMMap.get(time) ?? null;
+  }, [chartData?.points, atrMMap]);
+
   const [hoveredData, setHoveredData] = useState<{
     time: string;
     ohlc?: { open: number; high: number; low: number; close: number; volume: number; changePct?: number | null };
@@ -650,6 +696,7 @@ export function AvwapChart() {
     khkLine?: number | null;
     macd?: { macd: number; signal: number; histogram: number; color: string } | null;
     stoch?: { short: number; mid: number; long: number } | null;
+    atrM?: AtrMultiplePoint | null;
     isDd?: boolean | null;
     ddCount?: number | null;
     ddLevel?: "normal" | "caution" | "danger" | null;
@@ -1239,6 +1286,26 @@ export function AvwapChart() {
           if (longPl) longPl.applyOptions({ axisLabelVisible: false });
         }
       }
+
+      // 7. ATR% Multiple from 50MA Panel (ATR_M)
+      if (showAtrM) {
+        const timeStr = toChartTime(pt.date);
+        const aInfo = timeStr ? atrMMap.get(timeStr) : undefined;
+        const atrMPl = plMap.get("atr_m_hover");
+
+        if (aInfo) {
+          if (atrMPl) {
+            atrMPl.applyOptions({
+              price: aInfo.value,
+              color: aInfo.color,
+              axisLabelVisible: true,
+              title: "",
+            });
+          }
+        } else {
+          if (atrMPl) atrMPl.applyOptions({ axisLabelVisible: false });
+        }
+      }
     };
 
     try {
@@ -1329,6 +1396,9 @@ export function AvwapChart() {
         ...(showStoc
           ? [{ id: "stoch", name: "Stochastic Slow (단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12)", height: 110 }]
           : []),
+        ...(showAtrM
+          ? [{ id: "atr_m", name: "ATR% Multiple from 50MA (ATR_M)", height: 110 }]
+          : []),
       ];
 
       panels.forEach((panel, index) => {
@@ -1367,7 +1437,9 @@ export function AvwapChart() {
                       ? { top: 0.1, bottom: 0.1 }
                       : panel.id === "stoch"
                         ? { top: 0.08, bottom: 0.08 }
-                        : { top: 0.05, bottom: 0.05 },
+                        : panel.id === "atr_m"
+                          ? { top: 0.1, bottom: 0.1 }
+                          : { top: 0.05, bottom: 0.05 },
             autoScale: true,
             minimumWidth: 95,
             mode: panel.id === "main"
@@ -2200,6 +2272,81 @@ export function AvwapChart() {
           crosshairPriceLinesRef.current.set("stoch_long", longHoverLine);
         }
 
+        // 7. Panel: ATR% Multiple from 50MA (ATR_M)
+        else if (panel.id === "atr_m") {
+          const atrMFormat = {
+            type: "custom" as const,
+            formatter: (price: number) => `${price.toFixed(2)}x`,
+            minMove: 0.01,
+          };
+
+          const atrMSeries = chart.addSeries(LineSeries, {
+            color: "#c084fc",
+            lineWidth: 2,
+            lineStyle: LineStyle.Solid,
+            priceFormat: atrMFormat,
+            priceLineVisible: false,
+            lastValueVisible: true,
+          });
+          activeSeries.push(atrMSeries);
+
+          // Guide lines (title: "" to adhere to chart rules)
+          // 10x: 극단 과열 (클라이맥스)
+          atrMSeries.createPriceLine({
+            price: 10,
+            color: "rgba(239, 68, 68, 0.6)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          // 7x: 과열 (분할 익절)
+          atrMSeries.createPriceLine({
+            price: 7,
+            color: "rgba(249, 115, 22, 0.6)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          // 2x: 추세 초입 확장
+          atrMSeries.createPriceLine({
+            price: 2,
+            color: "rgba(34, 197, 94, 0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          // 0: 50MA 기준선
+          atrMSeries.createPriceLine({
+            price: 0,
+            color: "rgba(148, 163, 184, 0.4)",
+            lineWidth: 1,
+            lineStyle: LineStyle.Solid,
+            lineVisible: true,
+            axisLabelVisible: false,
+            title: "",
+          });
+
+          const atrMHoverLine = atrMSeries.createPriceLine({
+            price: 0,
+            color: "#c084fc",
+            lineWidth: 1,
+            lineStyle: LineStyle.Dotted,
+            lineVisible: false,
+            axisLabelVisible: false,
+            title: "",
+          });
+          crosshairPriceLinesRef.current.set("atr_m_hover", atrMHoverLine);
+        }
+
         seriesRef.current.set(panel.id, activeSeries);
 
         // TimeScale sync & dynamic vertical autoScale on scroll/pan
@@ -2253,6 +2400,7 @@ export function AvwapChart() {
           const khkVal = matchedPoint ? khkMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) ?? null : null;
           const macdInfo = matchedPoint ? macdMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           const stochInfo = matchedPoint ? stochMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
+          const atrMInfo = matchedPoint ? atrMMap.get(toChartTime(matchedPoint.date) || matchedPoint.date) : null;
           if (matchedPoint) {
             updateCrosshairPriceLines(matchedPoint, prevPoint);
             setHoveredData({
@@ -2283,6 +2431,7 @@ export function AvwapChart() {
               khkLine: khkVal,
               macd: macdInfo || null,
               stoch: stochInfo || null,
+              atrM: atrMInfo || null,
               isDd: matchedPoint.is_dd,
               ddCount: matchedPoint.dd_count,
               ddLevel: matchedPoint.dd_level,
@@ -2574,6 +2723,14 @@ export function AvwapChart() {
           }
         }
 
+        // 7. ATR% Multiple from 50MA (ATR_M)
+        if (showAtrM && atrMResult) {
+          const atrMSeriesList = seriesRef.current.get("atr_m") || [];
+          if (atrMSeriesList.length >= 1) {
+            atrMSeriesList[0].setData(atrMResult.series);
+          }
+        }
+
         // Initial visible range (show last 250 bars for 1D/1W, or all for 1M/1Y)
         const firstChart = chartsRef.current.values().next().value;
         if (firstChart) {
@@ -2595,7 +2752,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult, showStoc, stochResult]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult, showStoc, stochResult, showAtrM, atrMResult]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -2810,6 +2967,7 @@ export function AvwapChart() {
     khkLine: latestKhkInfo,
     macd: latestMacdInfo,
     stoch: latestStochInfo,
+    atrM: latestAtrMInfo,
     isDd: latestPoint.is_dd,
     ddCount: latestPoint.dd_count,
     ddLevel: latestPoint.dd_level,
@@ -3254,6 +3412,25 @@ export function AvwapChart() {
             title="클릭하여 Stochastic Slow(단기 5,3,3 / 중기 10,6,6 / 장기 20,12,12) 패널 표시 ON/OFF"
           >
             Stoc
+          </button>
+          <button
+            onClick={() => {
+              setShowAtrM((prev) => {
+                const next = !prev;
+                try {
+                  localStorage.setItem("mtt_atr_m_enabled", JSON.stringify(next));
+                } catch {}
+                return next;
+              });
+            }}
+            className={`px-2.5 py-1 rounded-md border font-semibold transition-all ${
+              showAtrM
+                ? "bg-purple-500/20 text-purple-400 border-purple-500/40 shadow-sm"
+                : "bg-gray-800 text-gray-500 border-gray-700 hover:text-gray-300"
+            }`}
+            title="클릭하여 ATR_M (50일선 이격 대비 ATR 변동성 배수) 패널 표시 ON/OFF"
+          >
+            ATR_M
           </button>
           {/* Supertrend Toggle & Settings Popover */}
           <div className="relative inline-flex items-center">
@@ -3740,6 +3917,20 @@ export function AvwapChart() {
                 </span>
               </span>
             )}
+            {showAtrM && activeDisplay.atrM && (
+              <span>
+                ATR_M:{" "}
+                <span
+                  className="font-bold"
+                  style={{ color: activeDisplay.atrM.color }}
+                >
+                  {activeDisplay.atrM.value.toFixed(2)}배
+                </span>
+                <span className="text-gray-400 text-[10px] ml-0.5">
+                  ({activeDisplay.atrM.label})
+                </span>
+              </span>
+            )}
           </>
         )}
         </div>
@@ -3898,7 +4089,7 @@ export function AvwapChart() {
           )}
 
           {/* Panel 3: Volume & VIX Fix */}
-          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd || showStoc ? "border-b border-gray-800" : ""}`}>
+          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd || showStoc || showAtrM ? "border-b border-gray-800" : ""}`}>
             <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
               <span>거래량 (막대) & VIX Fix (초록 점선)</span>
               {market.toLowerCase() === "sox" && !symbol && (
@@ -3912,7 +4103,7 @@ export function AvwapChart() {
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           {showAmount && (
-            <div className={`w-full relative bg-[#090d16] ${showMacd || showStoc ? "border-b border-gray-800" : ""}`}>
+            <div className={`w-full relative bg-[#090d16] ${showMacd || showStoc || showAtrM ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span>거래대금 ({chartData?.amount_unit || "조원"})</span>
                 {market.toLowerCase() === "sox" && !symbol ? (
@@ -3935,7 +4126,7 @@ export function AvwapChart() {
 
           {/* Panel 5: MACD (12, 26, 9) */}
           {showMacd && (
-            <div className={`w-full relative bg-[#090d16] ${showStoc ? "border-b border-gray-800" : ""}`}>
+            <div className={`w-full relative bg-[#090d16] ${showStoc || showAtrM ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span className="text-blue-400 font-bold">MACD (12, 26, 9)</span>
                 <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
@@ -3948,7 +4139,7 @@ export function AvwapChart() {
 
           {/* Panel 6: Stochastic Slow (5,3,3 / 10,6,6 / 20,12,12) */}
           {showStoc && (
-            <div className="w-full relative bg-[#090d16]">
+            <div className={`w-full relative bg-[#090d16] ${showAtrM ? "border-b border-gray-800" : ""}`}>
               <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
                 <span className="text-cyan-400 font-bold">Stochastic Slow</span>
                 <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
@@ -3956,6 +4147,19 @@ export function AvwapChart() {
                 </span>
               </div>
               <div data-chart-id="stoch" className="w-full" />
+            </div>
+          )}
+
+          {/* Panel 7: ATR% Multiple from 50MA (ATR_M) */}
+          {showAtrM && (
+            <div className="w-full relative bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span className="text-purple-400 font-bold">ATR_M (from 50MA)</span>
+                <span className="text-gray-400 text-[10px] hidden sm:inline font-mono">
+                  (7배: 과열/분할익절, 10배: 극단과열/강력익절)
+                </span>
+              </div>
+              <div data-chart-id="atr_m" className="w-full" />
             </div>
           )}
         </div>

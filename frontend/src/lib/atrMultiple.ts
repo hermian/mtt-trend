@@ -89,7 +89,7 @@ export function calculateAtrMultiple(
   );
 
   const n = validPoints.length;
-  if (n < smaPeriod) {
+  if (n === 0) {
     return { points: [], series: [] };
   }
 
@@ -122,31 +122,30 @@ export function calculateAtrMultiple(
     }
   }
 
-  // 3. SMA50
-  const sma: (number | null)[] = new Array(n).fill(null);
+  // 3. SMA50 (워밍업 구간은 가용 봉 기준 평균으로 계산하여 타임라인 1:1 정렬 유지)
+  const sma: number[] = new Array(n);
   let windowSum = 0;
   for (let i = 0; i < n; i++) {
     windowSum += validPoints[i].close;
     if (i >= smaPeriod) {
       windowSum -= validPoints[i - smaPeriod].close;
-    }
-    if (i >= smaPeriod - 1) {
       sma[i] = windowSum / smaPeriod;
+    } else {
+      sma[i] = windowSum / (i + 1);
     }
   }
 
-  // 4. ATR Multiple Calculation
+  // 4. ATR Multiple Calculation (모든 봉에 대해 계산하여 lightweight-charts logicalRange 정렬 유지)
   const points: AtrMultiplePoint[] = [];
   const series: { time: string; value: number }[] = [];
 
-  for (let i = smaPeriod - 1; i < n; i++) {
+  for (let i = 0; i < n; i++) {
     const currentSma = sma[i];
     const currentAtr = atr[i];
     const currentClose = validPoints[i].close;
     const time = validPoints[i].time;
 
     if (
-      currentSma == null ||
       currentSma <= 0 ||
       currentAtr <= 0 ||
       currentClose <= 0

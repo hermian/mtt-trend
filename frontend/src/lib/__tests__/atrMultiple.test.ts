@@ -40,7 +40,7 @@ describe("atrMultiple", () => {
       expect(res.series).toEqual([]);
     });
 
-    it("returns empty arrays when fewer than smaPeriod bars are provided", () => {
+    it("calculates values for all valid bars to ensure 1:1 timeline alignment with main chart", () => {
       const bars: AtrMultipleInputPoint[] = Array.from({ length: 49 }, (_, i) => ({
         time: `2024-01-${String(i + 1).padStart(2, "0")}`,
         high: 105,
@@ -48,13 +48,13 @@ describe("atrMultiple", () => {
         close: 100,
       }));
       const res = calculateAtrMultiple(bars, { smaPeriod: 50 });
-      expect(res.points).toEqual([]);
-      expect(res.series).toEqual([]);
+      expect(res.points).toHaveLength(49);
+      expect(res.series).toHaveLength(49);
+      expect(res.points[0].time).toBe(bars[0].time);
+      expect(res.points[48].time).toBe(bars[48].time);
     });
 
     it("matches note.com formula and calculations", () => {
-      // Create 50 bars. For first 49 bars, close is ~265.39.
-      // On the 50th bar, close jumps or sets up conditions to test math.
       const bars: AtrMultipleInputPoint[] = Array.from({ length: 60 }, (_, i) => ({
         time: `2024-01-${String(i + 1).padStart(2, "0")}`,
         high: 270,
@@ -63,12 +63,12 @@ describe("atrMultiple", () => {
       }));
 
       const res = calculateAtrMultiple(bars, { smaPeriod: 50, atrPeriod: 14 });
-      expect(res.points.length).toBe(11); // 60 - 50 + 1
-      expect(res.series.length).toBe(11);
+      expect(res.points.length).toBe(60);
+      expect(res.series.length).toBe(60);
 
       // When close equals SMA, disparity is 0 and ATR multiple is 0
-      expect(res.points[0].value).toBeCloseTo(0, 4);
-      expect(res.points[0].label).toContain("수렴");
+      expect(res.points[59].value).toBeCloseTo(0, 4);
+      expect(res.points[59].label).toContain("수렴");
     });
 
     it("filters out invalid points with NaN or non-positive values", () => {
@@ -85,8 +85,8 @@ describe("atrMultiple", () => {
       });
 
       const res = calculateAtrMultiple(bars, { smaPeriod: 50 });
-      // 59 valid points -> 59 - 50 + 1 = 10
-      expect(res.points.length).toBe(10);
+      // 59 valid points -> 59 points
+      expect(res.points.length).toBe(59);
     });
   });
 });

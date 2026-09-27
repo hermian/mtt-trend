@@ -23,6 +23,7 @@ const GROUPING_TITLES: Record<HeatmapControls["grouping"], string> = {
   sector: "섹터",
   industry: "업종",
   theme: "테마",
+  theme2: "테마2",
   kospi: "KOSPI",
   kosdaq: "KOSDAQ",
 };

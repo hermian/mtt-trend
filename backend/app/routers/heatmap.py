@@ -23,7 +23,7 @@ _STOCK_HEATMAP_CACHE_MAX = 32
 def get_stock_heatmap(
     grouping: str = Query(
         "sector",
-        description="그룹 기준: sector | industry | theme | kospi | kosdaq",
+        description="그룹 기준: sector | industry | theme | theme2 | kospi | kosdaq",
     ),
     period: str = Query("1M", description="수익률 기간: 1D | 5D | 1M | 3M | 6M | 12M | CUSTOM"),
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
@@ -38,7 +38,7 @@ def get_stock_heatmap(
     """
     한국 주식 히트맵 데이터.
 
-    최신 RS 유니버스(~/.cache/db/rs) 기준으로 그룹별(섹터/WICS 산업/테마/KOSPI/KOSDAQ)
+    최신 RS 유니버스(~/.cache/db/rs) 기준으로 그룹별(섹터/WICS 산업/테마/테마2/KOSPI/KOSDAQ)
     종목 목록과 선택 기간(또는 시작일~종료일 지정)의 수익률·RS·시가총액을 반환합니다.
     """
     # Sanitize query parameter defaults if called directly outside FastAPI injection

@@ -133,3 +133,54 @@ describe("ControlBar Default Actions", () => {
   });
 });
 
+describe("ControlBar Groupings", () => {
+  it("renders all grouping buttons including '테마2' and handles click with default filters", () => {
+    const handleChange = vi.fn();
+    render(
+      <ControlBar
+        value={{
+          ...defaultControls,
+          grouping: "sector",
+          period: "1M",
+          marcapMin: 3000,
+          minRet: 4,
+          minRs: 80,
+          mmt: [1, 2],
+          limit: 100,
+        }}
+        onChange={handleChange}
+      />
+    );
+
+    expect(screen.getByText("섹터")).toBeDefined();
+    expect(screen.getByText("업종")).toBeDefined();
+    expect(screen.getByText("테마")).toBeDefined();
+    expect(screen.getByText("테마2")).toBeDefined();
+    expect(screen.getByText("KOSPI")).toBeDefined();
+    expect(screen.getByText("KOSDAQ")).toBeDefined();
+
+    fireEvent.click(screen.getByText("테마2"));
+    expect(handleChange).toHaveBeenCalledWith({
+      grouping: "theme2",
+      period: "1D",
+      startDate: null,
+      endDate: null,
+      marcapMin: null,
+      marcapMax: null,
+      minRet: null,
+      minRs: null,
+      mmt: null,
+      limit: 0,
+    });
+  });
+
+  it("handles clicking other groupings normally", () => {
+    const handleChange = vi.fn();
+    render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    fireEvent.click(screen.getByText("업종"));
+    expect(handleChange).toHaveBeenCalledWith({ grouping: "industry" });
+  });
+});
+
+

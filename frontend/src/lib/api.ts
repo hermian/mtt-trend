@@ -304,6 +304,7 @@ export type HeatmapGrouping =
   | "sector"
   | "industry"
   | "theme"
+  | "theme2"
   | "kospi"
   | "kosdaq";
 

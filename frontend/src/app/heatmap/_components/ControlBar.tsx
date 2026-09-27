@@ -28,6 +28,7 @@ const GROUPINGS: Array<{ id: HeatmapGrouping; label: string }> = [
   { id: "sector", label: "섹터" },
   { id: "industry", label: "업종" },
   { id: "theme", label: "테마" },
+  { id: "theme2", label: "테마2" },
   { id: "kospi", label: "KOSPI" },
   { id: "kosdaq", label: "KOSDAQ" },
 ];
@@ -197,6 +198,32 @@ export const ControlBar = memo(function ControlBar({
     onChange({ period: "CUSTOM", startDate: start, endDate: end });
   };
 
+  const handleSelectGrouping = (groupingId: HeatmapGrouping) => {
+    if (groupingId === "theme2") {
+      // 테마2 버튼: 기본값은 1일, 시가총액 전체, 수익률 전체, RS 필터 전체, MMT 필터 전체, 표시 개수 전체
+      setMinInput("");
+      setMaxInput("");
+      setRetInput("");
+      setRsInput("");
+      setCustomStart("");
+      setCustomEnd("");
+      onChange({
+        grouping: "theme2",
+        period: "1D",
+        startDate: null,
+        endDate: null,
+        marcapMin: null,
+        marcapMax: null,
+        minRet: null,
+        minRs: null,
+        mmt: null,
+        limit: 0,
+      });
+    } else {
+      onChange({ grouping: groupingId });
+    }
+  };
+
   return (
     <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg border border-gray-800 bg-gray-900/60 px-4 py-3">
       {/* 그룹 기준 */}
@@ -206,7 +233,7 @@ export const ControlBar = memo(function ControlBar({
             key={g.id}
             type="button"
             className={btnClass(value.grouping === g.id)}
-            onClick={() => onChange({ grouping: g.id })}
+            onClick={() => handleSelectGrouping(g.id)}
           >
             {g.label}
           </button>

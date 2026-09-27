@@ -27,6 +27,8 @@ from zoneinfo import ZoneInfo
 
 import duckdb
 
+import sqlite3
+
 PERIOD_TRADING_DAYS = {
     "1D": 1,
     "5D": 5,
@@ -36,7 +38,7 @@ PERIOD_TRADING_DAYS = {
     "12M": 252,
 }
 
-VALID_GROUPINGS = ("sector", "industry", "theme", "kospi", "kosdaq")
+VALID_GROUPINGS = ("sector", "industry", "theme", "theme2", "kospi", "kosdaq")
 
 # parquet Market 값 → 표시 라벨 (KQ → KOSDAQ)
 _MARKET_LABELS = {
@@ -81,6 +83,13 @@ def get_stock_price_db_path() -> Path:
     return get_cache_db_dir() / "stock_price.duckdb"
 
 
+def get_theme_db_path() -> Path:
+    override = os.environ.get("THEME_DB_PATH")
+    if override:
+        return Path(override).expanduser()
+    return get_cache_db_dir() / "theme.db"
+
+
 def latest_rs_partition(rs_dir: Path) -> Optional[tuple[str, Path]]:
     """(date, parquet_path) of the newest date=YYYY-MM-DD partition, or None."""
     if not rs_dir.is_dir():
@@ -102,12 +111,15 @@ def stock_heatmap_sources() -> list[Path]:
     """shape_heatmap 이 읽는 원본 파일 목록. 캐시 무효화 키(최신 mtime) 산출용."""
     rs_dir = get_rs_dir()
     price_db = get_stock_price_db_path()
+    theme_db = get_theme_db_path()
     part = latest_rs_partition(rs_dir)
     sources: list[Path] = []
     if part and part[1].is_file():
         sources.append(part[1])
     if price_db.is_file():
         sources.append(price_db)
+    if theme_db.is_file():
+        sources.append(theme_db)
     return sources
 
 
@@ -190,7 +202,37 @@ def _compute_custom_period_returns_cached(
         con.close()
 
 
-def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
+def _load_custom_themes(theme_db_path: Path) -> Dict[str, List[str]]:
+    """~/.cache/db/theme.db 에서 종목별 커스텀 테마 목록을 읽어온다 (Read-Only)."""
+    if not theme_db_path.is_file():
+        return {}
+    res: Dict[str, List[str]] = {}
+    try:
+        # SQLite Read-Only URI 연결
+        con = sqlite3.connect(f"file:{theme_db_path.resolve()}?mode=ro", uri=True)
+        try:
+            cur = con.cursor()
+            rows = cur.execute(
+                """
+                SELECT i.code, t.name
+                FROM custom_theme_items i
+                JOIN custom_themes t ON i.theme_id = t.id
+                ORDER BY t.name, i.code
+                """
+            ).fetchall()
+            for code, theme_name in rows:
+                if code and theme_name:
+                    code_clean = str(code).strip()
+                    res.setdefault(code_clean, []).append(str(theme_name).strip())
+        finally:
+            con.close()
+    except Exception:
+        # DB가 아직 없거나 잠겨있거나 스키마가 다르면 빈 딕셔너리 반환
+        return {}
+    return res
+
+
+def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str, Any]:
     """Read latest RS snapshot + compute 6 period returns from the price DB."""
     part = latest_rs_partition(rs_dir)
     if part is None:
@@ -202,11 +244,15 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
         mtime = part_path.stat().st_mtime
         if price_db.is_file():
             mtime = max(mtime, price_db.stat().st_mtime)
+        if theme_db.is_file():
+            mtime = max(mtime, theme_db.stat().st_mtime)
         try:
             dt = datetime.fromtimestamp(mtime, tz=ZoneInfo("Asia/Seoul"))
         except Exception:
             dt = datetime.fromtimestamp(mtime)
         as_of_time = dt.strftime("%H:%M")
+
+    custom_themes_by_code = _load_custom_themes(theme_db)
 
     con = duckdb.connect(":memory:")
     try:
@@ -272,6 +318,7 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
         themes_list = (
             [t.strip() for t in str(themes).split(",") if t.strip()] if themes else []
         )
+        custom_themes_list = custom_themes_by_code.get(code, [])
         market_raw = (str(market).strip().upper() if market else "") or None
         mmt_int = int(round(mmt_val)) if mmt_val is not None and not (isinstance(mmt_val, float) and math.isnan(mmt_val)) else None
         frame_rows.append(
@@ -283,6 +330,7 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
                 "sector": sector or "미분류",
                 "wics": wics or "미분류",
                 "themes": themes_list,
+                "custom_themes": custom_themes_list,
                 "marcap": round(float(marcap) * 1000, 1) if marcap is not None else 0.0,  # 천억원→억원
                 "rs": int(round(rs_rating)) if rs_rating is not None else None,
                 "mmt": mmt_int,
@@ -294,17 +342,19 @@ def _build_base_frame(rs_dir: Path, price_db: Path) -> Dict[str, Any]:
 
 
 def get_base_frame() -> Dict[str, Any]:
-    """Cached base frame; invalidated when the partition date or price DB changes."""
+    """Cached base frame; invalidated when partition date, price DB, or theme DB changes."""
     rs_dir = get_rs_dir()
     price_db = get_stock_price_db_path()
+    theme_db = get_theme_db_path()
     part = latest_rs_partition(rs_dir)
     price_mtime = price_db.stat().st_mtime if price_db.is_file() else None
-    key = (part[0] if part else None, price_mtime)
+    theme_mtime = theme_db.stat().st_mtime if theme_db.is_file() else None
+    key = (part[0] if part else None, price_mtime, theme_mtime)
 
     with _cache_lock:
         if _cache["key"] == key and _cache["frame"] is not None:
             return _cache["frame"]
-        frame = _build_base_frame(rs_dir, price_db)
+        frame = _build_base_frame(rs_dir, price_db, theme_db)
         _cache["key"] = key
         _cache["frame"] = frame
         return frame
@@ -322,6 +372,8 @@ def _group_key(stock: Dict[str, Any], grouping: str) -> List[str]:
         return [stock["wics"]]
     if grouping == "theme":
         return stock["themes"]  # theme: a stock can belong to several groups
+    if grouping == "theme2":
+        return stock.get("custom_themes", [])  # theme2: custom themes from theme.db
     # kospi / kosdaq: 해당 시장만 단일 그룹 (그 외는 제외)
     label = stock.get("market_label")
     if grouping == "kospi" and label == "KOSPI":

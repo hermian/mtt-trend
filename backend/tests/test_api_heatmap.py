@@ -90,13 +90,51 @@ def heatmap_env(tmp_path, monkeypatch):
     pcon.close()
     con.close()
 
+    theme_db = tmp_path / "theme.db"
+    import sqlite3
+
+    scon = sqlite3.connect(str(theme_db))
+    scon.execute(
+        """
+        CREATE TABLE custom_themes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE NOT NULL,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    scon.execute(
+        """
+        CREATE TABLE custom_theme_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            theme_id INTEGER NOT NULL REFERENCES custom_themes(id) ON DELETE CASCADE,
+            code TEXT NOT NULL,
+            name TEXT NOT NULL,
+            added_date TEXT NOT NULL,
+            memo TEXT,
+            updated_at TEXT,
+            UNIQUE(theme_id, code)
+        )
+        """
+    )
+    # 테마 1: AI (종목 A, B 포함)
+    # 테마 2: 배당 (종목 B만 포함)
+    scon.execute("INSERT INTO custom_themes (id, name, created_at) VALUES (1, '커스텀AI', '2026-07-29')")
+    scon.execute("INSERT INTO custom_themes (id, name, created_at) VALUES (2, '커스텀배당', '2026-07-29')")
+    scon.execute("INSERT INTO custom_theme_items (theme_id, code, name, added_date) VALUES (1, '000010', '에이', '2026-07-29')")
+    scon.execute("INSERT INTO custom_theme_items (theme_id, code, name, added_date) VALUES (1, '000020', '비', '2026-07-29')")
+    scon.execute("INSERT INTO custom_theme_items (theme_id, code, name, added_date) VALUES (2, '000020', '비', '2026-07-29')")
+    scon.commit()
+    scon.close()
+
     monkeypatch.setenv("RS_PARQUET_DIR", str(rs_dir))
     monkeypatch.setenv("STOCK_PRICE_DB_PATH", str(price_db))
+    monkeypatch.setenv("THEME_DB_PATH", str(theme_db))
 
     import app.utils.stock_heatmap_utils as mod
 
     monkeypatch.setattr(mod, "_cache", {"key": None, "frame": None})
-    return {"rs_dir": rs_dir, "price_db": price_db}
+    return {"rs_dir": rs_dir, "price_db": price_db, "theme_db": theme_db}
 
 
 def _stocks_by_code(payload):
@@ -319,6 +357,60 @@ def test_mmt_filter(client, heatmap_env):
     assert body_multi["stock_count"] == 2
     stocks_multi = _stocks_by_code(body_multi)
     assert set(stocks_multi.keys()) == {"000020", "000030"}
+
+
+def test_theme2_grouping(client, heatmap_env):
+    """테마2(custom themes from theme.db) 그룹화 테스트."""
+    res = client.get("/api/heatmap/stocks?grouping=theme2&period=1M")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["grouping"] == "theme2"
+
+    groups = {g["name"]: g for g in body["groups"]}
+    # '커스텀AI', '커스텀배당' 테마 존재
+    assert set(groups.keys()) == {"커스텀AI", "커스텀배당"}
+
+    # 커스텀AI: 종목 A('000010'), 종목 B('000020')
+    ai_stocks = {s["code"]: s for s in groups["커스텀AI"]["stocks"]}
+    assert set(ai_stocks.keys()) == {"000010", "000020"}
+
+    # 커스텀배당: 종목 B('000020')
+    div_stocks = {s["code"]: s for s in groups["커스텀배당"]["stocks"]}
+    assert set(div_stocks.keys()) == {"000020"}
+
+    # 종목 C('000030')는 어떤 커스텀 테마에도 속하지 않으므로 어떤 그룹에도 나타나지 않음
+    all_codes = {s["code"] for g in body["groups"] for s in g["stocks"]}
+    assert "000030" not in all_codes
+
+
+def test_theme2_dynamic_invalidation(client, heatmap_env):
+    """theme.db 파일이 갱신(새 테마/종목 추가)되었을 때 캐시가 자동으로 무효화되는지 검증."""
+    theme_db = heatmap_env["theme_db"]
+
+    import sqlite3
+    import time
+    time.sleep(0.01)
+
+    scon = sqlite3.connect(str(theme_db))
+    scon.execute("INSERT INTO custom_themes (id, name, created_at) VALUES (3, '신규로봇', '2026-07-29')")
+    scon.execute("INSERT INTO custom_theme_items (theme_id, code, name, added_date) VALUES (3, '000030', '씨', '2026-07-29')")
+    scon.commit()
+    scon.close()
+
+    # mtime 확실히 변경
+    new_mtime = theme_db.stat().st_mtime + 5
+    import os
+    os.utime(str(theme_db), (new_mtime, new_mtime))
+
+    res = client.get("/api/heatmap/stocks?grouping=theme2&period=1M")
+    assert res.status_code == 200
+    body = res.json()
+
+    groups = {g["name"]: g for g in body["groups"]}
+    assert "신규로봇" in groups
+    robot_stocks = {s["code"]: s for s in groups["신규로봇"]["stocks"]}
+    assert "000030" in robot_stocks
+
 
 
 

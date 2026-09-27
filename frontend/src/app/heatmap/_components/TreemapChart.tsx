@@ -301,7 +301,7 @@ export const GroupTreemap = memo(function GroupTreemap({
             </div>
           )}
           <div className="mt-2 text-[10px] text-sky-400">
-            클릭하여 종목 목록 보기 ↗
+            💡 박스 클릭 시 종목 화면으로 이동
           </div>
         </div>
       )}
@@ -540,7 +540,7 @@ export const StockTreemap = memo(function StockTreemap({
             )}
           </div>
           <div className="mt-1 text-[10px] text-sky-400">
-            클릭 시 상세 정보 이동 ↗
+            💡 박스 클릭 시 상세 차트 및 링크 팝업
           </div>
         </div>
       )}

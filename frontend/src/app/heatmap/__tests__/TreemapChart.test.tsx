@@ -54,10 +54,10 @@ describe("TreemapChart Hover Popups", () => {
       expect(screen.getByText("+4.50%")).toBeDefined();
       expect(screen.getByText("RS 85")).toBeDefined();
       expect(screen.getByText("RS 92")).toBeDefined();
-      expect(screen.getByText("클릭하여 종목 목록 보기 ↗")).toBeDefined();
+      expect(screen.getByText("💡 박스 클릭 시 종목 화면으로 이동")).toBeDefined();
 
       fireEvent.mouseLeave(groupTile);
-      expect(screen.queryByText("클릭하여 종목 목록 보기 ↗")).toBeNull();
+      expect(screen.queryByText("💡 박스 클릭 시 종목 화면으로 이동")).toBeNull();
     }
   });
 
@@ -104,9 +104,9 @@ describe("TreemapChart Hover Popups", () => {
     fireEvent.mouseMove(firstTile, { clientX: 150, clientY: 150 });
 
     expect(screen.getAllByText("삼성전자").length).toBeGreaterThan(1);
-    expect(screen.getByText("클릭 시 상세 정보 이동 ↗")).toBeDefined();
+    expect(screen.getByText("💡 박스 클릭 시 상세 차트 및 링크 팝업")).toBeDefined();
 
     fireEvent.mouseLeave(firstTile);
-    expect(screen.queryByText("클릭 시 상세 정보 이동 ↗")).toBeNull();
+    expect(screen.queryByText("💡 박스 클릭 시 상세 차트 및 링크 팝업")).toBeNull();
   });
 });

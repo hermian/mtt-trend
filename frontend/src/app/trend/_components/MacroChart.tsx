@@ -15,7 +15,12 @@ import {
 } from "lightweight-charts";
 import { useMacroData } from "@/hooks/useMacroData";
 import type { MacroDataPoint } from "@/lib/api";
-import { hpFilterSeries, HP_LAMBDA_DAILY } from "@/lib/hpFilter";
+import {
+  hpFilterSeries,
+  HP_LAMBDA_DAILY,
+  HP_LAMBDA_WEEKLY,
+  HP_LAMBDA_MONTHLY,
+} from "@/lib/hpFilter";
 
 /** HP 장기추세·이탈도를 적용할 지수 (FinJump DSTOA005001 / DSTOA006001) */
 const INDEX_HP_IDS = new Set(["sp500", "nasdaq100", "dow30", "kospi", "sox"]);
@@ -300,6 +305,7 @@ function applySeriesData(
   displayStart: string | undefined,
   normalized: boolean,
   hpEnabled: boolean,
+  timeframe: Timeframe = "daily",
 ): TimePoint[] | undefined {
   const fullRaw = buildSeries(ind.id, fullPts);
   const useHistogram = !!ind.histogram && !normalized;
@@ -315,12 +321,19 @@ function applySeriesData(
   }
 
   if (series.ma) {
-    const maFull = movingAverage(fullRaw, HY_MA_WINDOW);
+    const maWindow = timeframe === "weekly" ? 40 : timeframe === "monthly" ? 10 : HY_MA_WINDOW;
+    const maFull = movingAverage(fullRaw, maWindow);
     series.ma.setData(toDisplayScale(sliceFrom(maFull, displayStart), base) as any);
   }
 
   if (hpEnabled && INDEX_HP_IDS.has(ind.id) && series.hpTrend && fullRaw.length >= 4) {
-    const { trend, deviation } = hpFilterSeries(fullRaw, HP_LAMBDA_DAILY);
+    const lambda =
+      timeframe === "weekly"
+        ? HP_LAMBDA_WEEKLY
+        : timeframe === "monthly"
+        ? HP_LAMBDA_MONTHLY
+        : HP_LAMBDA_DAILY;
+    const { trend, deviation } = hpFilterSeries(fullRaw, lambda);
     series.hpTrend.setData(toDisplayScale(sliceFrom(trend, displayStart), base) as any);
     const displayDev = sliceFrom(deviation, displayStart);
     if (series.hpDev) series.hpDev.setData(displayDev as any);
@@ -350,7 +363,52 @@ function movingAverage(data: TimePoint[], window: number): TimePoint[] {
 }
 
 /* 호버 범례에 실제 날짜 time을 매핑하기 위한 어댑터 */
-type FakePoint = MacroDataPoint & { time: string };
+export type FakePoint = MacroDataPoint & { time: string };
+
+export type Timeframe = "daily" | "weekly" | "monthly";
+
+export const TIMEFRAMES: { id: Timeframe; label: string }[] = [
+  { id: "daily", label: "일" },
+  { id: "weekly", label: "주" },
+  { id: "monthly", label: "월" },
+];
+
+/** UTC 기준 월요일 날짜 계산 (타임존 왜곡 방지) */
+export function getWeekKey(dateStr: string): string {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  const day = dt.getUTCDay(); // 0 (Sun) .. 6 (Sat)
+  const diff = dt.getUTCDate() - day + (day === 0 ? -6 : 1);
+  dt.setUTCDate(diff);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** 일/주/월 단위 리샘플링: 주/월간 마지막 거래일 관측치 기준 */
+export function resampleMacroData(points: FakePoint[], timeframe: Timeframe): FakePoint[] {
+  if (timeframe === "daily" || points.length === 0) return points;
+
+  const resampled: FakePoint[] = [];
+  let currentKey: string | null = null;
+  let lastPoint: FakePoint | null = null;
+
+  for (const p of points) {
+    const key = timeframe === "weekly" ? getWeekKey(p.date) : p.date.slice(0, 7);
+    if (currentKey === null) {
+      currentKey = key;
+      lastPoint = p;
+    } else if (key === currentKey) {
+      lastPoint = p;
+    } else {
+      if (lastPoint) resampled.push(lastPoint);
+      currentKey = key;
+      lastPoint = p;
+    }
+  }
+  if (lastPoint) {
+    resampled.push(lastPoint);
+  }
+  return resampled;
+}
 
 interface HoveredData {
   time: string;
@@ -389,6 +447,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
   const [isMobile, setIsMobile] = useState<boolean>(false);
   const [selected, setSelected] = useState<Set<string>>(DEFAULT_SELECTED);
   const [period, setPeriod] = useState<Period>("2Y");
+  const [timeframe, setTimeframe] = useState<Timeframe>("daily");
   const [normalized, setNormalized] = useState<boolean>(false);
   /** HP 필터 ON — 지수에 장기추세 오버레이 + 이탈 패널 (FinJump DSTOA005001/6001) */
   const [hpEnabled, setHpEnabled] = useState<boolean>(true);
@@ -441,10 +500,11 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
 
   const fullFormattedData = useMemo<FakePoint[]>(() => {
     if (!chartData || !chartData.data) return [];
-    return [...chartData.data]
+    const sorted = [...chartData.data]
       .sort((a, b) => (a.date > b.date ? 1 : -1))
       .map((p) => ({ ...p, time: p.date }));
-  }, [chartData]);
+    return resampleMacroData(sorted, timeframe);
+  }, [chartData, timeframe]);
 
   /** 화면에 그릴 구간 (워밍업 제외) */
   const formattedData = useMemo<FakePoint[]>(() => {
@@ -735,7 +795,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     activeIndicators.forEach((ind) => {
       const series = seriesRef.current.get(ind.id);
       if (!series) return;
-      const deviation = applySeriesData(ind, series, fullPts, dStart, normalized, hpEnabled);
+      const deviation = applySeriesData(ind, series, fullPts, dStart, normalized, hpEnabled, timeframe);
       if (deviation) {
         const m = new Map<string, number>();
         deviation.forEach((d) => m.set(d.time, d.value));
@@ -762,7 +822,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selected, normalized, isMobile, chartWidth, chartHeight, hpEnabled, displayStart]);
+  }, [selected, normalized, isMobile, chartWidth, chartHeight, hpEnabled, displayStart, timeframe]);
 
   /* 데이터 갱신 시 기존 시리즈에 반영 */
   useEffect(() => {
@@ -779,6 +839,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
         displayStart,
         normalized,
         hpEnabled,
+        timeframe,
       );
       if (deviation) {
         const m = new Map<string, number>();
@@ -799,7 +860,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
     setTimeout(() => scrollToLatest(), 100);
     setTimeout(() => scrollToLatest(), 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formattedData, fullFormattedData, displayStart]);
+  }, [formattedData, fullFormattedData, displayStart, timeframe]);
 
   const toggleIndicator = (id: string) => {
     setSelected((prev) => {
@@ -846,6 +907,24 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                   }`}
                 >
                   {p}
+                </button>
+              ))}
+            </div>
+            {/* 타임프레임 (일 / 주 / 월) */}
+            <div className="flex items-center gap-1" role="group" aria-label="Timeframe">
+              {TIMEFRAMES.map((tf) => (
+                <button
+                  key={tf.id}
+                  type="button"
+                  onClick={() => setTimeframe(tf.id)}
+                  className={`text-[9px] px-2 py-0.5 rounded border font-bold tracking-tighter transition-all ${
+                    timeframe === tf.id
+                      ? "bg-indigo-600 text-white border-indigo-500 shadow-sm"
+                      : "bg-slate-700 hover:bg-slate-600 text-slate-300 border-slate-600"
+                  }`}
+                  title={`${tf.label}간 단위 리샘플링`}
+                >
+                  {tf.label}
                 </button>
               ))}
             </div>

@@ -367,7 +367,7 @@ class StockHeatmapResponse(BaseModel):
     grouping: str
     period: str
     size_by: str = "marcap"  # "marcap" | "trade_value"
-    color_by: str = "return"  # "return" | "trade_value_growth"
+    color_by: str = "return"  # "return" | "trade_value_growth" | "split"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     effective_start_date: Optional[str] = None

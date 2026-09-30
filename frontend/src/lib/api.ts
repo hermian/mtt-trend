@@ -320,7 +320,7 @@ export type HeatmapPeriod =
   | "CUSTOM";
 
 export type HeatmapSizeBy = "marcap" | "trade_value";
-export type HeatmapColorBy = "return" | "trade_value_growth";
+export type HeatmapColorBy = "return" | "trade_value_growth" | "split";
 
 export interface StockHeatmapItem {
   code: string;

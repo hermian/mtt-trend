@@ -118,18 +118,26 @@ export default function StockHeatmapPage() {
     setSelectedStock(stock);
   }, []);
 
-  const scale = useMemo(() => {
-    if (controls.colorBy === "trade_value_growth") {
-      const growths = (data?.groups ?? []).flatMap((g) =>
-        g.stocks.map((s) => s.trade_value_growth ?? null)
-      );
-      return buildColorScale(growths, controls.period);
-    }
+  const retScale = useMemo(() => {
     const rets = (data?.groups ?? []).flatMap((g) =>
       g.stocks.map((s) => s.ret)
     );
     return buildColorScale(rets, controls.period);
-  }, [data, controls.period, controls.colorBy]);
+  }, [data, controls.period]);
+
+  const growthScale = useMemo(() => {
+    const growths = (data?.groups ?? []).flatMap((g) =>
+      g.stocks.map((s) => s.trade_value_growth ?? null)
+    );
+    return buildColorScale(growths, controls.period);
+  }, [data, controls.period]);
+
+  const scale = useMemo(() => {
+    if (controls.colorBy === "trade_value_growth") {
+      return growthScale;
+    }
+    return retScale;
+  }, [controls.colorBy, growthScale, retScale]);
 
   const drilledGroupData = useMemo(() => {
     if (!drilledGroup || !data) return null;
@@ -156,7 +164,13 @@ export default function StockHeatmapPage() {
             주식 히트맵
           </h1>
           <p className="text-xs text-gray-400 md:text-sm">
-            {GROUPING_TITLES[controls.grouping]}별 한국 주식 {controls.colorBy === "trade_value_growth" ? "거래대금 증가율" : "수익률"} ·{" "}
+            {GROUPING_TITLES[controls.grouping]}별 한국 주식{" "}
+            {controls.colorBy === "trade_value_growth"
+              ? "거래대금 증가율"
+              : controls.colorBy === "split"
+              ? "수익률 + 거래대금 증가율"
+              : "수익률"}{" "}
+            ·{" "}
             {data?.period === "CUSTOM" && data?.effective_start_date && data?.effective_end_date ? (
               <span className="font-medium text-sky-400">
                 지정 기간 ({data.effective_start_date} ~ {data.effective_end_date})
@@ -172,7 +186,11 @@ export default function StockHeatmapPage() {
               {controls.sizeBy === "trade_value" ? "거래대금 크기" : "시가총액 크기"}
             </span> ·{" "}
             <span className="font-medium text-gray-300">
-              {controls.colorBy === "trade_value_growth" ? "거래대금 증가율 색상" : "주가 수익률 색상"}
+              {controls.colorBy === "trade_value_growth"
+                ? "거래대금 증가율 색상"
+                : controls.colorBy === "split"
+                ? "수익률(좌)+대금증가(우) 분할 색상"
+                : "주가 수익률 색상"}
             </span>
             {isFetching && <span className="ml-2 text-gray-500">갱신 중…</span>}
           </p>
@@ -215,7 +233,12 @@ export default function StockHeatmapPage() {
           onSaveDefault={handleSaveDefault}
           onResetDefault={handleResetDefault}
         />
-        <Legend scale={scale} />
+        <Legend
+          scale={scale}
+          growthScale={growthScale}
+          colorBy={controls.colorBy}
+          sizeBy={controls.sizeBy}
+        />
 
         {/* Breadcrumb for drill-down (섹터/업종/테마만) */}
         {drilledGroup && !isMarketGrouping && (
@@ -257,6 +280,7 @@ export default function StockHeatmapPage() {
             <GroupTreemap
               groups={data.groups}
               scale={scale}
+              growthScale={growthScale}
               colorBy={controls.colorBy}
               onDrill={handleDrill}
               onShowStockList={handleOpenModal}
@@ -269,6 +293,7 @@ export default function StockHeatmapPage() {
             <StockTreemap
               group={stockTreemapGroup}
               scale={scale}
+              growthScale={growthScale}
               sizeBy={controls.sizeBy}
               colorBy={controls.colorBy}
               onSelectStock={handleSelectStock}

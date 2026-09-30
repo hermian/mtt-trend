@@ -55,6 +55,7 @@ const SIZE_BY_OPTIONS: Array<{ id: HeatmapSizeBy; label: string; tip: string }> 
 const COLOR_BY_OPTIONS: Array<{ id: HeatmapColorBy; label: string; tip: string }> = [
   { id: "return", label: "주가 수익률", tip: "타일 색상을 주가 등락률(빨강=상승, 파랑=하락) 기준으로 표시합니다" },
   { id: "trade_value_growth", label: "거래대금 증가율", tip: "타일 색상을 직전 동기간 대비 거래대금 증가율(빨강=급증, 파랑=감소) 기준으로 표시합니다" },
+  { id: "split", label: "수익률+대금(반반)", tip: "타일 좌측은 주가 수익률, 우측은 거래대금 증가율 색상으로 분할(반반) 표시합니다" },
 ];
 
 const TRADE_VALUE_GROWTH_PRESETS: Array<{ label: string; value: number | null }> = [

@@ -457,6 +457,12 @@ def test_color_by_and_growth_filter(client, heatmap_env):
     body_growth = res_growth.json()
     assert body_growth["color_by"] == "trade_value_growth"
 
+    # 2-1. color_by=split
+    res_split = client.get("/api/heatmap/stocks?grouping=sector&period=1D&color_by=split")
+    assert res_split.status_code == 200
+    body_split = res_split.json()
+    assert body_split["color_by"] == "split"
+
     # 3. min_trade_value_growth 필터
     res_filtered = client.get("/api/heatmap/stocks?grouping=sector&period=1D&min_trade_value_growth=999999")
     assert res_filtered.status_code == 200

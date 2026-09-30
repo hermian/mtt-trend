@@ -16,6 +16,7 @@ import { getStreamlitSearchUrl } from "@/lib/streamlitUrl";
 interface GroupTreemapProps {
   groups: StockHeatmapGroup[];
   scale: ColorScale;
+  growthScale?: ColorScale;
   colorBy?: HeatmapColorBy;
   onDrill: (groupName: string) => void;
   onShowStockList?: (groupName: string) => void;
@@ -30,6 +31,7 @@ interface GroupHoverState {
 const GroupTreemapCells = memo(function GroupTreemapCells({
   layout,
   scale,
+  growthScale,
   colorBy = "return",
   onDrill,
   onHoverGroup,
@@ -37,6 +39,7 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
 }: {
   layout: Array<{ item: { g: unknown; weight: number }; rect: Rect }>;
   scale: ColorScale;
+  growthScale?: ColorScale;
   colorBy?: HeatmapColorBy;
   onDrill: (groupName: string) => void;
   onHoverGroup: (group: StockHeatmapGroup, clientX: number, clientY: number) => void;
@@ -46,8 +49,26 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
     <>
       {layout.map(({ item, rect }) => {
         const g = item.g as StockHeatmapGroup;
-        const metricVal = colorBy === "trade_value_growth" ? (g.avg_trade_value_growth ?? null) : (g.avg_return ?? null);
-        const { fill, text } = heatColor(metricVal, scale);
+        const isSplit = colorBy === "split";
+        const retVal = g.avg_return ?? null;
+        const growthVal = g.avg_trade_value_growth ?? null;
+        const retColor = heatColor(retVal, scale);
+        const growthColor = heatColor(growthVal, growthScale ?? scale);
+
+        const fill = isSplit
+          ? undefined
+          : colorBy === "trade_value_growth"
+          ? growthColor.fill
+          : retColor.fill;
+        const text = isSplit
+          ? "#ffffff"
+          : colorBy === "trade_value_growth"
+          ? growthColor.text
+          : retColor.text;
+        const textStyle = isSplit
+          ? { filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.9))" }
+          : undefined;
+
         const cx = rect.x + rect.w / 2;
         const cy = rect.y + rect.h / 2;
 
@@ -86,15 +107,43 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
             }}
             onMouseLeave={onLeaveGroup}
           >
-            <rect
-              x={rect.x}
-              y={rect.y}
-              width={rect.w}
-              height={rect.h}
-              fill={fill}
-              stroke="rgba(0,0,0,0.5)"
-              strokeWidth={1}
-            />
+            {isSplit ? (
+              <>
+                <rect
+                  x={rect.x}
+                  y={rect.y}
+                  width={rect.w / 2}
+                  height={rect.h}
+                  fill={retColor.fill}
+                />
+                <rect
+                  x={rect.x + rect.w / 2}
+                  y={rect.y}
+                  width={rect.w - rect.w / 2}
+                  height={rect.h}
+                  fill={growthVal !== null ? growthColor.fill : retColor.fill}
+                />
+                <rect
+                  x={rect.x}
+                  y={rect.y}
+                  width={rect.w}
+                  height={rect.h}
+                  fill="none"
+                  stroke="rgba(0,0,0,0.5)"
+                  strokeWidth={1}
+                />
+              </>
+            ) : (
+              <rect
+                x={rect.x}
+                y={rect.y}
+                width={rect.w}
+                height={rect.h}
+                fill={fill}
+                stroke="rgba(0,0,0,0.5)"
+                strokeWidth={1}
+              />
+            )}
             {showName && (
               <text
                 x={cx}
@@ -102,6 +151,7 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
                 fontSize={nameFs}
                 fontWeight={700}
                 fill={text}
+                style={textStyle}
                 textAnchor="middle"
                 pointerEvents="none"
               >
@@ -116,9 +166,10 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
                 fontSize={retFs}
                 fontWeight={600}
                 fill={text}
+                style={textStyle}
                 textAnchor="middle"
                 pointerEvents="none"
-                opacity={0.9}
+                opacity={isSplit ? 1 : 0.9}
               >
                 {(() => {
                   const retStr = formatReturn(g.avg_return);
@@ -138,9 +189,10 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
                 y={curY + subFs * 0.85}
                 fontSize={subFs}
                 fill={text}
+                style={textStyle}
                 textAnchor="middle"
                 pointerEvents="none"
-                opacity={0.7}
+                opacity={isSplit ? 0.9 : 0.7}
               >
                 RS {g.rs}
               </text>
@@ -152,9 +204,10 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
                 y={curY + subFs * 0.85}
                 fontSize={subFs}
                 fill={text}
+                style={textStyle}
                 textAnchor="middle"
                 pointerEvents="none"
-                opacity={0.6}
+                opacity={isSplit ? 0.85 : 0.6}
               >
                 {g.stock_count}종목
               </text>
@@ -169,6 +222,7 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
 export const GroupTreemap = memo(function GroupTreemap({
   groups,
   scale,
+  growthScale,
   colorBy = "return",
   onDrill,
   onShowStockList,
@@ -228,6 +282,7 @@ export const GroupTreemap = memo(function GroupTreemap({
         <GroupTreemapCells
           layout={layout}
           scale={scale}
+          growthScale={growthScale}
           colorBy={colorBy}
           onDrill={onDrill}
           onHoverGroup={handleHoverGroup}
@@ -366,6 +421,7 @@ export const GroupTreemap = memo(function GroupTreemap({
 interface StockTreemapProps {
   group: StockHeatmapGroup;
   scale: ColorScale;
+  growthScale?: ColorScale;
   sizeBy?: HeatmapSizeBy;
   colorBy?: HeatmapColorBy;
   onSelectStock?: (stock: StockHeatmapItem) => void;
@@ -384,6 +440,7 @@ interface SelectedState {
 const StockTreemapCells = memo(function StockTreemapCells({
   cells,
   scale,
+  growthScale,
   sizeBy = "marcap",
   colorBy = "return",
   selectedCode,
@@ -393,6 +450,7 @@ const StockTreemapCells = memo(function StockTreemapCells({
 }: {
   cells: Array<{ item: { s: StockHeatmapItem; weight: number }; rect: Rect }>;
   scale: ColorScale;
+  growthScale?: ColorScale;
   sizeBy?: HeatmapSizeBy;
   colorBy?: HeatmapColorBy;
   selectedCode?: string;
@@ -403,8 +461,26 @@ const StockTreemapCells = memo(function StockTreemapCells({
   return (
     <>
       {cells.map(({ item, rect: cr }) => {
-        const metricVal = colorBy === "trade_value_growth" ? (item.s.trade_value_growth ?? null) : item.s.ret;
-        const { fill, text } = heatColor(metricVal, scale);
+        const isSplit = colorBy === "split";
+        const retVal = item.s.ret;
+        const growthVal = item.s.trade_value_growth ?? null;
+        const retColor = heatColor(retVal, scale);
+        const growthColor = heatColor(growthVal, growthScale ?? scale);
+
+        const fill = isSplit
+          ? undefined
+          : colorBy === "trade_value_growth"
+          ? growthColor.fill
+          : retColor.fill;
+        const text = isSplit
+          ? "#ffffff"
+          : colorBy === "trade_value_growth"
+          ? growthColor.text
+          : retColor.text;
+        const textStyle = isSplit
+          ? { filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.9))" }
+          : undefined;
+
         const fs = cr.w > 95 ? 11 : 9.5;
         const subFs = Math.max(8, fs - 2);
         const showRet = cr.w > 58 && cr.h > 36;
@@ -424,15 +500,43 @@ const StockTreemapCells = memo(function StockTreemapCells({
             onMouseLeave={onLeaveStock}
             onClick={(e) => onStockClick(e, item.s)}
           >
-            <rect
-              x={cr.x}
-              y={cr.y}
-              width={cr.w}
-              height={cr.h}
-              fill={fill}
-              stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
-              strokeWidth={isSelectedCell ? 2 : 0.5}
-            />
+            {isSplit ? (
+              <>
+                <rect
+                  x={cr.x}
+                  y={cr.y}
+                  width={cr.w / 2}
+                  height={cr.h}
+                  fill={retColor.fill}
+                />
+                <rect
+                  x={cr.x + cr.w / 2}
+                  y={cr.y}
+                  width={cr.w - cr.w / 2}
+                  height={cr.h}
+                  fill={growthVal !== null ? growthColor.fill : retColor.fill}
+                />
+                <rect
+                  x={cr.x}
+                  y={cr.y}
+                  width={cr.w}
+                  height={cr.h}
+                  fill="none"
+                  stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
+                  strokeWidth={isSelectedCell ? 2 : 0.5}
+                />
+              </>
+            ) : (
+              <rect
+                x={cr.x}
+                y={cr.y}
+                width={cr.w}
+                height={cr.h}
+                fill={fill}
+                stroke={isSelectedCell ? "#ffffff" : "rgba(0,0,0,0.4)"}
+                strokeWidth={isSelectedCell ? 2 : 0.5}
+              />
+            )}
             {showName && (
               <text
                 x={cr.x + 3}
@@ -440,6 +544,7 @@ const StockTreemapCells = memo(function StockTreemapCells({
                 fontSize={fs}
                 fontWeight={600}
                 fill={text}
+                style={textStyle}
                 pointerEvents="none"
               >
                 {truncate(item.s.name, cr.w - 6, fs)}
@@ -452,6 +557,7 @@ const StockTreemapCells = memo(function StockTreemapCells({
                 fontSize={fs - 1}
                 fontWeight={600}
                 fill={text}
+                style={textStyle}
                 pointerEvents="none"
               >
                 {(() => {
@@ -471,7 +577,8 @@ const StockTreemapCells = memo(function StockTreemapCells({
                 y={cr.y + fs * 3 + 4}
                 fontSize={subFs}
                 fill={text}
-                opacity={0.8}
+                style={textStyle}
+                opacity={isSplit ? 1 : 0.8}
                 pointerEvents="none"
               >
                 {sizeBy === "trade_value"
@@ -489,6 +596,7 @@ const StockTreemapCells = memo(function StockTreemapCells({
 export const StockTreemap = memo(function StockTreemap({
   group,
   scale,
+  growthScale,
   sizeBy = "marcap",
   colorBy = "return",
   onSelectStock,
@@ -575,6 +683,7 @@ export const StockTreemap = memo(function StockTreemap({
         <StockTreemapCells
           cells={cells}
           scale={scale}
+          growthScale={growthScale}
           sizeBy={sizeBy}
           colorBy={colorBy}
           selectedCode={selected?.stock.code}

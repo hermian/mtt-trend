@@ -152,6 +152,30 @@ describe("StockHeatmapPage Drill-down State Persistence", () => {
     expect(screen.getByRole("img", { name: "반도체소재 종목 히트맵" })).toBeDefined();
   });
 
+  it("preserves drilledGroup when changing colorBy to split and updates Legend and subtitle", async () => {
+    renderWithQuery(<StockHeatmapPage />);
+
+    // '반도체소재' 그룹 타일 클릭
+    const semiconductorTile = screen.getByText("반도체소재");
+    fireEvent.click(semiconductorTile);
+
+    expect(screen.getByRole("img", { name: "반도체소재 종목 히트맵" })).toBeDefined();
+
+    // '수익률+대금(반반)' 색상 버튼 클릭
+    const splitButton = screen.getByRole("button", { name: "수익률+대금(반반)" });
+    fireEvent.click(splitButton);
+
+    // 드릴다운 상태 유지 확인
+    expect(screen.getByRole("img", { name: "반도체소재 종목 히트맵" })).toBeDefined();
+
+    // 상단 요약 설명 텍스트 업데이트 확인
+    expect(screen.getByText(/수익률\(좌\)\+대금증가\(우\) 분할 색상/)).toBeDefined();
+
+    // Legend에 두 개의 분할 배지 표시 확인
+    expect(screen.getByText("좌측 50%")).toBeDefined();
+    expect(screen.getByText("우측 50%")).toBeDefined();
+  });
+
   it("resets drilledGroup when grouping actually changes", async () => {
     renderWithQuery(<StockHeatmapPage />);
 

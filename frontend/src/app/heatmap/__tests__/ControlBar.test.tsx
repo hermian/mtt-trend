@@ -209,6 +209,10 @@ describe("ControlBar Groupings", () => {
     expect(screen.getByText("색상 기준")).toBeDefined();
     expect(screen.getByRole("button", { name: "주가 수익률" })).toBeDefined();
     expect(screen.getByRole("button", { name: "거래대금 증가율" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "수익률+대금(반반)" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "수익률+대금(반반)" }));
+    expect(handleChange).toHaveBeenCalledWith({ colorBy: "split" });
 
     fireEvent.click(screen.getByRole("button", { name: "거래대금 증가율" }));
     expect(handleChange).toHaveBeenCalledWith({ colorBy: "trade_value_growth" });

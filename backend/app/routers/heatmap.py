@@ -29,7 +29,7 @@ def get_stock_heatmap(
     ),
     period: str = Query("1M", description="수익률 기간: 1D | 5D | 1M | 3M | 6M | 12M | CUSTOM"),
     size_by: str = Query("marcap", description="크기 기준: marcap (시가총액) | trade_value (거래대금)"),
-    color_by: str = Query("return", description="색상 기준: return (주가 수익률) | trade_value_growth (거래대금 증가율)"),
+    color_by: str = Query("return", description="색상 기준: return (주가 수익률) | trade_value_growth (거래대금 증가율) | split (수익률+대금증가율 분할)"),
     start_date: Optional[str] = Query(None, description="시작일 (YYYY-MM-DD)"),
     end_date: Optional[str] = Query(None, description="종료일 (YYYY-MM-DD)"),
     marcap_min: Optional[float] = Query(None, description="시가총액 하한 (억원)"),

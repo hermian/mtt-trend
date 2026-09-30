@@ -146,4 +146,49 @@ describe("TreemapChart Hover Popups", () => {
     );
     expect(screen.getByText("+2.50% / +30.5%")).toBeDefined();
   });
+
+  it("renders split rectangles for left (return) and right (trade value growth) when colorBy='split'", () => {
+    const dualGroup: StockHeatmapGroup = {
+      name: "반도체소재",
+      stock_count: 1,
+      weight: 100,
+      avg_return: 3.5,
+      avg_trade_value_growth: 45.2,
+      rs: 90,
+      stocks: [
+        {
+          code: "005930",
+          name: "삼성전자",
+          market: "KOSPI",
+          marcap: 4000000,
+          trade_value: 120000,
+          trade_value_growth: 30.5,
+          ret: 2.5,
+          weight: 100,
+          rs: 85,
+        },
+      ],
+    };
+
+    // 1. StockTreemap with colorBy="split"
+    const { unmount } = render(
+      <StockTreemap group={dualGroup} scale={mockScale} growthScale={mockScale} colorBy="split" />
+    );
+    const stockTile = screen.getByRole("img", { name: "반도체소재 종목 히트맵" }).querySelector("g");
+    expect(stockTile).not.toBeNull();
+    const rects = stockTile?.querySelectorAll("rect");
+    expect(rects?.length).toBe(3);
+    expect(screen.getByText("+2.50% / +30.5%")).toBeDefined();
+    unmount();
+
+    // 2. GroupTreemap with colorBy="split"
+    render(
+      <GroupTreemap groups={[dualGroup]} scale={mockScale} growthScale={mockScale} colorBy="split" onDrill={vi.fn()} />
+    );
+    const groupTile = screen.getByRole("img", { name: "그룹별 히트맵" }).querySelector("g");
+    expect(groupTile).not.toBeNull();
+    const groupRects = groupTile?.querySelectorAll("rect");
+    expect(groupRects?.length).toBe(3);
+    expect(screen.getByText("+3.50% / +45.2%")).toBeDefined();
+  });
 });

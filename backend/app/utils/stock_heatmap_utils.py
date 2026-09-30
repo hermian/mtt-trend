@@ -40,7 +40,7 @@ PERIOD_TRADING_DAYS = {
 
 VALID_GROUPINGS = ("sector", "industry", "theme", "theme2", "kospi", "kosdaq")
 VALID_SIZE_BY = ("marcap", "trade_value")
-VALID_COLOR_BY = ("return", "trade_value_growth")
+VALID_COLOR_BY = ("return", "trade_value_growth", "split")
 
 # parquet Market 값 → 표시 라벨 (KQ → KOSDAQ)
 _MARKET_LABELS = {

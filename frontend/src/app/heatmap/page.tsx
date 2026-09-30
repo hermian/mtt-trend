@@ -85,11 +85,25 @@ export default function StockHeatmapPage() {
     return ax.response?.data?.detail ?? "데이터를 불러오는 중 오류가 발생했습니다.";
   })();
 
-  // Reset drill-down when controls change
+  // Reset drill-down only when grouping actually changes
   const handleControlChange = useCallback((patch: Partial<HeatmapControls>) => {
-    setDrilledGroup(null);
-    setControls((prev) => ({ ...prev, ...patch }));
+    setControls((prev) => {
+      if (patch.grouping !== undefined && patch.grouping !== prev.grouping) {
+        setDrilledGroup(null);
+      }
+      return { ...prev, ...patch };
+    });
   }, []);
+
+  // 현재 드릴다운된 그룹이 필터링/데이터 갱신 후 결과 목록에 없으면 그룹 개요로 복귀
+  useEffect(() => {
+    if (drilledGroup && data && !isFetching) {
+      const exists = data.groups.some((g) => g.name === drilledGroup);
+      if (!exists) {
+        setDrilledGroup(null);
+      }
+    }
+  }, [data, drilledGroup, isFetching]);
 
   const handleOpenModal = useCallback((groupName?: string | null) => {
     setModalInitialGroup(groupName ?? null);

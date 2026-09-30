@@ -109,4 +109,41 @@ describe("TreemapChart Hover Popups", () => {
     fireEvent.mouseLeave(firstTile);
     expect(screen.queryByText("💡 박스 클릭 시 상세 차트 및 링크 팝업")).toBeNull();
   });
+
+  it("renders both return and trade value growth on tiles regardless of colorBy", () => {
+    const dualGroup: StockHeatmapGroup = {
+      name: "반도체소재",
+      stock_count: 1,
+      weight: 100,
+      avg_return: 3.5,
+      avg_trade_value_growth: 45.2,
+      rs: 90,
+      stocks: [
+        {
+          code: "005930",
+          name: "삼성전자",
+          market: "KOSPI",
+          marcap: 4000000,
+          trade_value: 120000,
+          trade_value_growth: 30.5,
+          ret: 2.5,
+          weight: 100,
+          rs: 85,
+        },
+      ],
+    };
+
+    // 1. colorBy="return" 일 때
+    const { unmount } = render(
+      <StockTreemap group={dualGroup} scale={mockScale} colorBy="return" />
+    );
+    expect(screen.getByText("+2.50% / +30.5%")).toBeDefined();
+    unmount();
+
+    // 2. colorBy="trade_value_growth" 일 때도 둘 다 표시되어야 함
+    render(
+      <StockTreemap group={dualGroup} scale={mockScale} colorBy="trade_value_growth" />
+    );
+    expect(screen.getByText("+2.50% / +30.5%")).toBeDefined();
+  });
 });

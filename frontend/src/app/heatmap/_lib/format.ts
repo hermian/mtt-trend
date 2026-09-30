@@ -8,11 +8,29 @@ export function formatMarcap(eok: number): string {
   return `${Math.round(eok).toLocaleString("ko-KR")}억`;
 }
 
+/** 거래대금(억원) → "4.3조" / "1,250억" */
+export function formatTradeValue(eok: number | null | undefined): string {
+  if (eok === null || eok === undefined || isNaN(eok)) return "-";
+  if (eok >= 10000) {
+    const jo = eok / 10000;
+    const fixed = jo >= 100 ? jo.toFixed(0) : jo.toFixed(1).replace(/\.0$/, "");
+    return `${fixed}조`;
+  }
+  return `${Math.round(eok).toLocaleString("ko-KR")}억`;
+}
+
 /** 수익률(%) → "+12.34%" / "-5.23%" / "N/A" */
 export function formatReturn(ret: number | null): string {
   if (ret === null) return "N/A";
   const sign = ret > 0 ? "+" : "";
   return `${sign}${ret.toFixed(2)}%`;
+}
+
+/** 거래대금 증가율(%) → "+45.2%" / "-12.0%" / "N/A" */
+export function formatTradeValueGrowth(growth: number | null | undefined): string {
+  if (growth === null || growth === undefined || isNaN(growth)) return "N/A";
+  const sign = growth > 0 ? "+" : "";
+  return `${sign}${growth.toFixed(1)}%`;
 }
 
 /** 범례 라벨: 부호 + 소수점 1자리 */

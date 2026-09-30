@@ -11,7 +11,7 @@ import {
 } from "lightweight-charts";
 import { useReturnComparison } from "@/hooks/useReturnComparison";
 import { getStreamlitSearchUrl } from "@/lib/streamlitUrl";
-import { formatMarcap, formatReturn } from "../_lib/format";
+import { formatMarcap, formatReturn, formatTradeValue } from "../_lib/format";
 import type { StockHeatmapItem } from "@/lib/api";
 import { toChartTime } from "@/app/trend/_components/_lib/chartTime";
 
@@ -293,6 +293,30 @@ export function StockDetailModal({
                   {formatMarcap(stock.marcap)}
                 </span>
               </div>
+              {stock.trade_value !== null && stock.trade_value !== undefined && (
+                <div>
+                  대금({periodLabel}):{" "}
+                  <span className="font-semibold text-gray-200">
+                    {formatTradeValue(stock.trade_value)}
+                  </span>
+                </div>
+              )}
+              {stock.trade_value_1d !== null && stock.trade_value_1d !== undefined && (
+                <div>
+                  당일:{" "}
+                  <span className="font-semibold text-gray-200">
+                    {formatTradeValue(stock.trade_value_1d)}
+                  </span>
+                </div>
+              )}
+              {stock.trade_value_5d !== null && stock.trade_value_5d !== undefined && (
+                <div>
+                  5일평균:{" "}
+                  <span className="font-semibold text-gray-200">
+                    {formatTradeValue(stock.trade_value_5d)}
+                  </span>
+                </div>
+              )}
               {stock.ret !== null && stock.ret !== undefined && (
                 <div>
                   {periodLabel} 수익률:{" "}

@@ -5,10 +5,14 @@ import { ControlBar, type HeatmapControls } from "../_components/ControlBar";
 const defaultControls: HeatmapControls = {
   grouping: "sector",
   period: "1D",
+  sizeBy: "marcap",
+  colorBy: "return",
   startDate: null,
   endDate: null,
   marcapMin: null,
   marcapMax: null,
+  tradeValueMin: null,
+  minTradeValueGrowth: null,
   minRet: null,
   minRs: null,
   mmt: null,
@@ -35,13 +39,13 @@ describe("ControlBar RS Filter", () => {
     const handleChange = vi.fn();
     render(<ControlBar value={defaultControls} onChange={handleChange} />);
 
-    // Find custom input for RS filter (3rd input with placeholder "최저")
+    // Find custom input for RS filter (RS custom input is the last "최저" placeholder)
     const inputs = screen.getAllByPlaceholderText("최저");
-    const rsInput = inputs[inputs.length - 1]; // RS custom input is the last "최저" placeholder
+    const rsInput = inputs[inputs.length - 1];
 
     fireEvent.change(rsInput, { target: { value: "75" } });
 
-    // Apply button for RS section is the 3rd "적용" button
+    // Apply button for RS section is the last "적용" button
     const applyButtons = screen.getAllByText("적용");
     const rsApplyBtn = applyButtons[applyButtons.length - 1];
 
@@ -163,10 +167,14 @@ describe("ControlBar Groupings", () => {
     expect(handleChange).toHaveBeenCalledWith({
       grouping: "theme2",
       period: "1D",
+      sizeBy: "marcap",
+      colorBy: "return",
       startDate: null,
       endDate: null,
       marcapMin: null,
       marcapMax: null,
+      tradeValueMin: null,
+      minTradeValueGrowth: null,
       minRet: null,
       minRs: null,
       mmt: null,
@@ -180,6 +188,53 @@ describe("ControlBar Groupings", () => {
 
     fireEvent.click(screen.getByText("업종"));
     expect(handleChange).toHaveBeenCalledWith({ grouping: "industry" });
+  });
+
+  it("renders sizeBy options and handles click", () => {
+    const handleChange = vi.fn();
+    render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    expect(screen.getByText("크기 기준")).toBeDefined();
+    expect(screen.getByRole("button", { name: "시가총액" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "거래대금" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "거래대금" }));
+    expect(handleChange).toHaveBeenCalledWith({ sizeBy: "trade_value" });
+  });
+
+  it("renders colorBy options and handles click", () => {
+    const handleChange = vi.fn();
+    render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    expect(screen.getByText("색상 기준")).toBeDefined();
+    expect(screen.getByRole("button", { name: "주가 수익률" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "거래대금 증가율" })).toBeDefined();
+
+    fireEvent.click(screen.getByRole("button", { name: "거래대금 증가율" }));
+    expect(handleChange).toHaveBeenCalledWith({ colorBy: "trade_value_growth" });
+  });
+
+  it("renders trade value presets and handles click", () => {
+    const handleChange = vi.fn();
+    render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    expect(screen.getByText("50억+")).toBeDefined();
+    expect(screen.getByText("100억+")).toBeDefined();
+
+    fireEvent.click(screen.getByText("100억+"));
+    expect(handleChange).toHaveBeenCalledWith({ tradeValueMin: 100 });
+  });
+
+  it("renders trade value growth presets and handles click", () => {
+    const handleChange = vi.fn();
+    render(<ControlBar value={defaultControls} onChange={handleChange} />);
+
+    expect(screen.getByText("0%+(증가)")).toBeDefined();
+    expect(screen.getByText("50%+")).toBeDefined();
+    expect(screen.getByText("100%+(2배)")).toBeDefined();
+
+    fireEvent.click(screen.getByText("100%+(2배)"));
+    expect(handleChange).toHaveBeenCalledWith({ minTradeValueGrowth: 100 });
   });
 });
 

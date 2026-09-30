@@ -2,15 +2,19 @@
 
 import { memo, useState } from "react";
 import clsx from "clsx";
-import type { HeatmapGrouping, HeatmapPeriod } from "@/lib/api";
+import type { HeatmapGrouping, HeatmapPeriod, HeatmapSizeBy, HeatmapColorBy } from "@/lib/api";
 
 export interface HeatmapControls {
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  sizeBy: HeatmapSizeBy;
+  colorBy: HeatmapColorBy;
   startDate: string | null;
   endDate: string | null;
   marcapMin: number | null;
   marcapMax: number | null;
+  tradeValueMin: number | null;
+  minTradeValueGrowth: number | null;
   minRet: number | null;
   minRs: number | null;
   mmt: number[] | null;
@@ -41,6 +45,34 @@ const PERIODS: Array<{ id: HeatmapPeriod; label: string }> = [
   { id: "6M", label: "6M" },
   { id: "12M", label: "12M" },
   { id: "CUSTOM", label: "기간 지정" },
+];
+
+const SIZE_BY_OPTIONS: Array<{ id: HeatmapSizeBy; label: string; tip: string }> = [
+  { id: "marcap", label: "시가총액", tip: "타일 크기를 시가총액 기준으로 표시합니다" },
+  { id: "trade_value", label: "거래대금", tip: "타일 크기를 선택 기간의 일평균 거래대금 기준으로 표시합니다" },
+];
+
+const COLOR_BY_OPTIONS: Array<{ id: HeatmapColorBy; label: string; tip: string }> = [
+  { id: "return", label: "주가 수익률", tip: "타일 색상을 주가 등락률(빨강=상승, 파랑=하락) 기준으로 표시합니다" },
+  { id: "trade_value_growth", label: "거래대금 증가율", tip: "타일 색상을 직전 동기간 대비 거래대금 증가율(빨강=급증, 파랑=감소) 기준으로 표시합니다" },
+];
+
+const TRADE_VALUE_GROWTH_PRESETS: Array<{ label: string; value: number | null }> = [
+  { label: "전체", value: null },
+  { label: "0%+(증가)", value: 0 },
+  { label: "30%+", value: 30 },
+  { label: "50%+", value: 50 },
+  { label: "100%+(2배)", value: 100 },
+  { label: "200%+(3배)", value: 200 },
+];
+
+const TRADE_VALUE_PRESETS: Array<{ label: string; value: number | null }> = [
+  { label: "전체", value: null },
+  { label: "50억+", value: 50 },
+  { label: "100억+", value: 100 },
+  { label: "300억+", value: 300 },
+  { label: "500억+", value: 500 },
+  { label: "1000억+", value: 1000 },
 ];
 
 const MARCAP_PRESETS: Array<{
@@ -140,6 +172,8 @@ export const ControlBar = memo(function ControlBar({
 }: ControlBarProps) {
   const [minInput, setMinInput] = useState("");
   const [maxInput, setMaxInput] = useState("");
+  const [tradeValInput, setTradeValInput] = useState("");
+  const [tradeValGrowthInput, setTradeValGrowthInput] = useState("");
   const [retInput, setRetInput] = useState("");
   const [rsInput, setRsInput] = useState("");
 
@@ -152,6 +186,20 @@ export const ControlBar = memo(function ControlBar({
     onChange({
       marcapMin: min !== null && Number.isFinite(min) && min >= 0 ? min : null,
       marcapMax: max !== null && Number.isFinite(max) && max > 0 ? max : null,
+    });
+  };
+
+  const applyCustomTradeVal = () => {
+    const val = tradeValInput.trim() === "" ? null : Number(tradeValInput);
+    onChange({
+      tradeValueMin: val !== null && Number.isFinite(val) && val >= 0 ? val : null,
+    });
+  };
+
+  const applyCustomTradeValGrowth = () => {
+    const val = tradeValGrowthInput.trim() === "" ? null : Number(tradeValGrowthInput);
+    onChange({
+      minTradeValueGrowth: val !== null && Number.isFinite(val) ? val : null,
     });
   };
 
@@ -203,6 +251,8 @@ export const ControlBar = memo(function ControlBar({
       // 테마2 버튼: 기본값은 1일, 시가총액 전체, 수익률 전체, RS 필터 전체, MMT 필터 전체, 표시 개수 전체
       setMinInput("");
       setMaxInput("");
+      setTradeValInput("");
+      setTradeValGrowthInput("");
       setRetInput("");
       setRsInput("");
       setCustomStart("");
@@ -210,10 +260,14 @@ export const ControlBar = memo(function ControlBar({
       onChange({
         grouping: "theme2",
         period: "1D",
+        sizeBy: "marcap",
+        colorBy: "return",
         startDate: null,
         endDate: null,
         marcapMin: null,
         marcapMax: null,
+        tradeValueMin: null,
+        minTradeValueGrowth: null,
         minRet: null,
         minRs: null,
         mmt: null,
@@ -325,6 +379,38 @@ export const ControlBar = memo(function ControlBar({
         )}
       </div>
 
+      {/* 크기 기준 */}
+      <div className="flex items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">크기 기준</span>
+        {SIZE_BY_OPTIONS.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            title={s.tip}
+            className={btnClass(value.sizeBy === s.id)}
+            onClick={() => onChange({ sizeBy: s.id })}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {/* 색상 기준 */}
+      <div className="flex items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">색상 기준</span>
+        {COLOR_BY_OPTIONS.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            title={c.tip}
+            className={btnClass(value.colorBy === c.id)}
+            onClick={() => onChange({ colorBy: c.id })}
+          >
+            {c.label}
+          </button>
+        ))}
+      </div>
+
       {/* 시가총액 */}
       <div className="flex flex-wrap items-center gap-1">
         <span className="mr-1 text-xs text-gray-500">시가총액</span>
@@ -362,6 +448,85 @@ export const ControlBar = memo(function ControlBar({
         <button
           type="button"
           onClick={applyCustom}
+          className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
+        >
+          적용
+        </button>
+      </div>
+
+      {/* 거래대금 필터 */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">
+          거래대금{value.period === "1D" ? "" : "(일평균)"}
+        </span>
+        {TRADE_VALUE_PRESETS.map((t) => (
+          <button
+            key={t.label}
+            type="button"
+            className={btnClass(value.tradeValueMin === t.value)}
+            onClick={() => {
+              setTradeValInput("");
+              onChange({ tradeValueMin: t.value });
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-gray-500">직접입력</span>
+        <input
+          type="number"
+          min={0}
+          placeholder="최저"
+          value={tradeValInput}
+          onChange={(e) => setTradeValInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyCustomTradeVal();
+          }}
+          className="w-16 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+        />
+        <span className="text-xs text-gray-500">억 이상</span>
+        <button
+          type="button"
+          onClick={applyCustomTradeVal}
+          className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
+        >
+          적용
+        </button>
+      </div>
+
+      {/* 거래대금 증가율 필터 */}
+      <div className="flex flex-wrap items-center gap-1">
+        <span className="mr-1 text-xs text-gray-500">
+          대금 증가{value.period === "1D" ? "(20MA대비)" : "(직전대비)"}
+        </span>
+        {TRADE_VALUE_GROWTH_PRESETS.map((tg) => (
+          <button
+            key={tg.label}
+            type="button"
+            className={btnClass(value.minTradeValueGrowth === tg.value)}
+            onClick={() => {
+              setTradeValGrowthInput("");
+              onChange({ minTradeValueGrowth: tg.value });
+            }}
+          >
+            {tg.label}
+          </button>
+        ))}
+        <span className="ml-2 text-xs text-gray-500">직접입력</span>
+        <input
+          type="number"
+          placeholder="최저"
+          value={tradeValGrowthInput}
+          onChange={(e) => setTradeValGrowthInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") applyCustomTradeValGrowth();
+          }}
+          className="w-16 rounded-md border border-gray-700 bg-gray-800 px-2 py-1 text-xs text-gray-200 placeholder-gray-500 focus:border-sky-500 focus:outline-none"
+        />
+        <span className="text-xs text-gray-500">% 이상</span>
+        <button
+          type="button"
+          onClick={applyCustomTradeValGrowth}
           className="rounded-md bg-gray-700 px-2.5 py-1.5 text-xs font-semibold text-gray-200 transition-colors hover:bg-gray-600"
         >
           적용

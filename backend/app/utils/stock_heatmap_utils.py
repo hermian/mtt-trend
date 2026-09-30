@@ -39,6 +39,8 @@ PERIOD_TRADING_DAYS = {
 }
 
 VALID_GROUPINGS = ("sector", "industry", "theme", "theme2", "kospi", "kosdaq")
+VALID_SIZE_BY = ("marcap", "trade_value")
+VALID_COLOR_BY = ("return", "trade_value_growth")
 
 # parquet Market 값 → 표시 라벨 (KQ → KOSDAQ)
 _MARKET_LABELS = {
@@ -140,10 +142,16 @@ def _is_duckdb_lock_error(exc: BaseException) -> bool:
 @lru_cache(maxsize=128)
 def _compute_custom_period_returns_cached(
     price_db_str: str, price_db_mtime: float, start_date_str: str, end_date_str: str
-) -> tuple[Optional[str], Optional[str], Dict[str, Optional[float]]]:
+) -> tuple[
+    Optional[str],
+    Optional[str],
+    Dict[str, Optional[float]],
+    Dict[str, Optional[float]],
+    Dict[str, Optional[float]],
+]:
     price_db = Path(price_db_str)
     if not price_db.is_file():
-        return None, None, {}
+        return None, None, {}, {}, {}
 
     escaped = str(price_db.resolve()).replace("'", "''")
     con = duckdb.connect(":memory:")
@@ -165,9 +173,16 @@ def _compute_custom_period_returns_cached(
         ).fetchone()
 
         if not eff_row or not eff_row[0] or not eff_row[1]:
-            return None, None, {}
+            return None, None, {}, {}, {}
 
         eff_end, eff_start = str(eff_row[0]), str(eff_row[1])
+
+        # CUSTOM 기간의 거래일 수 계산
+        cnt_row = con.execute(
+            "SELECT COUNT(DISTINCT 날짜) FROM sp.stock_price WHERE 날짜 >= ? AND 날짜 <= ?",
+            [eff_start, eff_end],
+        ).fetchone()
+        n_days = int(cnt_row[0]) if (cnt_row and cnt_row[0]) else 1
 
         rows = con.execute(
             """
@@ -182,22 +197,51 @@ def _compute_custom_period_returns_cached(
                        ROW_NUMBER() OVER (PARTITION BY 종목코드 ORDER BY 날짜 DESC) AS rn
                 FROM sp.stock_price
                 WHERE 날짜 <= ?
+            ),
+            period_val AS (
+                SELECT 종목코드 AS code,
+                       AVG((종가 * 거래량) / 100000000.0) AS avg_tval
+                FROM sp.stock_price
+                WHERE 날짜 >= ? AND 날짜 <= ?
+                GROUP BY 종목코드
+            ),
+            ranked_before AS (
+                SELECT 종목코드 AS code,
+                       (종가 * 거래량) / 100000000.0 AS tval,
+                       ROW_NUMBER() OVER (PARTITION BY 종목코드 ORDER BY 날짜 DESC) AS rn
+                FROM sp.stock_price
+                WHERE 날짜 < ?
+            ),
+            prev_period_val AS (
+                SELECT code, AVG(tval) AS avg_prev_tval
+                FROM ranked_before
+                WHERE rn <= ?
+                GROUP BY code
             )
-            SELECT e.code, s.close_start, e.close_end
+            SELECT e.code, s.close_start, e.close_end, pv.avg_tval, ppv.avg_prev_tval
             FROM (SELECT code, close_end FROM end_p WHERE rn = 1) e
             JOIN (SELECT code, close_start FROM start_p WHERE rn = 1) s ON e.code = s.code
+            LEFT JOIN period_val pv ON e.code = pv.code
+            LEFT JOIN prev_period_val ppv ON e.code = ppv.code
             """,
-            [eff_end, eff_start],
+            [eff_end, eff_start, eff_start, eff_end, eff_start, n_days],
         ).fetchall()
 
         rets: Dict[str, Optional[float]] = {}
-        for code, c_start, c_end in rows:
+        tvals: Dict[str, Optional[float]] = {}
+        growths: Dict[str, Optional[float]] = {}
+        for code, c_start, c_end, avg_tval, avg_prev_tval in rows:
             if c_start and c_end and c_start > 0:
                 rets[code] = round((c_end - c_start) / c_start * 100, 2)
             else:
                 rets[code] = None
+            tvals[code] = round(float(avg_tval), 1) if avg_tval is not None else None
+            if avg_tval is not None and avg_prev_tval is not None and float(avg_prev_tval) > 0:
+                growths[code] = round((float(avg_tval) - float(avg_prev_tval)) / float(avg_prev_tval) * 100, 2)
+            else:
+                growths[code] = None
 
-        return eff_start, eff_end, rets
+        return eff_start, eff_end, rets, tvals, growths
     finally:
         con.close()
 
@@ -258,17 +302,20 @@ def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str,
     try:
         parquet_cols = [col[0] for col in con.execute("DESCRIBE SELECT * FROM read_parquet(?)", [str(part_path)]).fetchall()]
         mmt_col_sql = "MMT" if "MMT" in parquet_cols else "NULL AS MMT"
+        tval_col_sql = '"거래대금" AS TradeValue' if "거래대금" in parquet_cols else "NULL AS TradeValue"
 
         attrs = con.execute(
             f"""
             SELECT Code, Name, Market, Sector, WICS,
-                   "테마" AS Themes, Marcap, RS_Rating, {mmt_col_sql}
+                   "테마" AS Themes, Marcap, RS_Rating, {mmt_col_sql}, {tval_col_sql}
             FROM read_parquet(?)
             """,
             [str(part_path)],
         ).fetchall()
 
         rets_by_code: Dict[str, Dict[str, Optional[float]]] = {}
+        trade_values_by_code: Dict[str, Dict[str, Optional[float]]] = {}
+        trade_value_growths_by_code: Dict[str, Dict[str, Optional[float]]] = {}
         if price_db.is_file():
             escaped = str(Path(price_db).resolve()).replace("'", "''")
             try:
@@ -282,10 +329,27 @@ def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str,
                 f"MAX(CASE WHEN rn={days + 1} THEN close END) AS c_{key}"
                 for key, days in PERIOD_TRADING_DAYS.items()
             )
+            tv_cols = ",\n".join(
+                (
+                    f"MAX(CASE WHEN rn=1 THEN tval END) AS tv_1D"
+                    if key == "1D"
+                    else f"AVG(CASE WHEN rn<={days} THEN tval END) AS tv_{key}"
+                )
+                for key, days in PERIOD_TRADING_DAYS.items()
+            )
+            tv_prev_cols = ",\n".join(
+                (
+                    f"AVG(CASE WHEN rn>=2 AND rn<=21 THEN tval END) AS tv_prev_1D"
+                    if key == "1D"
+                    else f"AVG(CASE WHEN rn>={days + 1} AND rn<={days * 2} THEN tval END) AS tv_prev_{key}"
+                )
+                for key, days in PERIOD_TRADING_DAYS.items()
+            )
             rows = con.execute(
                 f"""
                 WITH ranked AS (
                     SELECT 종목코드 AS code, 종가 AS close,
+                           (종가 * 거래량) / 100000000.0 AS tval,
                            ROW_NUMBER() OVER (
                                 PARTITION BY 종목코드 ORDER BY 날짜 DESC
                            ) AS rn
@@ -294,13 +358,16 @@ def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str,
                 )
                 SELECT code,
                        MAX(CASE WHEN rn=1 THEN close END) AS c0,
-                       {offsets}
+                       {offsets},
+                       {tv_cols},
+                       {tv_prev_cols}
                 FROM ranked
-                WHERE rn <= 253
+                WHERE rn <= 505
                 GROUP BY code
                 """,
                 [as_of],
             ).fetchall()
+            n_p = len(PERIOD_TRADING_DAYS)
             for row in rows:
                 code, c0 = row[0], row[1]
                 if not c0:
@@ -310,17 +377,36 @@ def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str,
                     cn = row[2 + i]
                     rets[key] = round((c0 - cn) / cn * 100, 2) if cn else None
                 rets_by_code[code] = rets
+
+                tvals: Dict[str, Optional[float]] = {}
+                tval_growths: Dict[str, Optional[float]] = {}
+                for i, key in enumerate(PERIOD_TRADING_DAYS):
+                    tvn = row[2 + n_p + i]
+                    tv_prev = row[2 + 2 * n_p + i]
+                    tvals[key] = round(float(tvn), 1) if tvn is not None else None
+                    if tvn is not None and tv_prev is not None and float(tv_prev) > 0:
+                        tval_growths[key] = round((float(tvn) - float(tv_prev)) / float(tv_prev) * 100, 2)
+                    else:
+                        tval_growths[key] = None
+                trade_values_by_code[code] = tvals
+                trade_value_growths_by_code[code] = tval_growths
     finally:
         con.close()
 
     frame_rows: List[Dict[str, Any]] = []
-    for code, name, market, sector, wics, themes, marcap, rs_rating, mmt_val in attrs:
+    for code, name, market, sector, wics, themes, marcap, rs_rating, mmt_val, trade_val_parquet in attrs:
         themes_list = (
             [t.strip() for t in str(themes).split(",") if t.strip()] if themes else []
         )
         custom_themes_list = custom_themes_by_code.get(code, [])
         market_raw = (str(market).strip().upper() if market else "") or None
         mmt_int = int(round(mmt_val)) if mmt_val is not None and not (isinstance(mmt_val, float) and math.isnan(mmt_val)) else None
+        tvals_stock = trade_values_by_code.get(code, {})
+        if "1D" not in tvals_stock and trade_val_parquet is not None:
+            tvals_stock["1D"] = round(float(trade_val_parquet), 1)
+        tv_1d = tvals_stock.get("1D")
+        tv_5d = tvals_stock.get("5D")
+        tv_20d = tvals_stock.get("1M")
         frame_rows.append(
             {
                 "code": code,
@@ -335,6 +421,11 @@ def _build_base_frame(rs_dir: Path, price_db: Path, theme_db: Path) -> Dict[str,
                 "rs": int(round(rs_rating)) if rs_rating is not None else None,
                 "mmt": mmt_int,
                 "rets": rets_by_code.get(code, {}),
+                "trade_values": tvals_stock,
+                "trade_value_growths": trade_value_growths_by_code.get(code, {}),
+                "trade_value_1d": tv_1d,
+                "trade_value_5d": tv_5d,
+                "trade_value_20d": tv_20d,
             }
         )
 
@@ -386,10 +477,14 @@ def _group_key(stock: Dict[str, Any], grouping: str) -> List[str]:
 def shape_heatmap(
     grouping: str,
     period: str = "1M",
+    size_by: str = "marcap",
+    color_by: str = "return",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     marcap_min: Optional[float] = None,
     marcap_max: Optional[float] = None,
+    trade_value_min: Optional[float] = None,
+    min_trade_value_growth: Optional[float] = None,
     min_ret: Optional[float] = None,
     min_rs: Optional[int] = None,
     mmt: Optional[Union[str, List[int], int]] = None,
@@ -398,13 +493,17 @@ def shape_heatmap(
     """
     Build the heatmap payload.
 
-    marcap_min/marcap_max are in 억원 (100M KRW). limit=0 means all stocks;
-    otherwise the top-N by market cap (applied before grouping).
+    marcap_min/marcap_max/trade_value_min are in 억원 (100M KRW). limit=0 means all stocks;
+    otherwise the top-N (applied before grouping).
     """
     if grouping not in VALID_GROUPINGS:
         raise ValueError(f"invalid grouping: {grouping}")
     if period != "CUSTOM" and period not in PERIOD_TRADING_DAYS:
         raise ValueError(f"invalid period: {period}")
+    if size_by not in VALID_SIZE_BY:
+        raise ValueError(f"invalid size_by: {size_by}")
+    if color_by not in VALID_COLOR_BY:
+        raise ValueError(f"invalid color_by: {color_by}")
 
     frame = get_base_frame()
     rows = frame["rows"]
@@ -421,7 +520,7 @@ def shape_heatmap(
         price_db = get_stock_price_db_path()
         price_mtime = price_db.stat().st_mtime if price_db.is_file() else 0.0
 
-        eff_start, eff_end, custom_rets = _compute_custom_period_returns_cached(
+        eff_start, eff_end, custom_rets, custom_tvals, custom_growths = _compute_custom_period_returns_cached(
             str(price_db), price_mtime, req_start, req_end
         )
         effective_start_date = eff_start
@@ -433,6 +532,14 @@ def shape_heatmap(
             rets_copy = dict(r["rets"])
             rets_copy["CUSTOM"] = custom_rets.get(r["code"])
             r_copy["rets"] = rets_copy
+
+            tvals_copy = dict(r.get("trade_values", {}))
+            tvals_copy["CUSTOM"] = custom_tvals.get(r["code"])
+            r_copy["trade_values"] = tvals_copy
+
+            growths_copy = dict(r.get("trade_value_growths", {}))
+            growths_copy["CUSTOM"] = custom_growths.get(r["code"])
+            r_copy["trade_value_growths"] = growths_copy
             new_rows.append(r_copy)
         rows = new_rows
 
@@ -446,6 +553,19 @@ def shape_heatmap(
         rows = [r for r in rows if r["marcap"] >= marcap_min]
     if marcap_max is not None:
         rows = [r for r in rows if r["marcap"] <= marcap_max]
+    if trade_value_min is not None:
+        rows = [
+            r
+            for r in rows
+            if (r.get("trade_values", {}).get(period) or r.get("trade_value_1d") or 0.0) >= trade_value_min
+        ]
+    if min_trade_value_growth is not None:
+        rows = [
+            r
+            for r in rows
+            if r.get("trade_value_growths", {}).get(period) is not None
+            and r["trade_value_growths"][period] >= min_trade_value_growth
+        ]
     if min_ret is not None:
         rows = [
             r
@@ -483,8 +603,14 @@ def shape_heatmap(
             for r in rows
             if r.get("mmt") is not None and r["mmt"] in mmt_set
         ]
+
     if limit and limit > 0:
-        rows = sorted(rows, key=lambda r: r["marcap"], reverse=True)[:limit]
+        sort_key = (
+            (lambda r: r.get("trade_values", {}).get(period) or r.get("trade_value_1d") or 0.0)
+            if size_by == "trade_value"
+            else (lambda r: r["marcap"])
+        )
+        rows = sorted(rows, key=sort_key, reverse=True)[:limit]
 
     groups: Dict[str, List[Dict[str, Any]]] = {}
     for stock in rows:
@@ -498,8 +624,23 @@ def shape_heatmap(
         rs_vals = [m["rs"] for m in members if m["rs"] is not None]
         stocks = []
         weight_sum = 0.0
+        total_trade_val = 0.0
         for m in members:
-            weight = math.cbrt(m["marcap"]) if m["marcap"] > 0 else 0.0
+            # 선택 기간 거래대금
+            tval = m.get("trade_values", {}).get(period)
+            if tval is None:
+                tval = m.get("trade_value_1d")
+            if tval:
+                total_trade_val += tval
+
+            tv_growth = m.get("trade_value_growths", {}).get(period)
+
+            if size_by == "trade_value":
+                val = tval if (tval and tval > 0) else 0.0
+                weight = math.cbrt(val) if val > 0 else 0.0
+            else:
+                weight = math.cbrt(m["marcap"]) if m["marcap"] > 0 else 0.0
+
             weight_sum += weight
             stocks.append(
                 {
@@ -511,9 +652,18 @@ def shape_heatmap(
                     "rs": m["rs"],
                     "mmt": m.get("mmt"),
                     "weight": round(weight, 3),
+                    "trade_value": round(tval, 1) if tval is not None else None,
+                    "trade_value_1d": m.get("trade_value_1d"),
+                    "trade_value_5d": m.get("trade_value_5d"),
+                    "trade_value_20d": m.get("trade_value_20d"),
+                    "trade_value_growth": round(tv_growth, 2) if tv_growth is not None else None,
                 }
             )
         stocks.sort(key=lambda s: s["weight"], reverse=True)
+        growths = [m.get("trade_value_growths", {}).get(period) for m in members]
+        valid_growths = [g for g in growths if g is not None]
+        avg_tv_growth = round(sum(valid_growths) / len(valid_growths), 2) if valid_growths else None
+
         group_payloads.append(
             {
                 "name": name,
@@ -523,6 +673,8 @@ def shape_heatmap(
                 ),
                 "rs": int(round(sum(rs_vals) / len(rs_vals))) if rs_vals else None,
                 "weight": round(weight_sum, 3),
+                "total_trade_value": round(total_trade_val, 1) if total_trade_val > 0 else None,
+                "avg_trade_value_growth": avg_tv_growth,
                 "stocks": stocks,
             }
         )
@@ -534,12 +686,16 @@ def shape_heatmap(
         "as_of_time": frame.get("as_of_time"),
         "grouping": grouping,
         "period": period,
+        "size_by": size_by,
+        "color_by": color_by,
         "start_date": start_date,
         "end_date": end_date,
         "effective_start_date": effective_start_date,
         "effective_end_date": effective_end_date,
         "marcap_min": marcap_min,
         "marcap_max": marcap_max,
+        "trade_value_min": trade_value_min,
+        "min_trade_value_growth": min_trade_value_growth,
         "min_ret": min_ret,
         "min_rs": min_rs,
         "mmt": mmt,

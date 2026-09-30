@@ -317,6 +317,9 @@ export type HeatmapPeriod =
   | "12M"
   | "CUSTOM";
 
+export type HeatmapSizeBy = "marcap" | "trade_value";
+export type HeatmapColorBy = "return" | "trade_value_growth";
+
 export interface StockHeatmapItem {
   code: string;
   name: string;
@@ -325,7 +328,12 @@ export interface StockHeatmapItem {
   ret: number | null; // 선택 기간 수익률 (%)
   rs: number | null;
   mmt?: number | null;
-  weight: number; // ∛(시가총액)
+  weight: number; // ∛(시가총액 또는 거래대금)
+  trade_value?: number | null; // 선택 기간 일평균 거래대금 (억원)
+  trade_value_1d?: number | null; // 당일 거래대금 (억원)
+  trade_value_5d?: number | null; // 5일 평균 거래대금 (억원)
+  trade_value_20d?: number | null; // 20일 평균 거래대금 (억원)
+  trade_value_growth?: number | null; // 직전 동기간 대비 거래대금 증가율 (%)
 }
 
 export interface StockHeatmapGroup {
@@ -334,6 +342,8 @@ export interface StockHeatmapGroup {
   avg_return: number | null;
   rs: number | null;
   weight: number;
+  total_trade_value?: number | null;
+  avg_trade_value_growth?: number | null;
   stocks: StockHeatmapItem[];
 }
 
@@ -342,12 +352,16 @@ export interface StockHeatmapResponse {
   as_of_time?: string | null;
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  size_by: HeatmapSizeBy;
+  color_by: HeatmapColorBy;
   start_date?: string | null;
   end_date?: string | null;
   effective_start_date?: string | null;
   effective_end_date?: string | null;
   marcap_min: number | null;
   marcap_max: number | null;
+  trade_value_min?: number | null;
+  min_trade_value_growth?: number | null;
   min_ret?: number | null;
   min_rs?: number | null;
   mmt?: string | number[] | number | null;
@@ -359,10 +373,14 @@ export interface StockHeatmapResponse {
 export interface StockHeatmapParams {
   grouping: HeatmapGrouping;
   period: HeatmapPeriod;
+  sizeBy?: HeatmapSizeBy;
+  colorBy?: HeatmapColorBy;
   startDate?: string | null;
   endDate?: string | null;
   marcapMin?: number | null;
   marcapMax?: number | null;
+  tradeValueMin?: number | null;
+  minTradeValueGrowth?: number | null;
   minRet?: number | null;
   minRs?: number | null;
   mmt?: number[] | number | string | null;
@@ -787,10 +805,14 @@ export const api = {
         params: {
           grouping: params.grouping,
           period: params.period,
+          size_by: params.sizeBy ?? undefined,
+          color_by: params.colorBy ?? undefined,
           start_date: params.startDate ?? undefined,
           end_date: params.endDate ?? undefined,
           marcap_min: params.marcapMin ?? undefined,
           marcap_max: params.marcapMax ?? undefined,
+          trade_value_min: params.tradeValueMin ?? undefined,
+          min_trade_value_growth: params.minTradeValueGrowth ?? undefined,
           min_ret: params.minRet ?? undefined,
           min_rs: params.minRs ?? undefined,
           mmt: mmtParam,

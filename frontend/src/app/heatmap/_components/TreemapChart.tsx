@@ -1,21 +1,22 @@
 "use client";
 
 import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, useEffect } from "react";
-import type { StockHeatmapGroup, StockHeatmapItem } from "@/lib/api";
+import type { HeatmapSizeBy, HeatmapColorBy, StockHeatmapGroup, StockHeatmapItem } from "@/lib/api";
 import { squarify, type Rect } from "../_lib/treemap";
 import { heatColor, type ColorScale } from "../_lib/colors";
-import { formatMarcap, formatReturn, truncate } from "../_lib/format";
+import { formatMarcap, formatReturn, formatTradeValue, formatTradeValueGrowth, truncate } from "../_lib/format";
 import { getStreamlitSearchUrl } from "@/lib/streamlitUrl";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Group-level treemap  (Step 1)
  * Each cell = one group (sector / industry / theme), sized by weight,
- * coloured by avg_return.  Clicking a cell drills into the group.
+ * coloured by avg_return or avg_trade_value_growth.  Clicking a cell drills into the group.
  * ──────────────────────────────────────────────────────────────────────── */
 
 interface GroupTreemapProps {
   groups: StockHeatmapGroup[];
   scale: ColorScale;
+  colorBy?: HeatmapColorBy;
   onDrill: (groupName: string) => void;
   onShowStockList?: (groupName: string) => void;
 }
@@ -29,12 +30,14 @@ interface GroupHoverState {
 const GroupTreemapCells = memo(function GroupTreemapCells({
   layout,
   scale,
+  colorBy = "return",
   onDrill,
   onHoverGroup,
   onLeaveGroup,
 }: {
   layout: Array<{ item: { g: unknown; weight: number }; rect: Rect }>;
   scale: ColorScale;
+  colorBy?: HeatmapColorBy;
   onDrill: (groupName: string) => void;
   onHoverGroup: (group: StockHeatmapGroup, clientX: number, clientY: number) => void;
   onLeaveGroup: () => void;
@@ -43,8 +46,8 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
     <>
       {layout.map(({ item, rect }) => {
         const g = item.g as StockHeatmapGroup;
-        const ret = g.avg_return ?? 0;
-        const { fill, text } = heatColor(ret, scale);
+        const metricVal = colorBy === "trade_value_growth" ? (g.avg_trade_value_growth ?? null) : (g.avg_return ?? null);
+        const { fill, text } = heatColor(metricVal, scale);
         const cx = rect.x + rect.w / 2;
         const cy = rect.y + rect.h / 2;
 
@@ -117,7 +120,9 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
                 pointerEvents="none"
                 opacity={0.9}
               >
-                {formatReturn(g.avg_return)}
+                {colorBy === "trade_value_growth"
+                  ? `대금 ${formatTradeValueGrowth(g.avg_trade_value_growth)}`
+                  : formatReturn(g.avg_return)}
               </text>
             )}
             {showRet && showRS && (curY += retFs + lineGap)}
@@ -158,6 +163,7 @@ const GroupTreemapCells = memo(function GroupTreemapCells({
 export const GroupTreemap = memo(function GroupTreemap({
   groups,
   scale,
+  colorBy = "return",
   onDrill,
   onShowStockList,
 }: GroupTreemapProps) {
@@ -216,6 +222,7 @@ export const GroupTreemap = memo(function GroupTreemap({
         <GroupTreemapCells
           layout={layout}
           scale={scale}
+          colorBy={colorBy}
           onDrill={onDrill}
           onHoverGroup={handleHoverGroup}
           onLeaveGroup={handleLeaveGroup}
@@ -232,7 +239,7 @@ export const GroupTreemap = memo(function GroupTreemap({
           }}
         >
           <div className="font-bold text-gray-100">{hover.group.name}</div>
-          <div className="mt-1 flex gap-3 text-gray-300">
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-gray-300">
             <span>
               평균 수익률{" "}
               <span
@@ -250,6 +257,11 @@ export const GroupTreemap = memo(function GroupTreemap({
               </span>
             </span>
             <span>{hover.group.stock_count}종목</span>
+            {hover.group.total_trade_value !== null && hover.group.total_trade_value !== undefined && (
+              <span className="text-gray-300">
+                대금 {formatTradeValue(hover.group.total_trade_value)}
+              </span>
+            )}
             {hover.group.rs !== null && (
               <span className="text-gray-400">RS {hover.group.rs}</span>
             )}
@@ -282,6 +294,9 @@ export const GroupTreemap = memo(function GroupTreemap({
                       {formatReturn(s.ret)}
                     </span>
                     <span className="text-gray-400">
+                      대금 {formatTradeValue(s.trade_value)}
+                    </span>
+                    <span className="text-gray-500">
                       시총 {formatMarcap(s.marcap)}
                     </span>
                     {s.rs !== null && (
@@ -317,6 +332,8 @@ export const GroupTreemap = memo(function GroupTreemap({
 interface StockTreemapProps {
   group: StockHeatmapGroup;
   scale: ColorScale;
+  sizeBy?: HeatmapSizeBy;
+  colorBy?: HeatmapColorBy;
   onSelectStock?: (stock: StockHeatmapItem) => void;
 }
 
@@ -333,6 +350,8 @@ interface SelectedState {
 const StockTreemapCells = memo(function StockTreemapCells({
   cells,
   scale,
+  sizeBy = "marcap",
+  colorBy = "return",
   selectedCode,
   onStockClick,
   onHoverStock,
@@ -340,6 +359,8 @@ const StockTreemapCells = memo(function StockTreemapCells({
 }: {
   cells: Array<{ item: { s: StockHeatmapItem; weight: number }; rect: Rect }>;
   scale: ColorScale;
+  sizeBy?: HeatmapSizeBy;
+  colorBy?: HeatmapColorBy;
   selectedCode?: string;
   onStockClick: (e: React.MouseEvent, stock: StockHeatmapItem) => void;
   onHoverStock: (stock: StockHeatmapItem, clientX: number, clientY: number) => void;
@@ -348,9 +369,12 @@ const StockTreemapCells = memo(function StockTreemapCells({
   return (
     <>
       {cells.map(({ item, rect: cr }) => {
-        const { fill, text } = heatColor(item.s.ret, scale);
+        const metricVal = colorBy === "trade_value_growth" ? (item.s.trade_value_growth ?? null) : item.s.ret;
+        const { fill, text } = heatColor(metricVal, scale);
         const fs = cr.w > 95 ? 11 : 9.5;
+        const subFs = Math.max(8, fs - 2);
         const showRet = cr.w > 58 && cr.h > 36;
+        const showVal = cr.w > 65 && cr.h > 50;
         const showName = showRet || (cr.w > 36 && cr.h > 16);
         const isSelectedCell = selectedCode === item.s.code;
 
@@ -390,12 +414,29 @@ const StockTreemapCells = memo(function StockTreemapCells({
             {showRet && (
               <text
                 x={cr.x + 3}
-                y={cr.y + fs * 2 + 4}
+                y={cr.y + fs * 2 + 3}
                 fontSize={fs - 1}
+                fontWeight={colorBy === "trade_value_growth" ? 600 : undefined}
                 fill={text}
                 pointerEvents="none"
               >
-                {formatReturn(item.s.ret)}
+                {colorBy === "trade_value_growth"
+                  ? `증가 ${formatTradeValueGrowth(item.s.trade_value_growth)}`
+                  : formatReturn(item.s.ret)}
+              </text>
+            )}
+            {showVal && (
+              <text
+                x={cr.x + 3}
+                y={cr.y + fs * 3 + 4}
+                fontSize={subFs}
+                fill={text}
+                opacity={0.8}
+                pointerEvents="none"
+              >
+                {sizeBy === "trade_value"
+                  ? `대금 ${formatTradeValue(item.s.trade_value)}`
+                  : `시총 ${formatMarcap(item.s.marcap)}`}
               </text>
             )}
           </g>
@@ -408,6 +449,8 @@ const StockTreemapCells = memo(function StockTreemapCells({
 export const StockTreemap = memo(function StockTreemap({
   group,
   scale,
+  sizeBy = "marcap",
+  colorBy = "return",
   onSelectStock,
 }: StockTreemapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -492,6 +535,8 @@ export const StockTreemap = memo(function StockTreemap({
         <StockTreemapCells
           cells={cells}
           scale={scale}
+          sizeBy={sizeBy}
+          colorBy={colorBy}
           selectedCode={selected?.stock.code}
           onStockClick={handleStockClick}
           onHoverStock={handleHoverStock}
@@ -502,10 +547,10 @@ export const StockTreemap = memo(function StockTreemap({
       {/* 데스크톱 마우스 호버 툴팁 */}
       {hover && !selected && (
         <div
-          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2 text-xs shadow-xl backdrop-blur-sm"
+          className="pointer-events-none fixed z-50 rounded-lg border border-gray-700 bg-gray-900/95 px-3 py-2.5 text-xs shadow-xl backdrop-blur-sm min-w-[240px]"
           style={{
-            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 240)),
-            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 150)),
+            left: Math.max(10, Math.min(hover.x + 14, window.innerWidth - 270)),
+            top: Math.max(10, Math.min(hover.y + 14, window.innerHeight - 200)),
           }}
         >
           <div className="font-bold text-gray-100">
@@ -515,7 +560,7 @@ export const StockTreemap = memo(function StockTreemap({
             </span>
           </div>
           <div className="mt-1 text-gray-400">{group.name}</div>
-          <div className="mt-1 flex gap-3">
+          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
             <span
               className={
                 hover.stock.ret === null
@@ -539,7 +584,52 @@ export const StockTreemap = memo(function StockTreemap({
               <span className="text-gray-400">MMT {hover.stock.mmt}</span>
             )}
           </div>
-          <div className="mt-1 text-[10px] text-sky-400">
+
+          {/* 거래대금 상세 정보 */}
+          <div className="mt-2 space-y-1 border-t border-gray-800 pt-1.5 text-[11px]">
+            <div className="flex items-center justify-between text-gray-300">
+              <span className="text-gray-400">거래대금(선택주기):</span>
+              <span className="font-semibold text-gray-100">
+                {formatTradeValue(hover.stock.trade_value)}
+              </span>
+            </div>
+            {hover.stock.trade_value_growth !== null && hover.stock.trade_value_growth !== undefined && (
+              <div className="flex items-center justify-between text-gray-300">
+                <span className="text-gray-400">대금 증가율:</span>
+                <span
+                  className={
+                    hover.stock.trade_value_growth > 0
+                      ? "font-bold text-red-400"
+                      : hover.stock.trade_value_growth < 0
+                        ? "font-bold text-blue-400"
+                        : "font-semibold text-gray-300"
+                  }
+                >
+                  {formatTradeValueGrowth(hover.stock.trade_value_growth)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-[10px] text-gray-400">
+              <span>당일 {formatTradeValue(hover.stock.trade_value_1d)}</span>
+              <span>5일평균 {formatTradeValue(hover.stock.trade_value_5d)}</span>
+              <span>20일평균 {formatTradeValue(hover.stock.trade_value_20d)}</span>
+            </div>
+            {hover.stock.trade_value_1d && hover.stock.trade_value_20d && hover.stock.trade_value_20d > 0 && (
+              (() => {
+                const ratio = Math.round((hover.stock.trade_value_1d / hover.stock.trade_value_20d) * 100);
+                if (ratio >= 200) {
+                  return (
+                    <div className="pt-0.5 text-right font-bold text-amber-400 text-[10px]">
+                      🔥 20일평균 대비 {ratio}% 유입
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
+          </div>
+
+          <div className="mt-2 text-[10px] text-sky-400">
             💡 박스 클릭 시 상세 차트 및 링크 팝업
           </div>
         </div>
@@ -570,31 +660,73 @@ export const StockTreemap = memo(function StockTreemap({
             </button>
           </div>
 
-          <div className="mt-3 flex items-center justify-between border-t border-gray-800 pt-3 text-sm">
-            <div className="flex gap-3">
-              <span
-                className={
-                  selected.stock.ret === null
-                    ? "font-semibold text-gray-400"
-                    : selected.stock.ret > 0
-                      ? "font-semibold text-red-400"
-                      : selected.stock.ret < 0
-                        ? "font-semibold text-blue-400"
-                        : "font-semibold text-gray-300"
-                }
-              >
-                {formatReturn(selected.stock.ret)}
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-gray-800 pt-3 text-sm">
+            <span
+              className={
+                selected.stock.ret === null
+                  ? "font-semibold text-gray-400"
+                  : selected.stock.ret > 0
+                    ? "font-semibold text-red-400"
+                    : selected.stock.ret < 0
+                      ? "font-semibold text-blue-400"
+                      : "font-semibold text-gray-300"
+              }
+            >
+              {formatReturn(selected.stock.ret)}
+            </span>
+            <span className="text-gray-300 text-xs">
+              시총 {formatMarcap(selected.stock.marcap)}
+            </span>
+            {selected.stock.rs !== null && (
+              <span className="text-gray-400 text-xs">RS {selected.stock.rs}</span>
+            )}
+            {selected.stock.mmt !== undefined && selected.stock.mmt !== null && (
+              <span className="text-gray-400 text-xs">MMT {selected.stock.mmt}</span>
+            )}
+          </div>
+
+          {/* 거래대금 상세 정보 */}
+          <div className="mt-2 space-y-1 border-t border-gray-800 pt-2 text-xs">
+            <div className="flex items-center justify-between text-gray-300">
+              <span className="text-gray-400 text-[11px]">거래대금(선택주기):</span>
+              <span className="font-semibold text-gray-100">
+                {formatTradeValue(selected.stock.trade_value)}
               </span>
-              <span className="text-gray-300">
-                시총 {formatMarcap(selected.stock.marcap)}
-              </span>
-              {selected.stock.rs !== null && (
-                <span className="text-gray-400">RS {selected.stock.rs}</span>
-              )}
-              {selected.stock.mmt !== undefined && selected.stock.mmt !== null && (
-                <span className="text-gray-400">MMT {selected.stock.mmt}</span>
-              )}
             </div>
+            {selected.stock.trade_value_growth !== null && selected.stock.trade_value_growth !== undefined && (
+              <div className="flex items-center justify-between text-gray-300">
+                <span className="text-gray-400 text-[11px]">대금 증가율:</span>
+                <span
+                  className={
+                    selected.stock.trade_value_growth > 0
+                      ? "font-bold text-red-400"
+                      : selected.stock.trade_value_growth < 0
+                        ? "font-bold text-blue-400"
+                        : "font-semibold text-gray-300"
+                  }
+                >
+                  {formatTradeValueGrowth(selected.stock.trade_value_growth)}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between text-[11px] text-gray-400">
+              <span>당일 {formatTradeValue(selected.stock.trade_value_1d)}</span>
+              <span>5일평균 {formatTradeValue(selected.stock.trade_value_5d)}</span>
+              <span>20일평균 {formatTradeValue(selected.stock.trade_value_20d)}</span>
+            </div>
+            {selected.stock.trade_value_1d && selected.stock.trade_value_20d && selected.stock.trade_value_20d > 0 && (
+              (() => {
+                const ratio = Math.round((selected.stock.trade_value_1d / selected.stock.trade_value_20d) * 100);
+                if (ratio >= 200) {
+                  return (
+                    <div className="pt-0.5 text-right font-bold text-amber-400 text-[10px]">
+                      🔥 20일평균 대비 {ratio}% 유입
+                    </div>
+                  );
+                }
+                return null;
+              })()
+            )}
           </div>
 
           <div className="mt-3 grid grid-cols-1 gap-2">

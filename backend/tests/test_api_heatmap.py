@@ -412,7 +412,58 @@ def test_theme2_dynamic_invalidation(client, heatmap_env):
     assert "000030" in robot_stocks
 
 
+def test_size_by_trade_value_and_min_filter(client, heatmap_env):
+    """size_by=trade_value 및 trade_value_min 필터 동작 검증."""
+    # 1. 기본 size_by=marcap
+    res = client.get("/api/heatmap/stocks?grouping=sector&period=1D")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["size_by"] == "marcap"
+    stock_a = next(s for g in body["groups"] for s in g["stocks"] if s["code"] == "000010")
+    assert stock_a["trade_value"] is not None
+    assert stock_a["trade_value_1d"] is not None
+
+    # 2. size_by=trade_value
+    res_tv = client.get("/api/heatmap/stocks?grouping=sector&period=1D&size_by=trade_value")
+    assert res_tv.status_code == 200
+    body_tv = res_tv.json()
+    assert body_tv["size_by"] == "trade_value"
+
+    # 3. trade_value_min filter
+    res_filtered = client.get("/api/heatmap/stocks?grouping=sector&period=1D&trade_value_min=999999999")
+    assert res_filtered.status_code == 200
+    body_filtered = res_filtered.json()
+    assert body_filtered["stock_count"] == 0
+
+    # 4. invalid size_by
+    res_invalid = client.get("/api/heatmap/stocks?grouping=sector&size_by=invalid_value")
+    assert res_invalid.status_code == 400
 
 
+def test_color_by_and_growth_filter(client, heatmap_env):
+    """color_by 및 min_trade_value_growth 파라미터와 trade_value_growth 계산 검증."""
+    # 1. 기본 color_by=return
+    res = client.get("/api/heatmap/stocks?grouping=sector&period=1D")
+    assert res.status_code == 200
+    body = res.json()
+    assert body["color_by"] == "return"
+    stock_a = next(s for g in body["groups"] for s in g["stocks"] if s["code"] == "000010")
+    # trade_value_growth 필드가 응답에 포함되어 있는지 확인
+    assert "trade_value_growth" in stock_a
 
+    # 2. color_by=trade_value_growth
+    res_growth = client.get("/api/heatmap/stocks?grouping=sector&period=1D&color_by=trade_value_growth")
+    assert res_growth.status_code == 200
+    body_growth = res_growth.json()
+    assert body_growth["color_by"] == "trade_value_growth"
+
+    # 3. min_trade_value_growth 필터
+    res_filtered = client.get("/api/heatmap/stocks?grouping=sector&period=1D&min_trade_value_growth=999999")
+    assert res_filtered.status_code == 200
+    body_filtered = res_filtered.json()
+    assert body_filtered["stock_count"] == 0
+
+    # 4. invalid color_by
+    res_invalid = client.get("/api/heatmap/stocks?grouping=sector&color_by=invalid_color")
+    assert res_invalid.status_code == 400
 

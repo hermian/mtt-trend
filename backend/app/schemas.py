@@ -341,7 +341,12 @@ class HeatmapStockItem(BaseModel):
     ret: Optional[float] = None  # 선택 기간 수익률 (%)
     rs: Optional[int] = None
     mmt: Optional[int] = None
-    weight: float  # ∛(시가총액), 트리맵 면적 가중치
+    weight: float  # 트리맵 면적 가중치
+    trade_value: Optional[float] = None  # 선택 기간 일평균 거래대금 (억원)
+    trade_value_1d: Optional[float] = None  # 당일 거래대금 (억원)
+    trade_value_5d: Optional[float] = None  # 5일 평균 거래대금 (억원)
+    trade_value_20d: Optional[float] = None  # 20일 평균 거래대금 (억원)
+    trade_value_growth: Optional[float] = None  # 직전 동기간 대비 거래대금 증가율 (%)
 
 
 class HeatmapGroupItem(BaseModel):
@@ -350,6 +355,8 @@ class HeatmapGroupItem(BaseModel):
     avg_return: Optional[float] = None  # 구성종목 단순평균 수익률 (%)
     rs: Optional[int] = None  # 구성종목 RS 평균
     weight: float  # 구성종목 weight 합계
+    total_trade_value: Optional[float] = None  # 구성종목 선택 기간 거래대금 합계 (억원)
+    avg_trade_value_growth: Optional[float] = None  # 구성종목 거래대금 증가율 단순평균 (%)
     stocks: List[HeatmapStockItem]
 
 
@@ -358,12 +365,16 @@ class StockHeatmapResponse(BaseModel):
     as_of_time: Optional[str] = None
     grouping: str
     period: str
+    size_by: str = "marcap"  # "marcap" | "trade_value"
+    color_by: str = "return"  # "return" | "trade_value_growth"
     start_date: Optional[str] = None
     end_date: Optional[str] = None
     effective_start_date: Optional[str] = None
     effective_end_date: Optional[str] = None
     marcap_min: Optional[float] = None
     marcap_max: Optional[float] = None
+    trade_value_min: Optional[float] = None  # 최소 거래대금 (억원)
+    min_trade_value_growth: Optional[float] = None  # 최소 거래대금 증가율 (%)
     min_ret: Optional[float] = None
     min_rs: Optional[int] = None
     mmt: Optional[Union[str, List[int], int]] = None

@@ -216,6 +216,10 @@ def temp_macro_db(monkeypatch):
         ("2026-06-01", "CPIAUCSL", 3.4),
         ("2026-06-01", "CPILFESL", 2.5),
         ("2026-06-01", "CRESTKCPIXSLTRM159SFRBATL", 2.3),
+        # US 10Y Breakeven Inflation Rate
+        ("2026-06-24", "T10YIE", 2.25),
+        ("2026-06-25", "T10YIE", 2.26),
+        ("2026-06-26", "T10YIE", 2.27),
     ])
     
     cursor.executemany("""
@@ -293,6 +297,7 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["vxn"] == 22.0
     assert pt["us_2y"] == 4.2
     assert pt["us_10y"] == 4.5
+    assert pt["us_10y_breakeven"] == 2.25
     assert pt["us_30y"] == 4.8
     assert pt["us_spread"] == 0.3
     assert pt["kr_10y"] == 3.1

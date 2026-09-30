@@ -122,6 +122,8 @@ export interface MacroDataPoint {
   vxn?: number;
   us_2y?: number;
   us_10y?: number;
+  /** US 10년물 기대 인플레이션율 (%) — FRED T10YIE */
+  us_10y_breakeven?: number;
   us_30y?: number;
   us_spread?: number;
   kr_10y?: number;

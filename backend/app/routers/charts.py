@@ -325,6 +325,7 @@ def get_macro_chart_data(
       cpi        fred_macro(CPIAUCSL) — 미국 CPI YoY (%), 월간 발표, 조회 시 ffill
       core_cpi   fred_macro(CPILFESL) — 미국 Core CPI YoY (%), 월간 발표, 조회 시 ffill
       sticky_cpi fred_macro(CRESTKCPIXSLTRM159SFRBATL) — 미국 Core Sticky CPI less Shelter YoY (%), 월간 발표, 조회 시 ffill
+      us_10y_breakeven fred_macro(T10YIE) — 10년물 인플레이션 기대치 (%), 조회 시 ffill
       credit_kospi / credit_kosdaq          kofia_credit_loan — 신용잔고 (조원)
       credit_kospi_pct / credit_kosdaq_pct  신용잔고 ÷ index_ohlcv.marcap (%)
       forced_sell / forced_sell_ratio       kofia_stock_money — 미수금 반대매매 (억원, %)
@@ -409,6 +410,7 @@ def get_macro_chart_data(
         "cpi": "CPIAUCSL",
         "core_cpi": "CPILFESL",
         "sticky_cpi": "CRESTKCPIXSLTRM159SFRBATL",
+        "us_10y_breakeven": "T10YIE",
     }
     # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
     ism_ffill_series_id = "ISM_PMI"
@@ -614,6 +616,7 @@ def get_macro_chart_data(
             vxn=p.get("vxn"),
             us_2y=p.get("us_2y"),
             us_10y=p.get("us_10y"),
+            us_10y_breakeven=p.get("us_10y_breakeven"),
             us_30y=p.get("us_30y"),
             us_spread=p.get("us_spread"),
             kr_10y=p.get("kr_10y"),

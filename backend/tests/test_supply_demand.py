@@ -149,3 +149,58 @@ def test_supply_demand_price_profile_invalid_code():
     response = client.get("/api/charts/supply-demand/price-profile?code=INVALID_CODE_999")
     assert response.status_code == 404
 
+
+def test_supply_demand_kospi_index():
+    """KOSPI 지수 수급 분석 API 테스트 (#68)."""
+    response = client.get("/api/charts/supply-demand?code=kospi")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == "kospi"
+    assert data["name"] == "KOSPI"
+    assert data["unit"] == "억원"
+    assert len(data["series"]) > 1000
+    assert len(data["table_supply"]) > 0
+    assert len(data["period_sums"]) == 13
+
+    # price profile
+    pp_res = client.get("/api/charts/supply-demand/price-profile?code=kospi&preset=1y")
+    assert pp_res.status_code == 200
+    pp_data = pp_res.json()
+    assert pp_data["code"] == "kospi"
+    assert pp_data["unit"] == "억원"
+    assert len(pp_data["bins"]) >= 3
+
+
+def test_supply_demand_kosdaq_index():
+    """KOSDAQ 지수 수급 분석 API 테스트 (#68)."""
+    response = client.get("/api/charts/supply-demand?code=kosdaq")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["code"] == "kosdaq"
+    assert data["name"] == "KOSDAQ"
+    assert data["unit"] == "억원"
+    assert len(data["series"]) > 1000
+    assert len(data["period_sums"]) == 13
+
+    # period sums
+    ps_res = client.get("/api/charts/supply-demand/period-sums?code=kosdaq&sum_start=2026-01-01&sum_end=2026-10-01")
+    assert ps_res.status_code == 200
+    ps_data = ps_res.json()
+    assert ps_data["code"] == "kosdaq"
+    assert ps_data["unit"] == "억원"
+    assert len(ps_data["period_sums"]) == 13
+
+
+def test_supply_demand_single_day_period_sums():
+    """시작일과 종료일이 동일한 단일 거래일 커스텀 합계 계산 검증."""
+    ps_res = client.get("/api/charts/supply-demand/period-sums?code=kosdaq&sum_start=2026-10-01&sum_end=2026-10-01")
+    assert ps_res.status_code == 200
+    data = ps_res.json()
+    assert data["sum_period"]["start"] == "2026-10-01"
+    assert data["sum_period"]["end"] == "2026-10-01"
+    sums = {item["investor"]: item["value"] for item in data["period_sums"]}
+    assert round(sums["개인"], 2) == -7781.71
+    assert round(sums["외국인"], 2) == 2321.26
+    assert round(sums["기관계"], 2) == 6213.33
+
+

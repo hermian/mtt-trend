@@ -31,13 +31,18 @@ function cellColor(col: string, val: unknown, label: string): string {
   return "text-gray-900";
 }
 
-function formatCell(col: string, val: unknown, label: string): string {
+function formatCell(col: string, val: unknown, label: string, isIndex = false): string {
   if (val == null || val === "") return "—";
   if (typeof val !== "number") return String(val);
   if (label === "보유비중" || label === "지수선도" || label === "분산추이") {
     return `${val.toFixed(2)}%`;
   }
-  if (col === "종가" || col === "거래량") {
+  if (col === "종가") {
+    return isIndex
+      ? val.toFixed(2)
+      : val.toLocaleString(undefined, { maximumFractionDigits: 0 });
+  }
+  if (col === "거래량") {
     return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
   }
   return val.toLocaleString(undefined, { maximumFractionDigits: 0 });
@@ -56,21 +61,35 @@ function GenericTable({
   rowKeyField = "label",
   pctMode = false,
   showAllCols = false,
+  unit,
+  isIndex = false,
 }: {
   title: string;
   rows: SupplyDemandTableRow[] | DispersionTableRow[];
   rowKeyField?: string;
   pctMode?: boolean;
   showAllCols?: boolean;
+  unit?: string;
+  isIndex?: boolean;
 }) {
   if (!rows.length) return null;
   const cols = pctMode ? DISPLAY_COLS : TABLE_COLS;
 
   return (
     <div className="space-y-2 sm:space-y-3">
-      <h3 className="text-base font-bold text-gray-800 text-center border-b border-gray-200 pb-2">
-        {title}
-      </h3>
+      <div className="flex items-center justify-between border-b border-gray-200 pb-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-base font-bold text-gray-800">{title}</h3>
+          {!pctMode && unit && (
+            <span className="text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+              단위: {unit}
+            </span>
+          )}
+        </div>
+        <span className="text-[11px] text-gray-400">
+          (단위: {pctMode ? "%" : unit || "주"})
+        </span>
+      </div>
       <div className="overflow-x-auto overscroll-x-contain">
         <table className="w-max min-w-full mx-auto text-[10px] sm:text-[11px] border-collapse dataframe whitespace-nowrap">
           <thead>
@@ -109,7 +128,7 @@ function GenericTable({
                       >
                         {pctMode && typeof val === "number"
                           ? `${(val * 100).toFixed(2)}%`
-                          : formatCell(c, val, label)}
+                          : formatCell(c, val, label, isIndex)}
                       </td>
                     );
                   })}
@@ -128,6 +147,8 @@ export interface SugeubTablesProps {
   tableLds: SupplyDemandTableRow[];
   tableDispersionRecent: DispersionTableRow[];
   tableDispersionPeak: DispersionTableRow[];
+  unit?: string;
+  isIndex?: boolean;
 }
 
 export function SugeubTables({
@@ -135,6 +156,8 @@ export function SugeubTables({
   tableLds,
   tableDispersionRecent,
   tableDispersionPeak,
+  unit,
+  isIndex,
 }: SugeubTablesProps) {
   const [showAllCols, setShowAllCols] = useState(false);
 
@@ -151,8 +174,8 @@ export function SugeubTables({
           상세 열 표시
         </label>
       </div>
-      <GenericTable title="수급 분석표 (상세)" rows={tableSupply} showAllCols={showAllCols} />
-      <GenericTable title="투자자별 매매동향 이동평균 (요약)" rows={tableLds} showAllCols={showAllCols} />
+      <GenericTable title="수급 분석표 (상세)" rows={tableSupply} showAllCols={showAllCols} unit={unit} isIndex={isIndex} />
+      <GenericTable title="투자자별 매매동향 이동평균 (요약)" rows={tableLds} showAllCols={showAllCols} unit={unit} isIndex={isIndex} />
       <div className="space-y-4 sm:space-y-6">
         <h3 className="text-base font-bold text-gray-800 text-center border-b-2 border-gray-200 pb-2">
           분산비율 상세

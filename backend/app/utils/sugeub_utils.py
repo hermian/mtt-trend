@@ -54,17 +54,25 @@ SERIES_ROUND_ND = 2
 # 6 이면 최악 57MB 로, 메모리가 고갈된 이 머신(swap 16/17.4GB)에서 감당 가능한 선이다.
 # ---------------------------------------------------------------------------
 _SUGEUB_CACHE: dict[tuple[str, ...], tuple[float, float, Any]] = {}
-_SUGEUB_CACHE_MAX = 6
+_SUGEUB_CACHE_MAX = 12
+
+FINANCE_KRX_DIR = Path.home() / ".cache" / "finance_krx"
+LEVERAGE_CSV_DIR = Path.home() / ".cache" / "db" / "kodex_leverage"
 
 
-def _db_mtimes() -> tuple[float, float]:
-    def _mtime(path: str) -> float:
-        try:
-            return Path(path).stat().st_mtime
-        except OSError:
-            return 0.0
+def _file_mtime(path: str | Path) -> float:
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return 0.0
 
-    return _mtime(DB_FILE), _mtime(MARCAP_DB)
+
+def _db_mtimes(code: str = "", is_index: bool = False) -> tuple[float, float]:
+    if is_index and code:
+        parquet_path = FINANCE_KRX_DIR / f"{code}_investor.parquet"
+        csv_path = LEVERAGE_CSV_DIR / f"{code}_mtt.csv"
+        return _file_mtime(parquet_path), _file_mtime(csv_path)
+    return _file_mtime(DB_FILE), _file_mtime(MARCAP_DB)
 
 
 def invalidate_sugeub_cache() -> None:
@@ -72,20 +80,29 @@ def invalidate_sugeub_cache() -> None:
     _SUGEUB_CACHE.clear()
 
 
+def _get_mtimes(code: str = "", is_index: bool = False) -> tuple[float, float]:
+    try:
+        return _db_mtimes(code, is_index)
+    except TypeError:
+        return _db_mtimes()
+
+
 def _cached_result(
     key: tuple[str, ...],
+    code: str = "",
+    is_index: bool = False,
 ) -> Optional[Any]:
-    sugeub_mtime, marcap_mtime = _db_mtimes()
+    db1_mtime, db2_mtime = _get_mtimes(code, is_index)
     cached = _SUGEUB_CACHE.get(key)
-    if cached is not None and cached[0] == sugeub_mtime and cached[1] == marcap_mtime:
+    if cached is not None and cached[0] == db1_mtime and cached[1] == db2_mtime:
         return cached[2]
     return None
 
 
-def _store_result(key: tuple[str, ...], result: Any) -> None:
+def _store_result(key: tuple[str, ...], result: Any, code: str = "", is_index: bool = False) -> None:
     if len(_SUGEUB_CACHE) >= _SUGEUB_CACHE_MAX and key not in _SUGEUB_CACHE:
         _SUGEUB_CACHE.pop(next(iter(_SUGEUB_CACHE)))
-    _SUGEUB_CACHE[key] = (*_db_mtimes(), result)
+    _SUGEUB_CACHE[key] = (*_get_mtimes(code, is_index), result)
 
 
 def _parse_date(s: Optional[str]) -> Optional[datetime]:
@@ -115,8 +132,9 @@ def resolve_sum_window(
     end = min(end or data_last, data_last)
 
     start = _parse_date(start_str)
-    if start is not None and start_str and start < end:
+    if start is not None and start_str and start <= end:
         sel["start"] = start_str.strip()
+        sel["preset"] = "custom"
     else:
         days = SUM_PRESETS.get(sum_period)
         if days is not None:
@@ -129,6 +147,78 @@ def resolve_sum_window(
 
     start = max(start, data_first)
     return start, end, sel
+
+
+def resolve_target(code_or_name: str) -> Optional[tuple[str, str, str, bool]]:
+    """(code, name, market, is_index) 반환.
+    KOSPI / KOSDAQ 지수와 개별 KR 주식을 통합 식별.
+    """
+    if not code_or_name:
+        return None
+    normalized = code_or_name.strip().lower()
+    if normalized in ("kospi", "코스피", "^ks11"):
+        return ("kospi", "KOSPI", "KOSPI", True)
+    if normalized in ("kosdaq", "코스닥", "^kq11"):
+        return ("kosdaq", "KOSDAQ", "KOSDAQ", True)
+
+    info = resolve_stock_info(code_or_name, asset_type="stock")
+    if not info:
+        return None
+    code, name, market = info
+    if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR") and not (code.isdigit() and len(code) == 6):
+        return None
+    return (code, name, market, False)
+
+
+def load_index_data(code: str) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """지수 수급 및 시세 로드 (수급 단위: 억원, 시세: 포인트)."""
+    parquet_path = FINANCE_KRX_DIR / f"{code}_investor.parquet"
+    csv_path = LEVERAGE_CSV_DIR / f"{code}_mtt.csv"
+    if not parquet_path.exists() or not csv_path.exists():
+        logger.warning("Index file missing for %s (parquet: %s, csv: %s)", code, parquet_path.exists(), csv_path.exists())
+        return pd.DataFrame(), pd.DataFrame()
+
+    try:
+        raw_df = pd.read_parquet(parquet_path)
+        cols = [c for c in CUMSUM_COLS if c in raw_df.columns]
+        # 원(KRW) → 억원 변환
+        raw_df[cols] = (raw_df[cols] / 1e8).round(SERIES_ROUND_ND)
+        raw_df = raw_df.reset_index()
+        raw_df["일자"] = pd.to_datetime(raw_df["일자"])
+
+        df_csv = pd.read_csv(csv_path)
+        date_col = "Date" if "Date" in df_csv.columns else "date"
+        df_csv["일자"] = pd.to_datetime(df_csv[date_col].astype(str).str[:10])
+        col_rename = {
+            "Open": "시가", "open": "시가",
+            "High": "고가", "high": "고가",
+            "Low": "저가", "low": "저가",
+            "Close": "종가", "close": "종가",
+            "Volume": "거래량", "volume": "거래량",
+        }
+        df_csv = df_csv.rename(columns=col_rename)
+        needed = ["시가", "고가", "저가", "종가", "거래량"]
+        if not all(c in df_csv.columns for c in needed):
+            logger.warning("Index csv missing required columns: %s", csv_path)
+            return pd.DataFrame(), pd.DataFrame()
+
+        price_df = df_csv.set_index("일자")[needed]
+        price_df["등락률"] = price_df["종가"].pct_change() * 100
+        return raw_df, price_df
+    except Exception as exc:
+        logger.warning("Failed to load index data for %s: %s", code, exc)
+        return pd.DataFrame(), pd.DataFrame()
+
+
+def load_target_dataset(code: str, is_index: bool) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """대상 자산(지수 또는 종목)의 (raw_df, price_df)를 반환."""
+    if is_index:
+        return load_index_data(code)
+    raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
+    if raw_df.empty:
+        return pd.DataFrame(), pd.DataFrame()
+    price_df = fetch_price(code, pd.to_datetime(raw_df["일자"]).min(), datetime.now())
+    return raw_df, price_df
 
 
 def load_supply_demand_raw(code: str, start: datetime, end: datetime) -> pd.DataFrame:
@@ -397,24 +487,20 @@ def load_supply_demand_period_sums(
     sum_end: str = "",
 ) -> Optional[dict[str, Any]]:
     """순매수 합계만 재계산 (커스텀 기간). 시계열/테이블은 포함하지 않음."""
-    info = resolve_stock_info(code_or_name, asset_type="stock")
-    if not info:
+    target = resolve_target(code_or_name)
+    if not target:
         return None
-    code, name, market = info
-    if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR") and not (code.isdigit() and len(code) == 6):
-        return None
+    code, name, market, is_index = target
 
     cache_key = ("period_sums", code, "", sum_start or "", sum_end or "")
-    cached = _cached_result(cache_key)
+    cached = _cached_result(cache_key, code, is_index)
     if cached is not None:
         return cached
 
-    raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
-    if raw_df.empty:
+    raw_df, price_df = load_target_dataset(code, is_index)
+    if raw_df.empty or price_df.empty:
         return None
-    price_df = fetch_price(code, pd.to_datetime(raw_df["일자"]).min(), datetime.now())
-    if price_df.empty:
-        return None
+
     df = compute_indicators(build_dataset(raw_df, price_df))
     if df.empty:
         return None
@@ -422,9 +508,11 @@ def load_supply_demand_period_sums(
     data_first, data_last = df.index.min(), df.index.max()
     sum_from, sum_to, sel = resolve_sum_window("", sum_start, sum_end, data_first, data_last)
     label = f"{sum_from:%Y-%m-%d} ~ {sum_to:%Y-%m-%d}"
+    unit = "억원" if is_index else "주"
     result = {
         "code": code,
         "name": name,
+        "unit": unit,
         "sum_period": {
             "preset": sel["preset"],
             "start": sum_from.strftime("%Y-%m-%d"),
@@ -433,7 +521,7 @@ def load_supply_demand_period_sums(
         },
         "period_sums": _compute_period_sums(df, sum_from, sum_to),
     }
-    _store_result(cache_key, result)
+    _store_result(cache_key, result, code, is_index)
     return result
 
 
@@ -443,26 +531,18 @@ def load_supply_demand_analysis(
     sum_start: str = "",
     sum_end: str = "",
 ) -> Optional[dict[str, Any]]:
-    info = resolve_stock_info(code_or_name, asset_type="stock")
-    if not info:
+    target = resolve_target(code_or_name)
+    if not target:
         return None
-    code, name, market = info
-    if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR"):
-        # KR stock only — resolve_stock_info returns KOSPI/KOSDAQ for domestic
-        if not code.isdigit() or len(code) != 6:
-            return None
+    code, name, market, is_index = target
 
     cache_key = ("analysis", code, sum_period or "", sum_start or "", sum_end or "")
-    cached = _cached_result(cache_key)
+    cached = _cached_result(cache_key, code, is_index)
     if cached is not None:
         return cached
 
-    raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
-    if raw_df.empty:
-        return None
-
-    price_df = fetch_price(code, pd.to_datetime(raw_df["일자"]).min(), datetime.now())
-    if price_df.empty:
+    raw_df, price_df = load_target_dataset(code, is_index)
+    if raw_df.empty or price_df.empty:
         return None
 
     df = compute_indicators(build_dataset(raw_df, price_df))
@@ -493,9 +573,11 @@ def load_supply_demand_analysis(
     period_sums = _compute_period_sums(df, sum_from, sum_to)
     period_sums_by_preset = _build_period_sums_by_preset(df, data_first, data_last)
 
+    unit = "억원" if is_index else "주"
     result = {
         "code": code,
         "name": name,
+        "unit": unit,
         "data_first": data_first.strftime("%Y-%m-%d"),
         "data_last": data_last.strftime("%Y-%m-%d"),
         "sum_period": {
@@ -514,7 +596,7 @@ def load_supply_demand_analysis(
         "period_sums_by_preset": period_sums_by_preset,
         "columns": TABLE_BASE_COLS,
     }
-    _store_result(cache_key, result)
+    _store_result(cache_key, result, code, is_index)
     return result
 
 
@@ -555,24 +637,18 @@ def load_supply_demand_price_profile(
     KR 종목 수급별 매물대 (Volume Profile by Investor).
     기본 1y 기준 또는 시작/종료 날짜 커스텀 지정.
     """
-    info = resolve_stock_info(code_or_name, asset_type="stock")
-    if not info:
+    target = resolve_target(code_or_name)
+    if not target:
         return None
-    code, name, market = info
-    if market not in ("KOSPI", "KOSDAQ", "KONEX", "KR") and not (code.isdigit() and len(code) == 6):
-        return None
+    code, name, market, is_index = target
 
     cache_key = ("price_profile", code, preset or "", start_str or "", end_str or "", str(bins_count))
-    cached = _cached_result(cache_key)
+    cached = _cached_result(cache_key, code, is_index)
     if cached is not None:
         return cached
 
-    raw_df = load_supply_demand_raw(code, ALL_TIME_START, datetime.now())
-    if raw_df.empty:
-        return None
-
-    price_df = fetch_price(code, pd.to_datetime(raw_df["일자"]).min(), datetime.now())
-    if price_df.empty:
+    raw_df, price_df = load_target_dataset(code, is_index)
+    if raw_df.empty or price_df.empty:
         return None
 
     df = build_dataset(raw_df, price_df)
@@ -590,7 +666,7 @@ def load_supply_demand_price_profile(
 
     start_dt = _parse_date(start_str)
     used_preset = preset or "1y"
-    if start_dt is not None and start_str and start_dt < end_dt:
+    if start_dt is not None and start_str and start_dt <= end_dt:
         used_preset = "custom"
         start_dt = max(start_dt, data_first)
     elif used_preset == "all":
@@ -686,10 +762,12 @@ def load_supply_demand_price_profile(
         })
 
     label = f"{start_dt:%Y-%m-%d} ~ {end_dt:%Y-%m-%d}"
+    unit = "억원" if is_index else "주"
     result = {
         "code": code,
         "name": name,
         "market": market,
+        "unit": unit,
         "data_first": data_first.strftime("%Y-%m-%d"),
         "data_last": data_last.strftime("%Y-%m-%d"),
         "start": start_dt.strftime("%Y-%m-%d"),
@@ -704,6 +782,6 @@ def load_supply_demand_price_profile(
         "investors": [c for c in DISPLAY_COLS if c in period_df.columns],
         "total_period_sums": total_period_sums,
     }
-    _store_result(cache_key, result)
+    _store_result(cache_key, result, code, is_index)
     return result
 

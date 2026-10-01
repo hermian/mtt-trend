@@ -667,6 +667,7 @@ class PeriodSumsPresetBundle(BaseModel):
 class SupplyDemandPeriodSumsResponse(BaseModel):
     code: str
     name: str
+    unit: str = "주"
     sum_period: SupplyDemandSumPeriod
     period_sums: List[PeriodSumItem]
 
@@ -674,6 +675,7 @@ class SupplyDemandPeriodSumsResponse(BaseModel):
 class SupplyDemandResponse(BaseModel):
     code: str
     name: str
+    unit: str = "주"
     data_first: str
     data_last: str
     sum_period: SupplyDemandSumPeriod
@@ -724,6 +726,7 @@ class SupplyDemandPriceProfileResponse(BaseModel):
     code: str
     name: str
     market: str
+    unit: str = "주"
     data_first: str
     data_last: str
     start: str

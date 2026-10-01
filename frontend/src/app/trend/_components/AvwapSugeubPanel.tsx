@@ -60,8 +60,10 @@ export function AvwapSugeubPanel({
   if (!symbol) {
     return (
       <div className="flex flex-col items-center justify-center flex-1 min-h-[320px] text-gray-500 text-sm px-6 text-center">
-        <p className="text-base font-medium text-gray-700">종목코드(예: 005930)나 종목명(예: 삼성전자)을 입력하세요.</p>
-        <p className="text-xs text-gray-400 mt-2">AVWAP 차트에서 선택한 KR 종목과 자동 연동됩니다.</p>
+        <p className="text-base font-medium text-gray-700">
+          종목코드(예: 005930)나 종목명(예: 삼성전자), 또는 상단 [KOSPI] / [KOSDAQ] 지수를 선택하세요.
+        </p>
+        <p className="text-xs text-gray-400 mt-2">AVWAP 차트에서 선택한 시장 및 KR 종목과 자동 연동됩니다.</p>
       </div>
     );
   }
@@ -79,7 +81,7 @@ export function AvwapSugeubPanel({
     return (
       <div className="flex flex-col items-center justify-center flex-1 min-h-[320px] text-red-600 text-sm px-4 text-center">
         <span>수급 데이터를 불러오는 데 실패했습니다.</span>
-        <span className="text-gray-500 text-xs mt-2">sugeub DB 및 marcap 시세 DB를 확인하세요.</span>
+        <span className="text-gray-500 text-xs mt-2">sugeub DB 및 시세 DB를 확인하세요.</span>
       </div>
     );
   }
@@ -90,15 +92,25 @@ export function AvwapSugeubPanel({
 
   const activePeriodSums = periodSums ?? data.period_sums;
   const activeSumPeriod = sumPeriod ?? data.sum_period;
+  const isIndex = data.code?.toLowerCase() === "kospi" || data.code?.toLowerCase() === "kosdaq";
 
   return (
     <div className="flex-1 overflow-y-auto custom-scrollbar">
       <div className="max-w-[1300px] mx-auto px-2 sm:px-4 py-3 sm:py-6">
         <div className="bg-white rounded-lg shadow-md px-3 sm:px-6 py-5 sm:py-8 space-y-8 sm:space-y-12">
           <header className="text-center space-y-2">
-            <h2 className="text-xl font-bold text-gray-800">종목 분석기</h2>
+            <div className="flex items-center justify-center gap-2">
+              <h2 className="text-xl font-bold text-gray-800">
+                {isIndex ? `${data.name} 지수 수급 분석` : "종목 분석기"}
+              </h2>
+              {data.unit && (
+                <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                  단위: {data.unit}
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-600">
-              {data.name}({data.code})
+              {data.name} ({data.code})
             </p>
             <p className="text-xs text-gray-400">
               데이터: {data.data_first} ~ {data.data_last}
@@ -110,6 +122,8 @@ export function AvwapSugeubPanel({
             tableLds={data.table_lds}
             tableDispersionRecent={data.table_dispersion_recent}
             tableDispersionPeak={data.table_dispersion_peak}
+            unit={data.unit}
+            isIndex={isIndex}
           />
 
           <section className="space-y-6">
@@ -147,6 +161,7 @@ export function AvwapSugeubPanel({
               onCustomStartChange={onCustomSumStartChange}
               onCustomEndChange={onCustomSumEndChange}
               onApplyCustom={onApplyCustomSum}
+              unit={data.unit}
             />
           </section>
 
@@ -156,6 +171,7 @@ export function AvwapSugeubPanel({
               name={data.name}
               defaultFirstDate={data.data_first}
               defaultLastDate={data.data_last}
+              unit={data.unit}
             />
           </section>
         </div>

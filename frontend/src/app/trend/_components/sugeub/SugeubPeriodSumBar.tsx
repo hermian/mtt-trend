@@ -17,11 +17,18 @@ export interface SugeubPeriodSumBarProps {
   onCustomStartChange: (v: string) => void;
   onCustomEndChange: (v: string) => void;
   onApplyCustom: () => void;
+  unit?: string;
 }
 
-function formatSumLabel(value: number): string {
+function formatSumLabel(value: number, unit?: string): string {
   const abs = Math.abs(value);
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  if (unit === "억원") {
+    if (abs >= 10000) {
+      return `${sign}${(abs / 10000).toFixed(1)}조`;
+    }
+    return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}억`;
+  }
   if (abs >= 100000000) {
     return `${sign}${(abs / 100000000).toFixed(1)}억`;
   }
@@ -44,6 +51,7 @@ export function SugeubPeriodSumBar({
   onCustomStartChange,
   onCustomEndChange,
   onApplyCustom,
+  unit,
 }: SugeubPeriodSumBarProps) {
   const [viewMode, setViewMode] = useState<"auto" | "horizontal" | "vertical">("auto");
   const maxAbs = Math.max(...periodSums.map((p) => Math.abs(p.value)), 1);
@@ -60,6 +68,11 @@ export function SugeubPeriodSumBar({
             <h3 className="text-sm font-bold text-gray-800">
               주체별 순매수 합계
             </h3>
+            {unit && (
+              <span className="text-[11px] font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200">
+                단위: {unit}
+              </span>
+            )}
             <span className="text-[11px] text-gray-500 font-normal">
               ({isLoading ? "계산 중..." : sumPeriod.label})
             </span>
@@ -200,7 +213,7 @@ export function SugeubPeriodSumBar({
                           backgroundColor: "#2563eb",
                           opacity: 0.85,
                         }}
-                        title={`${item.investor}: ${item.value.toLocaleString()}주`}
+                        title={`${item.investor}: ${item.value.toLocaleString()}${unit || "주"}`}
                       />
                     )}
                   </div>
@@ -218,7 +231,7 @@ export function SugeubPeriodSumBar({
                           backgroundColor: "#dc2626",
                           opacity: 0.85,
                         }}
-                        title={`${item.investor}: ${item.value.toLocaleString()}주`}
+                        title={`${item.investor}: ${item.value.toLocaleString()}${unit || "주"}`}
                       />
                     )}
                   </div>
@@ -233,9 +246,9 @@ export function SugeubPeriodSumBar({
                       ? "text-blue-600"
                       : "text-gray-400"
                   }`}
-                  title={`${item.value.toLocaleString()}주`}
+                  title={`${item.value.toLocaleString()}${unit || "주"}`}
                 >
-                  {formatSumLabel(item.value)}
+                  {formatSumLabel(item.value, unit)}
                 </span>
               </div>
             );
@@ -265,7 +278,7 @@ export function SugeubPeriodSumBar({
                     positive ? "text-red-600 font-semibold" : "text-transparent"
                   }`}
                 >
-                  {positive ? formatSumLabel(item.value) : "·"}
+                  {positive ? formatSumLabel(item.value, unit) : "·"}
                 </span>
 
                 <div className="w-full flex flex-col" style={{ height: BAR_HALF_H * 2 }}>
@@ -281,7 +294,7 @@ export function SugeubPeriodSumBar({
                           backgroundColor: "#dc2626",
                           opacity: 0.85,
                         }}
-                        title={`${item.investor}: ${item.value.toLocaleString()}주`}
+                        title={`${item.investor}: ${item.value.toLocaleString()}${unit || "주"}`}
                       />
                     )}
                   </div>
@@ -298,7 +311,7 @@ export function SugeubPeriodSumBar({
                           backgroundColor: "#2563eb",
                           opacity: 0.85,
                         }}
-                        title={`${item.investor}: ${item.value.toLocaleString()}주`}
+                        title={`${item.investor}: ${item.value.toLocaleString()}${unit || "주"}`}
                       />
                     )}
                   </div>
@@ -309,7 +322,7 @@ export function SugeubPeriodSumBar({
                     negative ? "text-blue-600 font-semibold" : "text-transparent"
                   }`}
                 >
-                  {negative ? formatSumLabel(item.value) : "·"}
+                  {negative ? formatSumLabel(item.value, unit) : "·"}
                 </span>
 
                 <span

@@ -4,7 +4,7 @@ import type { AppRouterInstance } from "next/dist/shared/lib/app-router-context.
 export interface TrendStockContext {
   code: string;
   name: string;
-  type: "stock" | "etf";
+  type: "stock" | "etf" | "index";
   country: "kr" | "us";
 }
 

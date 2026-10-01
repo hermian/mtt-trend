@@ -1106,6 +1106,7 @@ export interface PeriodSumsPresetBundle {
 export interface SupplyDemandPeriodSumsResponse {
   code: string;
   name: string;
+  unit?: string;
   sum_period: SupplyDemandSumPeriod;
   period_sums: PeriodSumItem[];
 }
@@ -1113,6 +1114,7 @@ export interface SupplyDemandPeriodSumsResponse {
 export interface SupplyDemandResponse {
   code: string;
   name: string;
+  unit?: string;
   data_first: string;
   data_last: string;
   sum_period: SupplyDemandSumPeriod;
@@ -1164,6 +1166,7 @@ export interface SupplyDemandPriceProfileResponse {
   code: string;
   name: string;
   market: string;
+  unit?: string;
   data_first: string;
   data_last: string;
   start: string;

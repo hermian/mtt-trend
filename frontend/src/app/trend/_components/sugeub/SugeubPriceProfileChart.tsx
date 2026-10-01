@@ -15,6 +15,7 @@ export interface SugeubPriceProfileChartProps {
   name: string;
   defaultFirstDate?: string;
   defaultLastDate?: string;
+  unit?: string;
 }
 
 type ProfilePreset = "1m" | "3m" | "6m" | "1y" | "3y" | "ytd" | "all";
@@ -111,9 +112,15 @@ function formatKoreanDate(dateStr: string): string {
   return `${parts[0]}년 ${parseInt(parts[1], 10)}월 ${parseInt(parts[2], 10)}일`;
 }
 
-function formatUnitShort(num: number): string {
+function formatUnitShort(num: number, unit?: string): string {
   const abs = Math.abs(num);
   const sign = num > 0 ? "+" : num < 0 ? "-" : "";
+  if (unit === "억원") {
+    if (abs >= 10000) {
+      return `${sign}${(abs / 10000).toFixed(1)}조`;
+    }
+    return `${sign}${abs.toLocaleString(undefined, { maximumFractionDigits: 0 })}억`;
+  }
   if (abs >= 100000000) {
     return `${sign}${(abs / 100000000).toFixed(1)}억`;
   }
@@ -151,6 +158,7 @@ export function SugeubPriceProfileChart({
   name,
   defaultFirstDate,
   defaultLastDate,
+  unit,
 }: SugeubPriceProfileChartProps) {
   const [activePreset, setActivePreset] = useState<ProfilePreset>("1y");
   const [customApplied, setCustomApplied] = useState<boolean>(false);
@@ -413,12 +421,19 @@ export function SugeubPriceProfileChart({
       {/* 1. Header with Chesly Style Title */}
       <div className="bg-[#1b5e20] text-white px-4 py-3 sm:px-6">
         <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
-          <h3 className="text-base sm:text-lg font-bold tracking-tight text-center sm:text-left">
-            {name} 매물대 분석{" "}
-            <span className="font-normal text-sm sm:text-base opacity-90">
-              {headerStartDate} ~ {headerEndDate}
-            </span>
-          </h3>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base sm:text-lg font-bold tracking-tight text-center sm:text-left">
+              {name} 매물대 분석{" "}
+              <span className="font-normal text-sm sm:text-base opacity-90">
+                {headerStartDate} ~ {headerEndDate}
+              </span>
+            </h3>
+            {(unit || data?.unit) && (
+              <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded text-white font-medium">
+                단위: {unit || data?.unit}
+              </span>
+            )}
+          </div>
           <span className="text-[11px] bg-white/20 px-2 py-0.5 rounded text-white/90">
             기본 1Y 매물대 (개인·외국인·기관계 3대 주체 통합)
           </span>
@@ -1213,8 +1228,8 @@ export function SugeubPriceProfileChart({
                             : "text-gray-600"
                         }`}
                       >
-                        {formatNumberCommas(Number(data.total_period_sums["개인"] || 0))}주 (
-                        {formatUnitShort(Number(data.total_period_sums["개인"] || 0))})
+                        {formatNumberCommas(Number(data.total_period_sums["개인"] || 0))}{unit || "주"} (
+                        {formatUnitShort(Number(data.total_period_sums["개인"] || 0), unit)})
                       </span>
                     </div>
 
@@ -1231,8 +1246,8 @@ export function SugeubPriceProfileChart({
                             : "text-gray-600"
                         }`}
                       >
-                        {formatNumberCommas(Number(data.total_period_sums["외국인"] || 0))}주 (
-                        {formatUnitShort(Number(data.total_period_sums["외국인"] || 0))})
+                        {formatNumberCommas(Number(data.total_period_sums["외국인"] || 0))}{unit || "주"} (
+                        {formatUnitShort(Number(data.total_period_sums["외국인"] || 0), unit)})
                       </span>
                     </div>
 
@@ -1249,8 +1264,8 @@ export function SugeubPriceProfileChart({
                             : "text-gray-600"
                         }`}
                       >
-                        {formatNumberCommas(Number(data.total_period_sums["기관계"] || 0))}주 (
-                        {formatUnitShort(Number(data.total_period_sums["기관계"] || 0))})
+                        {formatNumberCommas(Number(data.total_period_sums["기관계"] || 0))}{unit || "주"} (
+                        {formatUnitShort(Number(data.total_period_sums["기관계"] || 0), unit)})
                       </span>
                     </div>
                   </div>
@@ -1285,7 +1300,7 @@ export function SugeubPriceProfileChart({
                               : "text-gray-500"
                           }`}
                         >
-                          {formatNumberCommas(val)}주 ({formatUnitShort(val)})
+                          {formatNumberCommas(val)}{unit || "주"} ({formatUnitShort(val, unit)})
                         </span>
                       </span>
                     );

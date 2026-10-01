@@ -109,8 +109,8 @@ class StockbeeMmRow(BaseModel):
     m_dn_50p: Optional[float] = None
     d34_up_13p: Optional[float] = None
     d34_dn_13p: Optional[float] = None
-    t2108: Optional[float] = None
     stock_count: Optional[float] = None
+    t2108: Optional[float] = None
     kospi: Optional[float] = None
 
 

@@ -18,7 +18,7 @@ _SELECT_COLS = """
     q_up_25p, q_dn_25p,
     m_up_25p, m_dn_25p, m_up_50p, m_dn_50p,
     d34_up_13p, d34_dn_13p,
-    t2108, stock_count, kospi
+    stock_count, t2108, kospi
 """
 
 

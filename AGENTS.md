@@ -1,5 +1,10 @@
 # Agent Guidelines & Project Rules
 
+## Response Rules (Ponytail Output Format)
+- **에세이 및 장황한 보고 금지**: 긴 표, 기능 투어, 사후 에세이, 설계 변명 절대 금지.
+- **포맷 원칙**: `[Code/Diff]` 우선 → 최대 3줄 요약 (`[작업 완료 내용] → 생략: [X], 추가 시점: [Y]`).
+- **설명이 코드보다 길면 삭제**: 사용자가 명시적으로 상세 보고서를 요구하지 않는 한 초간결 유지.
+
 ## Chart Development Rules (lightweight-charts)
 
 ### 1. 차트 내부(Pane) 텍스트 오버레이 금지 (`createPriceLine`의 `title` 금지)

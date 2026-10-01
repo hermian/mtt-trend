@@ -106,28 +106,128 @@ function fmt2(v: number | null | undefined): string {
   return v.toFixed(2);
 }
 
-/** stockbee_mm.png 컬럼 순서 일치 */
-const COLUMNS: Array<{
+interface MmColumnDef {
   key: keyof StockbeeMmRow | "date";
   label: string;
+  sub: string;
+  tooltip: string;
   format: "int" | "2" | "date";
-}> = [
-  { key: "date", label: "Date", format: "date" },
-  { key: "bo_up", label: "bo_up", format: "int" },
-  { key: "bo_dn", label: "bo_dn", format: "int" },
-  { key: "q_up_25p", label: "q_up_25p", format: "int" },
-  { key: "q_dn_25p", label: "q_dn_25p", format: "int" },
-  { key: "m_up_25p", label: "m_up_25p", format: "int" },
-  { key: "m_dn_25p", label: "m_dn_25p", format: "int" },
-  { key: "m_up_50p", label: "m_up_50p", format: "int" },
-  { key: "m_dn_50p", label: "m_dn_50p", format: "int" },
-  { key: "d34_up_13p", label: "34d_up_13p", format: "int" },
-  { key: "d34_dn_13p", label: "34d_dn_13p", format: "int" },
-  { key: "t2108", label: "T2108", format: "2" },
-  { key: "stock_count", label: "주식수", format: "int" },
-  { key: "five_d_r", label: "5d_r", format: "2" },
-  { key: "ten_d_r", label: "10d_r", format: "2" },
-  { key: "kospi", label: "KOSPI", format: "2" },
+}
+
+/** 미국 Stockbee Market Monitor 시트 기준 컬럼 순서 및 정의 */
+const COLUMNS: MmColumnDef[] = [
+  {
+    key: "date",
+    label: "Date",
+    sub: "날짜",
+    tooltip: "거래일 (Date)",
+    format: "date",
+  },
+  {
+    key: "bo_up",
+    label: "4% Plus Today",
+    sub: "bo_up",
+    tooltip: "Number of stocks up 4% plus today (당일 4% 이상 상승 종목 수)",
+    format: "int",
+  },
+  {
+    key: "bo_dn",
+    label: "4% Down Today",
+    sub: "bo_dn",
+    tooltip: "Number of stocks down 4% plus today (당일 4% 이상 하락 종목 수)",
+    format: "int",
+  },
+  {
+    key: "five_d_r",
+    label: "5 Day Ratio",
+    sub: "5d_r",
+    tooltip: "5 day ratio (5일 4% 돌파 상승/하락 누적 비율)",
+    format: "2",
+  },
+  {
+    key: "ten_d_r",
+    label: "10 Day Ratio",
+    sub: "10d_r",
+    tooltip: "10 day ratio (10일 4% 돌파 상승/하락 누적 비율)",
+    format: "2",
+  },
+  {
+    key: "q_up_25p",
+    label: "25%+ Quarter Up",
+    sub: "q_up_25p",
+    tooltip: "Number of stocks up 25% plus in a quarter (최근 1분기 25% 이상 상승 종목 수)",
+    format: "int",
+  },
+  {
+    key: "q_dn_25p",
+    label: "25%+ Quarter Down",
+    sub: "q_dn_25p",
+    tooltip: "Number of stocks down 25% + in a quarter (최근 1분기 25% 이상 하락 종목 수)",
+    format: "int",
+  },
+  {
+    key: "m_up_25p",
+    label: "25%+ Month Up",
+    sub: "m_up_25p",
+    tooltip: "Number of stocks up 25% + in a month (최근 1개월 25% 이상 상승 종목 수)",
+    format: "int",
+  },
+  {
+    key: "m_dn_25p",
+    label: "25%+ Month Down",
+    sub: "m_dn_25p",
+    tooltip: "Number of stocks down 25% + in a month (최근 1개월 25% 이상 하락 종목 수)",
+    format: "int",
+  },
+  {
+    key: "m_up_50p",
+    label: "50%+ Month Up",
+    sub: "m_up_50p",
+    tooltip: "Number of stocks up 50% + in a month (최근 1개월 50% 이상 상승 종목 수)",
+    format: "int",
+  },
+  {
+    key: "m_dn_50p",
+    label: "50%+ Month Down",
+    sub: "m_dn_50p",
+    tooltip: "Number of stocks down 50% + in a month (최근 1개월 50% 이상 하락 종목 수)",
+    format: "int",
+  },
+  {
+    key: "d34_up_13p",
+    label: "13%+ 34d Up",
+    sub: "34d_up_13p",
+    tooltip: "Number of stocks up 13% + in 34 days (최근 34일간 13% 이상 상승 종목 수)",
+    format: "int",
+  },
+  {
+    key: "d34_dn_13p",
+    label: "13%+ 34d Down",
+    sub: "34d_dn_13p",
+    tooltip: "Number of stocks down 13% + in 34 days (최근 34일간 13% 이상 하락 종목 수)",
+    format: "int",
+  },
+  {
+    key: "stock_count",
+    label: "Universe",
+    sub: "주식수",
+    tooltip: "Worden Common stock universe (상장 주식 수)",
+    format: "int",
+  },
+  {
+    key: "t2108",
+    label: "T2108",
+    sub: "40MA %",
+    tooltip: "T2108 (% of stocks above 40SMA, 40일 이평선 상회 종목 비율)",
+    format: "2",
+  },
+  {
+    key: "kospi",
+    label: "KOSPI",
+    sub: "S&P 대응",
+    tooltip: "KOSPI 지수 종가 (미국 시트 S&P 500 대응)",
+    format: "2",
+  },
 ];
 
 const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
@@ -151,14 +251,46 @@ const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] })
   return (
     <div className="overflow-x-auto rounded-xl border border-gray-300 bg-white shadow-sm">
       <table className="min-w-full text-xs font-sans border-collapse bg-white">
-        <thead className="bg-white sticky top-0 z-10 border-b border-gray-300 shadow-sm">
-          <tr>
-            {COLUMNS.map((c) => (
+        <thead className="bg-white sticky top-0 z-10 shadow-sm">
+          {/* 1단 그룹 헤더: 미국 원본 시트 분류 일치 */}
+          <tr className="border-b border-gray-300 text-[11px] font-bold select-none">
+            <th
+              rowSpan={2}
+              className="px-2.5 py-2 text-left text-black font-extrabold whitespace-nowrap border-r border-b border-gray-300 bg-gray-100 align-middle"
+            >
+              <div className="text-xs">Date</div>
+              <div className="text-[10px] text-gray-500 font-normal">거래일</div>
+            </th>
+            <th
+              colSpan={6}
+              className="px-2 py-1.5 text-center text-cyan-950 bg-cyan-100 font-bold border-r border-b border-gray-300 tracking-tight"
+            >
+              Primary Breadth Indicators
+            </th>
+            <th
+              colSpan={6}
+              className="px-2 py-1.5 text-center text-yellow-950 bg-yellow-100 font-bold border-r border-b border-gray-300 tracking-tight"
+            >
+              Secondary Breadth Indicators
+            </th>
+            <th
+              colSpan={3}
+              className="px-2 py-1.5 text-center text-gray-800 bg-amber-50 font-bold border-b border-gray-300 tracking-tight"
+            >
+              Market / Breadth
+            </th>
+          </tr>
+
+          {/* 2단 컬럼 헤더: 미국식 명칭 + 기존 약칭 병기 */}
+          <tr className="border-b border-gray-300 bg-gray-50">
+            {COLUMNS.slice(1).map((c) => (
               <th
                 key={c.key}
-                className="px-2.5 py-2 text-right text-black font-bold whitespace-nowrap border-b border-gray-300 first:text-left"
+                title={c.tooltip}
+                className="px-2 py-1.5 text-right text-black font-semibold whitespace-nowrap border-r border-gray-300 last:border-r-0 hover:bg-gray-100 cursor-help transition-colors"
               >
-                {c.label}
+                <div className="leading-tight text-[11px] font-bold text-gray-900">{c.label}</div>
+                <div className="text-[10px] text-gray-500 font-mono font-normal leading-tight mt-0.5">{c.sub}</div>
               </th>
             ))}
           </tr>

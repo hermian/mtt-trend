@@ -403,8 +403,8 @@ export interface StockbeeMmRow {
   m_dn_50p?: number | null;
   d34_up_13p?: number | null;
   d34_dn_13p?: number | null;
-  t2108?: number | null;
   stock_count?: number | null;
+  t2108?: number | null;
   kospi?: number | null;
 }
 

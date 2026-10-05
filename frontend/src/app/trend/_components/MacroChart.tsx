@@ -113,6 +113,8 @@ interface IndicatorDef {
   /** 월간 등 희소 지표 — 값 변경일만 Histogram (normalized 시 Line 폴백) */
   histogram?: boolean;
   raw: (v: number) => string;
+  /** 지표 보충 설명/안내 (툴팁 및 범례용) */
+  desc?: string;
 }
 
 const INDICATORS: IndicatorDef[] = [
@@ -133,6 +135,7 @@ const INDICATORS: IndicatorDef[] = [
     color: ISM_EXPAND_COLOR,
     histogram: true,
     raw: (v) => `ISM ${v.toFixed(1)}`,
+    desc: "익월초 발표(전월치) → 참조월 매핑 (10월치는 11월초 발표)",
   },
   { id: "cnn_fgi", label: "CNN FGI", color: "#eab308", raw: (v) => `FGI ${v.toFixed(0)}` },
   { id: "kr_fgi", label: "K FGI", color: "#f59e0b", raw: (v) => `KFGI ${v.toFixed(0)}` },
@@ -996,6 +999,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                     key={ind.id}
                     type="button"
                     onClick={() => toggleIndicator(ind.id)}
+                    title={ind.desc ? `${ind.label}: ${ind.desc}` : ind.label}
                     style={{
                       borderColor: active ? ind.color : "#334155",
                       color: active ? ind.color : "#94a3b8",
@@ -1026,7 +1030,7 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
                 key={ind.id}
                 type="button"
                 onClick={() => toggleIndicator(ind.id)}
-                title={`${ind.label} 해제`}
+                title={ind.desc ? `${ind.label} 해제 (${ind.desc})` : `${ind.label} 해제`}
                 style={{ color: ind.color }}
                 className="group inline-flex items-center gap-0.5 font-bold hover:opacity-80 transition-all cursor-pointer rounded px-1.5 py-0.5 -my-0.5 hover:bg-slate-800/80 border border-transparent hover:border-slate-700"
               >
@@ -1046,6 +1050,14 @@ export const MacroChart: React.FC<MacroChartProps> = () => {
               </button>
             );
           })}
+          {activeIndicators.some((i) => i.id === "ism_pmi") && (
+            <span
+              className="text-purple-300 text-[9px] md:text-[10px] bg-purple-950/40 border border-purple-800/60 px-1.5 py-0.5 rounded cursor-help"
+              title="ISM 제조업 PMI는 전월 실적을 익월 1영업일에 발표하므로 차트상 실제 경기 기준월(참조월 1일)로 정규화되어 표시됩니다. (현재 9월분 54.5, 10월분은 11월 초 발표)"
+            >
+              ℹ️ ISM: 익월초 발표(전월치) → 참조월 매핑 (10월치는 11월초 발표)
+            </span>
+          )}
           {normalized && <span className="text-purple-400 italic">(정규화: 기준일=100)</span>}
           {hpEnabled && activeIndicators.some((i) => INDEX_HP_IDS.has(i.id)) && (
             <span className="text-pink-400/80 italic">분홍선=HP추세 · 하단=이탈(100=추세)</span>

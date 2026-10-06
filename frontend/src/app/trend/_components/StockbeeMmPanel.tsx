@@ -30,7 +30,7 @@ export function getStockbeeMmUsUrl(year: number): string {
 
 export const STOCKBEE_MM_US_URL = getStockbeeMmUsUrl(2026);
 
-type MarketTab = "kr" | "us";
+type MarketTab = "kr_all" | "kospi" | "kosdaq" | "us";
 /** "1y" = 최근 1년(한국) / 최신 연도 시트(미국) */
 type Period = "1y" | number;
 
@@ -66,6 +66,7 @@ function cellTones(row: StockbeeMmRow, strongThreshold = 150): Record<string, Ce
     if (r5 >= 2) tones.five_d_r = "lightgreen";
     else if (r5 <= 0.5) tones.five_d_r = "red";
   }
+
   const r10 = row.ten_d_r;
   if (r10 != null) {
     if (r10 >= 2) tones.ten_d_r = "lightgreen";
@@ -115,122 +116,137 @@ interface MmColumnDef {
 }
 
 /** 미국 Stockbee Market Monitor 시트 기준 컬럼 순서 및 정의 */
-const COLUMNS: MmColumnDef[] = [
-  {
-    key: "date",
-    label: "Date",
-    sub: "날짜",
-    tooltip: "거래일 (Date)",
-    format: "date",
-  },
-  {
-    key: "bo_up",
-    label: "4% Plus Today",
-    sub: "bo_up",
-    tooltip: "Number of stocks up 4% plus today (당일 4% 이상 상승 종목 수)",
-    format: "int",
-  },
-  {
-    key: "bo_dn",
-    label: "4% Down Today",
-    sub: "bo_dn",
-    tooltip: "Number of stocks down 4% plus today (당일 4% 이상 하락 종목 수)",
-    format: "int",
-  },
-  {
-    key: "five_d_r",
-    label: "5 Day Ratio",
-    sub: "5d_r",
-    tooltip: "5 day ratio (5일 4% 돌파 상승/하락 누적 비율)",
-    format: "2",
-  },
-  {
-    key: "ten_d_r",
-    label: "10 Day Ratio",
-    sub: "10d_r",
-    tooltip: "10 day ratio (10일 4% 돌파 상승/하락 누적 비율)",
-    format: "2",
-  },
-  {
-    key: "q_up_25p",
-    label: "25%+ Quarter Up",
-    sub: "q_up_25p",
-    tooltip: "Number of stocks up 25% plus in a quarter (최근 1분기 25% 이상 상승 종목 수)",
-    format: "int",
-  },
-  {
-    key: "q_dn_25p",
-    label: "25%+ Quarter Down",
-    sub: "q_dn_25p",
-    tooltip: "Number of stocks down 25% + in a quarter (최근 1분기 25% 이상 하락 종목 수)",
-    format: "int",
-  },
-  {
-    key: "m_up_25p",
-    label: "25%+ Month Up",
-    sub: "m_up_25p",
-    tooltip: "Number of stocks up 25% + in a month (최근 1개월 25% 이상 상승 종목 수)",
-    format: "int",
-  },
-  {
-    key: "m_dn_25p",
-    label: "25%+ Month Down",
-    sub: "m_dn_25p",
-    tooltip: "Number of stocks down 25% + in a month (최근 1개월 25% 이상 하락 종목 수)",
-    format: "int",
-  },
-  {
-    key: "m_up_50p",
-    label: "50%+ Month Up",
-    sub: "m_up_50p",
-    tooltip: "Number of stocks up 50% + in a month (최근 1개월 50% 이상 상승 종목 수)",
-    format: "int",
-  },
-  {
-    key: "m_dn_50p",
-    label: "50%+ Month Down",
-    sub: "m_dn_50p",
-    tooltip: "Number of stocks down 50% + in a month (최근 1개월 50% 이상 하락 종목 수)",
-    format: "int",
-  },
-  {
-    key: "d34_up_13p",
-    label: "13%+ 34d Up",
-    sub: "34d_up_13p",
-    tooltip: "Number of stocks up 13% + in 34 days (최근 34일간 13% 이상 상승 종목 수)",
-    format: "int",
-  },
-  {
-    key: "d34_dn_13p",
-    label: "13%+ 34d Down",
-    sub: "34d_dn_13p",
-    tooltip: "Number of stocks down 13% + in 34 days (최근 34일간 13% 이상 하락 종목 수)",
-    format: "int",
-  },
-  {
-    key: "stock_count",
-    label: "Universe",
-    sub: "주식수",
-    tooltip: "Worden Common stock universe (상장 주식 수)",
-    format: "int",
-  },
-  {
-    key: "t2108",
-    label: "T2108",
-    sub: "40MA %",
-    tooltip: "T2108 (% of stocks above 40SMA, 40일 이평선 상회 종목 비율)",
-    format: "2",
-  },
-  {
-    key: "kospi",
-    label: "KOSPI",
-    sub: "S&P 대응",
-    tooltip: "KOSPI 지수 종가 (미국 시트 S&P 500 대응)",
-    format: "2",
-  },
-];
+function getColumns(market: MarketTab): MmColumnDef[] {
+  const indexLabel = market === "kosdaq" ? "KOSDAQ" : "KOSPI";
+  const indexTooltip =
+    market === "kosdaq"
+      ? "KOSDAQ 지수 종가 (미국 시트 S&P 500 대응)"
+      : "KOSPI 지수 종가 (미국 시트 S&P 500 대응)";
 
-const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] }) {
+  return [
+    {
+      key: "date",
+      label: "Date",
+      sub: "날짜",
+      tooltip: "거래일 (Date)",
+      format: "date",
+    },
+    {
+      key: "bo_up",
+      label: "4% Plus Today",
+      sub: "bo_up",
+      tooltip: "Number of stocks up 4% plus today (당일 4% 이상 상승 종목 수)",
+      format: "int",
+    },
+    {
+      key: "bo_dn",
+      label: "4% Down Today",
+      sub: "bo_dn",
+      tooltip: "Number of stocks down 4% plus today (당일 4% 이상 하락 종목 수)",
+      format: "int",
+    },
+    {
+      key: "five_d_r",
+      label: "5 Day Ratio",
+      sub: "5d_r",
+      tooltip: "5 day ratio (5일 4% 돌파 상승/하락 누적 비율)",
+      format: "2",
+    },
+    {
+      key: "ten_d_r",
+      label: "10 Day Ratio",
+      sub: "10d_r",
+      tooltip: "10 day ratio (10일 4% 돌파 상승/하락 누적 비율)",
+      format: "2",
+    },
+    {
+      key: "q_up_25p",
+      label: "25%+ Quarter Up",
+      sub: "q_up_25p",
+      tooltip: "Number of stocks up 25% plus in a quarter (최근 1분기 25% 이상 상승 종목 수)",
+      format: "int",
+    },
+    {
+      key: "q_dn_25p",
+      label: "25%+ Quarter Down",
+      sub: "q_dn_25p",
+      tooltip: "Number of stocks down 25% + in a quarter (최근 1분기 25% 이상 하락 종목 수)",
+      format: "int",
+    },
+    {
+      key: "m_up_25p",
+      label: "25%+ Month Up",
+      sub: "m_up_25p",
+      tooltip: "Number of stocks up 25% + in a month (최근 1개월 25% 이상 상승 종목 수)",
+      format: "int",
+    },
+    {
+      key: "m_dn_25p",
+      label: "25%+ Month Down",
+      sub: "m_dn_25p",
+      tooltip: "Number of stocks down 25% + in a month (최근 1개월 25% 이상 하락 종목 수)",
+      format: "int",
+    },
+    {
+      key: "m_up_50p",
+      label: "50%+ Month Up",
+      sub: "m_up_50p",
+      tooltip: "Number of stocks up 50% + in a month (최근 1개월 50% 이상 상승 종목 수)",
+      format: "int",
+    },
+    {
+      key: "m_dn_50p",
+      label: "50%+ Month Down",
+      sub: "m_dn_50p",
+      tooltip: "Number of stocks down 50% + in a month (최근 1개월 50% 이상 하락 종목 수)",
+      format: "int",
+    },
+    {
+      key: "d34_up_13p",
+      label: "13%+ 34d Up",
+      sub: "34d_up_13p",
+      tooltip: "Number of stocks up 13% + in 34 days (최근 34일간 13% 이상 상승 종목 수)",
+      format: "int",
+    },
+    {
+      key: "d34_dn_13p",
+      label: "13%+ 34d Down",
+      sub: "34d_dn_13p",
+      tooltip: "Number of stocks down 13% + in 34 days (최근 34일간 13% 이상 하락 종목 수)",
+      format: "int",
+    },
+    {
+      key: "stock_count",
+      label: "Universe",
+      sub: "주식수",
+      tooltip: "Worden Common stock universe (상장 주식 수)",
+      format: "int",
+    },
+    {
+      key: "t2108",
+      label: "T2108",
+      sub: "40MA %",
+      tooltip: "T2108 (% of stocks above 40SMA, 40일 이평선 상회 종목 비율)",
+      format: "2",
+    },
+    {
+      key: "kospi",
+      label: indexLabel,
+      sub: "S&P 대응",
+      tooltip: indexTooltip,
+      format: "2",
+    },
+  ];
+}
+
+const KoreaTable = memo(function KoreaTable({
+  rows,
+  market,
+}: {
+  rows: StockbeeMmRow[];
+  market: MarketTab;
+}) {
+  const columns = useMemo(() => getColumns(market), [market]);
   const rowsWithTones = useMemo(() => {
     return rows.map((row) => ({
       row,
@@ -283,7 +299,7 @@ const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] })
 
           {/* 2단 컬럼 헤더: 미국식 명칭 + 기존 약칭 병기 */}
           <tr className="border-b border-gray-300 bg-gray-50">
-            {COLUMNS.slice(1).map((c) => (
+            {columns.slice(1).map((c) => (
               <th
                 key={c.key}
                 title={c.tooltip}
@@ -299,7 +315,7 @@ const KoreaTable = memo(function KoreaTable({ rows }: { rows: StockbeeMmRow[] })
           {rowsWithTones.map(({ row, tones }) => {
             return (
               <tr key={row.date} className="border-b border-gray-200 hover:brightness-95">
-                {COLUMNS.map((c) => {
+                {columns.map((c) => {
                   const raw = row[c.key as keyof StockbeeMmRow];
                   const text =
                     c.format === "date"
@@ -363,12 +379,14 @@ const US_YEARS = Object.keys(STOCKBEE_MM_US_YEAR_GIDS)
   .sort((a, b) => b - a);
 
 export function StockbeeMmPanel() {
-  const [market, setMarket] = useState<MarketTab>("kr");
+  const [market, setMarket] = useState<MarketTab>("kr_all");
   const [period, setPeriod] = useState<Period>("1y");
   const [rows, setRows] = useState<StockbeeMmRow[]>([]);
   const [krYears, setKrYears] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const isKr = market !== "us";
 
   const yearOptions = useMemo(() => {
     if (market === "us") return US_YEARS;
@@ -381,13 +399,15 @@ export function StockbeeMmPanel() {
   }, [period]);
 
   useEffect(() => {
-    if (market !== "kr") return;
+    if (!isKr) return;
     let cancelled = false;
     setLoading(true);
     setError(null);
     const yearParam = typeof period === "number" ? period : undefined;
+    const apiMarket = market === "kospi" ? "kospi" : market === "kosdaq" ? "kosdaq" : "all";
+
     api
-      .getStockbeeMm({ year: yearParam })
+      .getStockbeeMm({ market: apiMarket, year: yearParam })
       .then((res) => {
         if (cancelled) return;
         setRows(res.data ?? []);
@@ -405,7 +425,7 @@ export function StockbeeMmPanel() {
     return () => {
       cancelled = true;
     };
-  }, [market, period]);
+  }, [market, period, isKr]);
 
   // 미국 탭에서 없는 연도가 선택된 경우 최신 연도로 보정
   useEffect(() => {
@@ -422,7 +442,9 @@ export function StockbeeMmPanel() {
         <div className="flex flex-wrap gap-2 bg-gray-900/60 p-2 rounded-xl border border-gray-800">
           {(
             [
-              { id: "kr" as const, label: "한국" },
+              { id: "kr_all" as const, label: "한국 전체" },
+              { id: "kospi" as const, label: "KOSPI" },
+              { id: "kosdaq" as const, label: "KOSDAQ" },
               { id: "us" as const, label: "미국" },
             ] as const
           ).map((t) => (
@@ -453,7 +475,7 @@ export function StockbeeMmPanel() {
             className="bg-gray-800 text-gray-200 text-xs border border-gray-700 rounded-lg px-3 py-2 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <option value="1y">
-              {market === "kr" ? "최근 1년" : `최신 (${US_YEARS[0] ?? 2026})`}
+              {isKr ? "최근 1년" : `최신 (${US_YEARS[0] ?? 2026})`}
             </option>
             {yearOptions.map((y) => (
               <option key={y} value={y}>
@@ -463,14 +485,14 @@ export function StockbeeMmPanel() {
           </select>
         </label>
 
-        {market === "kr" && !loading && !error && (
+        {isKr && !loading && !error && (
           <span className="text-[11px] text-gray-500 font-mono">
             {rows.length}일
           </span>
         )}
       </div>
 
-      {market === "kr" ? (
+      {isKr ? (
         <div className="flex-1 overflow-y-auto custom-scrollbar">
           {loading && (
             <p className="text-sm text-gray-500 py-12 text-center">로딩 중…</p>
@@ -478,12 +500,10 @@ export function StockbeeMmPanel() {
           {error && (
             <p className="text-sm text-red-400 py-8 text-center">{error}</p>
           )}
-          {!loading && !error && <KoreaTable rows={rows} />}
+          {!loading && !error && <KoreaTable rows={rows} market={market} />}
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto custom-scrollbar min-h-0">
-          <UsIframe year={usYear} />
-        </div>
+        <UsIframe year={usYear} />
       )}
     </div>
   );

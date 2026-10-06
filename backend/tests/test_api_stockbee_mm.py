@@ -50,6 +50,29 @@ def temp_stockbee_mm_db():
             ("2026-08-06", 40, 10, 2.5, 2.0, 6, 1, 9, 1, 3, 0, 12, 2, 2002, 60.0, 2600.0),
         ],
     )
+    conn.execute(
+        """
+        CREATE TABLE stockbee_mm_kospi (
+            date TEXT PRIMARY KEY,
+            bo_up REAL, bo_dn REAL,
+            five_d_r REAL, ten_d_r REAL,
+            q_up_25p REAL, q_dn_25p REAL,
+            m_up_25p REAL, m_dn_25p REAL,
+            m_up_50p REAL, m_dn_50p REAL,
+            d34_up_13p REAL, d34_dn_13p REAL,
+            stock_count REAL, t2108 REAL, kospi REAL
+        )
+        """
+    )
+    conn.execute(
+        """
+        INSERT INTO stockbee_mm_kospi (
+            date, bo_up, bo_dn, five_d_r, ten_d_r,
+            q_up_25p, q_dn_25p, m_up_25p, m_dn_25p, m_up_50p, m_dn_50p,
+            d34_up_13p, d34_dn_13p, stock_count, t2108, kospi
+        ) VALUES ('2026-08-06', 15, 5, 3.0, 2.5, 2, 0, 3, 0, 1, 0, 5, 1, 800, 50.0, 2600.0)
+        """
+    )
     conn.commit()
     conn.close()
 
@@ -77,6 +100,16 @@ def test_stockbee_mm_default_one_year(temp_stockbee_mm_db):
     assert data[0]["bo_up"] == 40
     assert data[0]["five_d_r"] == 2.5
     assert data[0]["kospi"] == 2600.0
+
+
+def test_stockbee_mm_market_filter(temp_stockbee_mm_db):
+    res = client.get("/api/charts/stockbee-mm?market=kospi")
+    assert res.status_code == 200
+    body = res.json()
+    data = body["data"]
+    assert len(data) == 1
+    assert data[0]["bo_up"] == 15
+    assert data[0]["stock_count"] == 800
 
 
 def test_stockbee_mm_year_filter(temp_stockbee_mm_db):

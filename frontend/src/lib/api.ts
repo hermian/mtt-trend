@@ -531,11 +531,13 @@ export const api = {
 
   // GET /api/charts/stockbee-mm → StockbeeMmResponse
   getStockbeeMm: async (params?: {
+    market?: "all" | "kospi" | "kosdaq";
     year?: number;
     limit?: number;
   }): Promise<StockbeeMmResponse> => {
     const { data } = await apiClient.get<StockbeeMmResponse>("/api/charts/stockbee-mm", {
       params: {
+        market: params?.market,
         year: params?.year,
         limit: params?.limit,
       },

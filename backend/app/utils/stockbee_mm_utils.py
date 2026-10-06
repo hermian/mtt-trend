@@ -29,36 +29,44 @@ def get_stockbee_mm_db_path() -> Path:
     return Path.home() / ".cache" / "db" / "stockbee_mm.db"
 
 
-def _connect_ro(db_path: Path) -> Optional[sqlite3.Connection]:
+TABLE_MAP = {
+    "all": "stockbee_mm",
+    "kospi": "stockbee_mm_kospi",
+    "kosdaq": "stockbee_mm_kosdaq",
+}
+
+
+def _connect_ro(db_path: Path, table_name: str = "stockbee_mm") -> Optional[sqlite3.Connection]:
     if not db_path.exists():
         logger.error(f"Stockbee MM SQLite DB가 존재하지 않습니다: {db_path}")
         return None
     conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     cur = conn.execute(
-        """
+        f"""
         SELECT name FROM sqlite_master
-        WHERE type='table' AND name='stockbee_mm'
+        WHERE type='table' AND name='{table_name}'
         """
     )
     if cur.fetchone() is None:
-        logger.error(f"stockbee_mm 테이블이 없습니다: {db_path}")
+        logger.error(f"{table_name} 테이블이 없습니다: {db_path}")
         conn.close()
         return None
     return conn
 
 
-def list_stockbee_mm_years() -> Optional[List[int]]:
+def list_stockbee_mm_years(market: str = "all") -> Optional[List[int]]:
     """DB에 존재하는 연도 목록 (내림차순). DB 없으면 None."""
+    table_name = TABLE_MAP.get(market.lower(), "stockbee_mm")
     db_path = get_stockbee_mm_db_path()
-    conn = _connect_ro(db_path)
+    conn = _connect_ro(db_path, table_name=table_name)
     if conn is None:
         return None
     try:
         rows = conn.execute(
-            """
+            f"""
             SELECT DISTINCT CAST(substr(date, 1, 4) AS INTEGER) AS y
-            FROM stockbee_mm
+            FROM {table_name}
             WHERE length(date) >= 4
             ORDER BY y DESC
             """
@@ -72,28 +80,31 @@ def list_stockbee_mm_years() -> Optional[List[int]]:
 
 
 def load_stockbee_mm(
+    market: str = "all",
     year: Optional[int] = None,
     limit: Optional[int] = None,
 ) -> Optional[Tuple[List[dict], List[int]]]:
     """
-    stockbee_mm 행을 날짜 내림차순으로 반환합니다.
+    stockbee_mm(_kospi / _kosdaq) 행을 날짜 내림차순으로 반환합니다.
 
+    - market: 'all' | 'kospi' | 'kosdaq'
     - year 지정: 해당 연도(YYYY-01-01 ~ YYYY-12-31)
     - year 미지정: DB 최신일 기준 최근 1년(캘린더)
     - limit: 선택적 상한 (테스트용). None이면 제한 없음(연도/1년 범위만)
 
     Returns: (rows, years) 또는 DB 문제 시 None
     """
+    table_name = TABLE_MAP.get(market.lower(), "stockbee_mm")
     db_path = get_stockbee_mm_db_path()
-    conn = _connect_ro(db_path)
+    conn = _connect_ro(db_path, table_name=table_name)
     if conn is None:
         return None
 
     try:
         years_rows = conn.execute(
-            """
+            f"""
             SELECT DISTINCT CAST(substr(date, 1, 4) AS INTEGER) AS y
-            FROM stockbee_mm
+            FROM {table_name}
             WHERE length(date) >= 4
             ORDER BY y DESC
             """
@@ -106,7 +117,7 @@ def load_stockbee_mm(
             where = "WHERE date >= ? AND date <= ?"
             params.extend([f"{int(year):04d}-01-01", f"{int(year):04d}-12-31"])
         else:
-            max_row = conn.execute("SELECT MAX(date) AS d FROM stockbee_mm").fetchone()
+            max_row = conn.execute(f"SELECT MAX(date) AS d FROM {table_name}").fetchone()
             max_date_str = max_row["d"] if max_row else None
             if max_date_str:
                 try:
@@ -119,7 +130,7 @@ def load_stockbee_mm(
 
         sql = f"""
             SELECT {_SELECT_COLS}
-            FROM stockbee_mm
+            FROM {table_name}
             {where}
             ORDER BY date DESC
         """

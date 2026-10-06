@@ -188,6 +188,9 @@ _STOCKBEE_MM_CACHE_MAX = 8
 @router.get("/stockbee-mm", response_model=StockbeeMmResponse)
 def get_stockbee_mm_data(
     request: Request,
+    market: str = Query(
+        "all", pattern="^(all|kospi|kosdaq)$", description="시장 구분 (all, kospi, kosdaq)"
+    ),
     year: Optional[int] = Query(
         None, ge=1990, le=2100, description="연도(YYYY). 미지정 시 DB 최신일 기준 최근 1년"
     ),
@@ -197,11 +200,11 @@ def get_stockbee_mm_data(
 ):
     """
     ~/.cache/db/stockbee_mm.db 의 한국 Stockbee Market Monitor 일별 지표를 반환합니다.
-    기본: 최근 1년. year 지정 시 해당 연도 전체.
+    기본: 최근 1년 (all: 전체, kospi: 코스피, kosdaq: 코스닥). year 지정 시 해당 연도 전체.
     """
     db_path = get_stockbee_mm_db_path()
     current_mtime = file_mtime(db_path)
-    cache_key = (str(db_path), year, limit)
+    cache_key = (str(db_path), market.lower(), year, limit)
     cached = _STOCKBEE_MM_CACHE.get(cache_key)
     if cached is not None and cached[0] == current_mtime:
         raw_bytes, gz_bytes = cached[1], cached[2]
@@ -217,7 +220,7 @@ def get_stockbee_mm_data(
             media_type="application/json",
         )
 
-    result = load_stockbee_mm(year=year, limit=limit)
+    result = load_stockbee_mm(market=market, year=year, limit=limit)
     if result is None:
         resp_model = StockbeeMmResponse(data=[], years=[])
     else:

@@ -277,11 +277,14 @@ function TrendPageContent() {
               </div>
 
               <div className="flex items-center gap-3">
-                <span className="text-xs text-gray-500 font-medium">기준일</span>
+                <label htmlFor="date-select" className="text-xs text-gray-500 font-medium">
+                  기준일
+                </label>
                 {datesLoading ? (
                   <div className="h-8 w-32 bg-gray-800 rounded animate-pulse" />
                 ) : (
                   <select
+                    id="date-select"
                     value={selectedDate || ""}
                     onChange={(e) => setSelectedDate(e.target.value)}
                     className="bg-gray-800 text-xs border border-gray-700 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 appearance-none cursor-pointer"

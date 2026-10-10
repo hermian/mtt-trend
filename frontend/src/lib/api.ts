@@ -163,6 +163,14 @@ export interface MacroDataPoint {
   core_ppi?: number;
   /** 미국 PPI All Commodities YoY (장기 시계열, %) — FRED PPIACO */
   ppi_all?: number;
+  /** 미국 PCE 물가지수 YoY (%) — FRED PCEPI */
+  pce?: number;
+  /** 미국 Core PCE 물가지수 YoY (Fed 선호 지표, %) — FRED PCEPILFE */
+  core_pce?: number;
+  /** 미국 민간 전업종 시간당 평균임금 YoY (%) — FRED CES0500000003 */
+  wage_growth?: number;
+  /** 미국 고용비용지수 ECI YoY (%) — FRED ECIALLCIV */
+  eci?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

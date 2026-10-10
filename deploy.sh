@@ -44,6 +44,16 @@ fi
 
 echo "🔄 PM2 프로세스 재시작..."
 chmod +x ../scripts/pm2-mtt-backend.sh ../scripts/pm2-mtt-frontend.sh
+
+# 3000번 포트 점유 중인 외부 프로세스(예: 수동 실행된 next dev) 정리
+PM2_FE_PID=$(pm2 pid mtt-frontend 2>/dev/null || true)
+for p in $(lsof -ti :3000 2>/dev/null || true); do
+    if [ -n "$p" ] && [ "$p" != "$PM2_FE_PID" ]; then
+        echo "⚠️ 3000번 포트를 점유 중인 외부 프로세스($p) 종료..."
+        kill -9 "$p" 2>/dev/null || true
+    fi
+done
+
 if pm2 describe mtt-backend >/dev/null 2>&1; then
     pm2 reload ../ecosystem.config.cjs --update-env
 else

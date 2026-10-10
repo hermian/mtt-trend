@@ -331,6 +331,10 @@ def get_macro_chart_data(
       ppi        fred_macro(PPIFIS) — 미국 PPI Final Demand YoY (%), 월간 발표, 조회 시 ffill
       core_ppi   fred_macro(PPIFES) — 미국 Core PPI Final Demand Less Foods and Energy YoY (%), 월간 발표, 조회 시 ffill
       ppi_all    fred_macro(PPIACO) — 미국 PPI All Commodities YoY (장기 시계열, %), 월간 발표, 조회 시 ffill
+      pce        fred_macro(PCEPI) — 미국 PCE 물가지수 YoY (%), 월간 발표, 조회 시 ffill
+      core_pce   fred_macro(PCEPILFE) — 미국 Core PCE 물가지수 YoY (Fed 선호 지표, %), 월간 발표, 조회 시 ffill
+      wage_growth fred_macro(CES0500000003) — 미국 시간당 평균임금 YoY (%), 월간 발표, 조회 시 ffill
+      eci        fred_macro(ECIALLCIV) — 미국 고용비용지수 ECI YoY (%), 분기 발표, 조회 시 ffill
       us_10y_breakeven fred_macro(T10YIE) — 10년물 인플레이션 기대치 (%), 조회 시 ffill
       credit_kospi / credit_kosdaq          kofia_credit_loan — 신용잔고 (조원)
       credit_kospi_pct / credit_kosdaq_pct  신용잔고 ÷ index_ohlcv.marcap (%)
@@ -419,6 +423,10 @@ def get_macro_chart_data(
         "ppi": "PPIFIS",
         "core_ppi": "PPIFES",
         "ppi_all": "PPIACO",
+        "pce": "PCEPI",
+        "core_pce": "PCEPILFE",
+        "wage_growth": "CES0500000003",
+        "eci": "ECIALLCIV",
         "us_10y_breakeven": "T10YIE",
     }
     # ISM: DB는 발표일 원본, 차트만 참조월 정규화 후 ffill
@@ -654,6 +662,10 @@ def get_macro_chart_data(
             ppi=p.get("ppi"),
             core_ppi=p.get("core_ppi"),
             ppi_all=p.get("ppi_all"),
+            pce=p.get("pce"),
+            core_pce=p.get("core_pce"),
+            wage_growth=p.get("wage_growth"),
+            eci=p.get("eci"),
             export_avg=p.get("export_avg"),
             ism_pmi=p.get("ism_pmi"),
             credit_kospi=p.get("credit_kospi"),

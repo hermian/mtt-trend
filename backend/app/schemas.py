@@ -67,6 +67,10 @@ class MacroDataPoint(BaseModel):
     ppi: Optional[float] = None          # FRED PPIFIS pc1 (미국 PPI Final Demand YoY, %) → fred_macro
     core_ppi: Optional[float] = None     # FRED PPIFES pc1 (미국 Core PPI Final Demand Less Foods and Energy YoY, %) → fred_macro
     ppi_all: Optional[float] = None      # FRED PPIACO pc1 (미국 PPI All Commodities YoY, 장기 시계열, %) → fred_macro
+    pce: Optional[float] = None          # FRED PCEPI pc1 (미국 PCE 물가지수 YoY, %) → fred_macro
+    core_pce: Optional[float] = None     # FRED PCEPILFE pc1 (미국 Core PCE 물가지수 YoY, Fed 선호 지표, %) → fred_macro
+    wage_growth: Optional[float] = None  # FRED CES0500000003 pc1 (미국 민간 전업종 시간당 평균임금 YoY, %) → fred_macro
+    eci: Optional[float] = None          # FRED ECIALLCIV pc1 (미국 고용비용지수 ECI YoY, %) → fred_macro
     export_avg: Optional[float] = None   # kr_export_avg (FinJump 주간, 조회 시 ffill)
     ism_pmi: Optional[float] = None      # Investing ISM_PMI(발표일 원본) → 조회 시 참조월 정규화+ffill
     credit_kospi: Optional[float] = None       # KOSPI 신용잔고 (조원) — kofia_credit_loan

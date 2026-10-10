@@ -157,6 +157,12 @@ export interface MacroDataPoint {
   core_cpi?: number;
   /** 미국 Core Sticky CPI less Shelter YoY (%) — FRED CRESTKCPIXSLTRM159SFRBATL */
   sticky_cpi?: number;
+  /** 미국 PPI Final Demand YoY (%) — FRED PPIFIS */
+  ppi?: number;
+  /** 미국 Core PPI Final Demand Less Foods and Energy YoY (%) — FRED PPIFES */
+  core_ppi?: number;
+  /** 미국 PPI All Commodities YoY (장기 시계열, %) — FRED PPIACO */
+  ppi_all?: number;
   /** 일평균 수출 (억 USD) — FinJump 주간, API ffill */
   export_avg?: number;
   /** ISM 제조업 PMI — Investing(월간), API ffill */

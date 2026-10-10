@@ -216,6 +216,9 @@ def temp_macro_db(monkeypatch):
         ("2026-06-01", "CPIAUCSL", 3.4),
         ("2026-06-01", "CPILFESL", 2.5),
         ("2026-06-01", "CRESTKCPIXSLTRM159SFRBATL", 2.3),
+        ("2026-06-01", "PPIFIS", 2.2),
+        ("2026-06-01", "PPIFES", 2.0),
+        ("2026-06-01", "PPIACO", 3.1),
         # US 10Y Breakeven Inflation Rate
         ("2026-06-24", "T10YIE", 2.25),
         ("2026-06-25", "T10YIE", 2.26),
@@ -318,6 +321,9 @@ def test_get_macro_chart_data(temp_macro_db):
     assert pt["cpi"] == 3.4
     assert pt["core_cpi"] == 2.5
     assert pt["sticky_cpi"] == 2.3
+    assert pt["ppi"] == 2.2
+    assert pt["core_ppi"] == 2.0
+    assert pt["ppi_all"] == 3.1
     assert pt["export_avg"] == 39.5  # 6/22 seed → ffill onto 6/24
     # 6/1 발표 → 참조월 5/1; 6월 차트에는 48.5 (7월치 55.6은 아직 미적용)
     assert pt["ism_pmi"] == 48.5
@@ -361,6 +367,9 @@ def test_get_macro_chart_data(temp_macro_db):
     assert data_filtered["data"][0]["cpi"] == 3.4
     assert data_filtered["data"][0]["core_cpi"] == 2.5
     assert data_filtered["data"][0]["sticky_cpi"] == 2.3
+    assert data_filtered["data"][0]["ppi"] == 2.2
+    assert data_filtered["data"][0]["core_ppi"] == 2.0
+    assert data_filtered["data"][0]["ppi_all"] == 3.1
 
 
 def test_ism_pmi_release_normalized_to_ref_month(temp_macro_db):

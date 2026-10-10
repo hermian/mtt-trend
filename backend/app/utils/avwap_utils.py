@@ -30,7 +30,7 @@ INTERVAL_CONFIGS: Dict[str, Dict[str, Any]] = {
         "vwap_lookback": 252,
     },
     "1W": {
-        "ta_indicators": [("SMA_10", 10, "sma"), ("SMA_20", 20, "sma"), ("SMA_30", 30, "sma"), ("SMA_40", 40, "sma")],
+        "ta_indicators": [("SMA_5", 5, "sma"), ("SMA_10", 10, "sma"), ("SMA_20", 20, "sma"), ("SMA_30", 30, "sma"), ("SMA_40", 40, "sma")],
         "vol_ma_length": 10,
         "bb_length": 15,
         "vwap_lookback": 52,
@@ -42,7 +42,7 @@ INTERVAL_CONFIGS: Dict[str, Dict[str, Any]] = {
         "vwap_lookback": 12,
     },
     "1Y": {
-        "ta_indicators": [("SMA_3", 3, "sma"), ("SMA_5", 5, "sma"), ("SMA_10", 10, "sma")],
+        "ta_indicators": [("SMA_10", 10, "sma")],
         "vol_ma_length": 3,
         "bb_length": None,
         "vwap_lookback": None,

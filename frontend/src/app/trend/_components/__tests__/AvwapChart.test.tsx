@@ -246,13 +246,13 @@ describe("AvwapChart Component", () => {
     // Toggle on
     fireEvent.click(anchorBtn);
 
-    // Toggle All Off / On using single toggle button
-    const toggleAnchorBtn = screen.getByText("앵커 전체 ON");
+    // Toggle All On / Off using single toggle button (default is OFF)
+    const toggleAnchorBtn = screen.getByText("앵커 전체 OFF");
     fireEvent.click(toggleAnchorBtn);
-    expect(screen.getByText("앵커 전체 OFF")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("앵커 전체 OFF"));
     expect(screen.getByText("앵커 전체 ON")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("앵커 전체 ON"));
+    expect(screen.getByText("앵커 전체 OFF")).toBeInTheDocument();
   });
 
   it("renders log scale by default and allows toggling to linear scale", () => {
@@ -444,15 +444,15 @@ describe("AvwapChart Component", () => {
     renderWithClient(<AvwapChart />);
 
     const anchorBtn = screen.getByText("AVWAP (2021-06-28)").closest("button")!;
-    expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 끄기 (OFF)");
-
-    // Click anchor badge -> turn OFF
-    fireEvent.click(anchorBtn);
     expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 켜기 (ON)");
 
-    // Click anchor badge again -> turn ON
+    // Click anchor badge -> turn ON
     fireEvent.click(anchorBtn);
     expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 끄기 (OFF)");
+
+    // Click anchor badge again -> turn OFF
+    fireEvent.click(anchorBtn);
+    expect(anchorBtn).toHaveAttribute("title", "클릭하여 차트 표시 켜기 (ON)");
   });
 
   it("toggles base indicator lines on/off and highlights line on chart click", () => {
@@ -711,15 +711,15 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/HP이탈:/)).toBeInTheDocument();
 
     // Toggle HP off
+    expect(screen.getByRole("button", { name: /HP추세:/ })).not.toHaveClass("line-through");
     fireEvent.click(hpBtn);
     expect(screen.queryByText("HP 이탈도")).not.toBeInTheDocument();
-    expect(screen.queryByText(/HP추세:/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/HP이탈:/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /HP추세:/ })).toHaveClass("line-through");
 
     // Toggle HP back on
     fireEvent.click(hpBtn);
     expect(screen.getByText("HP 이탈도")).toBeInTheDocument();
-    expect(screen.getByText(/HP추세:/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /HP추세:/ })).not.toHaveClass("line-through");
   });
 
   it("toggles 거래대금 (amount) panel on and off", () => {
@@ -739,20 +739,19 @@ describe("AvwapChart Component", () => {
     const amtBtn = screen.getByText("거래대금");
     expect(amtBtn).toBeInTheDocument();
     expect(screen.queryByText(/거래대금 \(조원\)/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/거래대금:/)).not.toBeInTheDocument();
-    expect(screen.queryByText("15.4조")).not.toBeInTheDocument();
+    const amtLegendBtn = screen.getByRole("button", { name: /거래대금:/ });
+    expect(amtLegendBtn).toHaveClass("line-through");
 
     // Toggle on
     fireEvent.click(amtBtn);
     expect(screen.getByText(/거래대금 \(조원\)/)).toBeInTheDocument();
-    expect(screen.getByText(/거래대금:/)).toBeInTheDocument();
+    expect(amtLegendBtn).not.toHaveClass("line-through");
     expect(screen.getByText("15.4조")).toBeInTheDocument();
 
     // Toggle back off
     fireEvent.click(amtBtn);
     expect(screen.queryByText(/거래대금 \(조원\)/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/거래대금:/)).not.toBeInTheDocument();
-    expect(screen.queryByText("15.4조")).not.toBeInTheDocument();
+    expect(amtLegendBtn).toHaveClass("line-through");
   });
 
   it("toggles MACD panel on and off", () => {
@@ -772,17 +771,18 @@ describe("AvwapChart Component", () => {
     const macdBtn = screen.getByText("MACD");
     expect(macdBtn).toBeInTheDocument();
     expect(screen.getByText("MACD (12, 26, 9)")).toBeInTheDocument();
-    expect(screen.getByText(/MACD:/)).toBeInTheDocument();
+    const macdLegendBtn = screen.getByRole("button", { name: /MACD:/ });
+    expect(macdLegendBtn).not.toHaveClass("line-through");
 
     // Toggle off
     fireEvent.click(macdBtn);
     expect(screen.queryByText("MACD (12, 26, 9)")).not.toBeInTheDocument();
-    expect(screen.queryByText(/MACD:/)).not.toBeInTheDocument();
+    expect(macdLegendBtn).toHaveClass("line-through");
 
     // Toggle back on
     fireEvent.click(macdBtn);
     expect(screen.getByText("MACD (12, 26, 9)")).toBeInTheDocument();
-    expect(screen.getByText(/MACD:/)).toBeInTheDocument();
+    expect(macdLegendBtn).not.toHaveClass("line-through");
   });
 
   it("toggles Stoc panel on and off", () => {
@@ -802,17 +802,18 @@ describe("AvwapChart Component", () => {
     const stocBtn = screen.getByText("Stoc");
     expect(stocBtn).toBeInTheDocument();
     expect(screen.getByText("Stochastic Slow")).toBeInTheDocument();
-    expect(screen.getByText(/Stoc:/)).toBeInTheDocument();
+    const stocLegendBtn = screen.getByRole("button", { name: /Stoc:/ });
+    expect(stocLegendBtn).not.toHaveClass("line-through");
 
     // Toggle off
     fireEvent.click(stocBtn);
     expect(screen.queryByText("Stochastic Slow")).not.toBeInTheDocument();
-    expect(screen.queryByText(/Stoc:/)).not.toBeInTheDocument();
+    expect(stocLegendBtn).toHaveClass("line-through");
 
     // Toggle back on
     fireEvent.click(stocBtn);
     expect(screen.getByText("Stochastic Slow")).toBeInTheDocument();
-    expect(screen.getByText(/Stoc:/)).toBeInTheDocument();
+    expect(stocLegendBtn).not.toHaveClass("line-through");
   });
 
   it("toggles ATR_M panel on and off and defaults to ON", () => {
@@ -841,17 +842,18 @@ describe("AvwapChart Component", () => {
     const atrMBtn = screen.getByText("ATR_M");
     expect(atrMBtn).toBeInTheDocument();
     expect(screen.getByText("ATR_M (from 50MA)")).toBeInTheDocument();
-    expect(screen.getByText(/ATR_M:/)).toBeInTheDocument();
+    const atrMLegendBtn = screen.getByRole("button", { name: /ATR_M:/ });
+    expect(atrMLegendBtn).not.toHaveClass("line-through");
 
     // Toggle off
     fireEvent.click(atrMBtn);
     expect(screen.queryByText("ATR_M (from 50MA)")).not.toBeInTheDocument();
-    expect(screen.queryByText(/ATR_M:/)).not.toBeInTheDocument();
+    expect(atrMLegendBtn).toHaveClass("line-through");
 
     // Toggle back on
     fireEvent.click(atrMBtn);
     expect(screen.getByText("ATR_M (from 50MA)")).toBeInTheDocument();
-    expect(screen.getByText(/ATR_M:/)).toBeInTheDocument();
+    expect(atrMLegendBtn).not.toHaveClass("line-through");
   });
 
   it("updates crosshair price lines and HUD across all panels when moving crosshair (+ cursor)", () => {
@@ -930,7 +932,7 @@ describe("AvwapChart Component", () => {
 
     // Toggle Supertrend Off
     fireEvent.click(stBtn);
-    expect(screen.queryByText(/Supertrend\(14, 3\):/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Supertrend\(14, 3\):/ })).toHaveClass("line-through");
   });
 
   it("renders stock name with screener link when stock mode is active", () => {
@@ -994,10 +996,95 @@ describe("AvwapChart Component", () => {
     expect(screen.getByText(/DD 4일/)).toBeInTheDocument();
     expect(screen.getByText(/\[경계\]/)).toBeInTheDocument();
     expect(screen.getByText(/⚡ FTD \(확인\)/)).toBeInTheDocument();
+    const ddFtdLegendBtn = screen.getByTitle(/클릭하여 DD\/FTD 신호 마커 숨김/);
+    expect(ddFtdLegendBtn).not.toHaveClass("line-through");
 
     // Toggle button off
     fireEvent.click(ddFtdBtn);
-    expect(screen.queryByText(/DD 4일/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/⚡ FTD \(확인\)/)).not.toBeInTheDocument();
+    expect(ddFtdLegendBtn).toHaveClass("line-through");
+    expect(screen.getByTitle(/클릭하여 DD\/FTD 신호 마커 표시/)).toBeInTheDocument();
+  });
+
+  it("toggles moving average on and off when clicked in the HUD legend", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    const ema10Btn = screen.getByRole("button", { name: /EMA10:/ });
+    expect(ema10Btn).toBeInTheDocument();
+    expect(ema10Btn).not.toHaveClass("line-through");
+
+    // Click to toggle off
+    fireEvent.click(ema10Btn);
+    expect(ema10Btn).toHaveClass("line-through");
+    expect(ema10Btn.getAttribute("title")).toContain("표시");
+
+    // Click to toggle on again
+    fireEvent.click(ema10Btn);
+    expect(ema10Btn).not.toHaveClass("line-through");
+    expect(ema10Btn.getAttribute("title")).toContain("숨김");
+  });
+
+  it("toggles indicators, volume, vix fix, and drawdown when clicked in HUD legend", () => {
+    vi.spyOn(useAvwapChartModule, "useAvwapChart").mockReturnValue({
+      data: mockChartData,
+      isLoading: false,
+      error: null,
+    } as any);
+
+    renderWithClient(<AvwapChart />);
+
+    // 1. VWAP toggle from HUD
+    const vwapBtn = screen.getByRole("button", { name: /VWAP:/ });
+    expect(vwapBtn).toBeInTheDocument();
+    expect(vwapBtn).not.toHaveClass("line-through");
+    fireEvent.click(vwapBtn);
+    expect(vwapBtn).toHaveClass("line-through");
+    fireEvent.click(vwapBtn);
+    expect(vwapBtn).not.toHaveClass("line-through");
+
+    // 2. Vol toggle from HUD (toggles volume bars, keeping VIX Fix)
+    expect(screen.getByText("거래량 (막대) & VIX Fix (초록 점선)")).toBeInTheDocument();
+    const volBtn = screen.getAllByRole("button", { name: /Vol:/ })[0];
+    expect(volBtn).not.toHaveClass("line-through");
+    fireEvent.click(volBtn);
+    expect(volBtn).toHaveClass("line-through");
+    // Vol is off but Vix Fix is on -> panel stays with "VIX Fix (초록 점선)"
+    expect(screen.getByText("VIX Fix (초록 점선)")).toBeInTheDocument();
+
+    // 3. VIX Fix toggle from HUD (now both Vol and Vix Fix are off -> panel removed)
+    const vixBtn = screen.getByRole("button", { name: /VIX Fix:/ });
+    expect(vixBtn).toBeInTheDocument();
+    expect(vixBtn).not.toHaveClass("line-through");
+    fireEvent.click(vixBtn);
+    expect(vixBtn).toHaveClass("line-through");
+    // Both off -> panel is removed completely
+    expect(screen.queryByText("거래량 (막대) & VIX Fix (초록 점선)")).not.toBeInTheDocument();
+    expect(screen.queryByText("VIX Fix (초록 점선)")).not.toBeInTheDocument();
+
+    // Turn Vol back on -> panel re-appears with "거래량 (막대)"
+    fireEvent.click(volBtn);
+    expect(volBtn).not.toHaveClass("line-through");
+    expect(screen.getByText("거래량 (막대)")).toBeInTheDocument();
+
+    // Turn VIX Fix back on -> panel title becomes "거래량 (막대) & VIX Fix (초록 점선)"
+    fireEvent.click(vixBtn);
+    expect(vixBtn).not.toHaveClass("line-through");
+    expect(screen.getByText("거래량 (막대) & VIX Fix (초록 점선)")).toBeInTheDocument();
+
+    // 4. MDD / 낙폭 toggle from HUD
+    expect(screen.getByText("52주 (기본)")).toBeInTheDocument();
+    const mddBtn = screen.getByRole("button", { name: /낙폭\(52주\):/ });
+    expect(mddBtn).toBeInTheDocument();
+    expect(mddBtn).not.toHaveClass("line-through");
+    fireEvent.click(mddBtn);
+    expect(mddBtn).toHaveClass("line-through");
+    expect(screen.queryByText("52주 (기본)")).not.toBeInTheDocument();
+    fireEvent.click(mddBtn);
+    expect(mddBtn).not.toHaveClass("line-through");
   });
 });

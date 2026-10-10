@@ -215,13 +215,40 @@ export function AvwapChart() {
 
   // Toggle state for base vwap, hvwap, lvwap, bb_upper, hp, supertrend, and individual anchor dates
   const [showVwap, setShowVwap] = useState(true);
-  const [showHvwap, setShowHvwap] = useState(true);
+  const [showHvwap, setShowHvwap] = useState(false);
   const [showLvwap, setShowLvwap] = useState(true);
-  const [showBbUpper, setShowBbUpper] = useState(true);
+  const [showBbUpper, setShowBbUpper] = useState(false);
   const [showHp, setShowHp] = useState(true);
   const [showAmount, setShowAmount] = useState(false);
   const [showMacd, setShowMacd] = useState(true);
   const [showStoc, setShowStoc] = useState(true);
+  const [showMdd, setShowMdd] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_mdd_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
+  const [showVolume, setShowVolume] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_volume_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
+  const [showVixFix, setShowVixFix] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("mtt_vix_fix_enabled");
+        if (saved !== null) return JSON.parse(saved);
+      } catch {}
+    }
+    return true;
+  });
   const [showAtrM, setShowAtrM] = useState<boolean>(() => {
     if (typeof window !== "undefined") {
       try {
@@ -291,6 +318,24 @@ export function AvwapChart() {
     });
   }, []);
 
+  // Hidden moving averages state for interactive toggling from legend
+  const [hiddenMaKeys, setHiddenMaKeys] = useState<Set<string>>(new Set());
+
+  const toggleMa = useCallback((maName: string) => {
+    setHiddenMaKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(maName)) {
+        next.delete(maName);
+      } else {
+        next.add(maName);
+        if (selectedLineIdRef.current === maName) {
+          setSelectedLineId(null);
+        }
+      }
+      return next;
+    });
+  }, []);
+
   const [enabledAnchors, setEnabledAnchors] = useState<Set<string>>(new Set());
   const enabledAnchorsRef = useRef<Set<string>>(new Set());
   const showLinesRef = useRef({
@@ -301,6 +346,10 @@ export function AvwapChart() {
     hp: showHp,
     khk: showKhkLine,
     supertrend: showSupertrend,
+    hiddenMas: hiddenMaKeys,
+    mdd: showMdd,
+    volume: showVolume,
+    vixFix: showVixFix,
   });
 
   useEffect(() => {
@@ -316,8 +365,12 @@ export function AvwapChart() {
       hp: showHp,
       khk: showKhkLine,
       supertrend: showSupertrend,
+      hiddenMas: hiddenMaKeys,
+      mdd: showMdd,
+      volume: showVolume,
+      vixFix: showVixFix,
     };
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showKhkLine, showSupertrend]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showKhkLine, showSupertrend, hiddenMaKeys, showMdd, showVolume, showVixFix]);
 
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
@@ -366,29 +419,28 @@ export function AvwapChart() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Initialize enabled anchors when market/symbol/interval changes
+  // Initialize enabled anchors when market/symbol/interval changes (default disabled)
   useEffect(() => {
-    if (chartData?.anchors) {
-      const initial = new Set(
-        chartData.anchors
-          .filter((a) => !a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL"))
-          .map((a) => a.id)
-      );
-      setEnabledAnchors(initial);
-    }
+    setEnabledAnchors(new Set());
   }, [chartData?.market, chartData?.symbol, chartData?.interval]);
 
   // Ensure newly added custom anchors are automatically enabled
   useEffect(() => {
     if (chartData?.anchors) {
       setEnabledAnchors((prev) => {
+        const customAnchors = chartData.anchors.filter(
+          (a) => a.id.startsWith("anc_") || (!a.id.startsWith("anchor_") && !a.id.startsWith("anchor_atl_"))
+        );
+        if (customAnchors.length === 0) return prev;
         const next = new Set(prev);
-        chartData.anchors.forEach((a) => {
-          if (!a.id.startsWith("anchor_atl_") && !a.name.includes("역대 최저") && !a.name.includes("ATL")) {
+        let changed = false;
+        customAnchors.forEach((a) => {
+          if (!next.has(a.id)) {
             next.add(a.id);
+            changed = true;
           }
         });
-        return next;
+        return changed ? next : prev;
       });
     }
   }, [chartData?.anchors]);
@@ -428,9 +480,12 @@ export function AvwapChart() {
     });
   }, [selectedLineId]);
 
-  // Reset highlight on target or interval change
+  // Reset highlight on target or interval change (and disable supertrend by default on 1Y)
   useEffect(() => {
     setSelectedLineId(null);
+    if (interval === "1Y") {
+      setShowSupertrend(false);
+    }
   }, [market, symbol, interval]);
 
   // HP Filter calculation for the current chart points & interval
@@ -967,7 +1022,7 @@ export function AvwapChart() {
           : pt.mdd;
       const mddPl = plMap.get("mdd");
       if (mddPl) {
-        if (curDd != null && Number.isFinite(curDd)) {
+        if (showLinesRef.current.mdd && curDd != null && Number.isFinite(curDd)) {
           mddPl.applyOptions({
             price: curDd,
             axisLabelVisible: true,
@@ -999,7 +1054,7 @@ export function AvwapChart() {
         Object.entries(pt.ma).forEach(([maName, val]) => {
           const maPl = plMap.get(`ma_${maName}`);
           if (maPl) {
-            if (val != null && Number.isFinite(val)) {
+            if (!showLinesRef.current.hiddenMas.has(maName) && val != null && Number.isFinite(val)) {
               maPl.applyOptions({
                 price: val,
                 axisLabelVisible: true,
@@ -1154,7 +1209,7 @@ export function AvwapChart() {
       const isUpBar = prevPt ? pt.close >= prevPt.close : (pt.open != null ? pt.close >= pt.open : true);
       const volPl = plMap.get("vol");
       if (volPl) {
-        if (pt.volume != null && Number.isFinite(pt.volume)) {
+        if (showLinesRef.current.volume && pt.volume != null && Number.isFinite(pt.volume)) {
           volPl.applyOptions({
             price: pt.volume,
             color: isUpBar ? "rgba(239, 68, 68, 0.9)" : "rgba(59, 130, 246, 0.9)",
@@ -1168,7 +1223,7 @@ export function AvwapChart() {
 
       const volMaPl = plMap.get("vol_ma");
       if (volMaPl) {
-        if (pt.vol_ma != null && Number.isFinite(pt.vol_ma)) {
+        if (showLinesRef.current.volume && pt.vol_ma != null && Number.isFinite(pt.vol_ma)) {
           volMaPl.applyOptions({
             price: pt.vol_ma,
             axisLabelVisible: true,
@@ -1383,10 +1438,12 @@ export function AvwapChart() {
       const amountUnitLabel = chartData.amount_unit || "조원";
 
       const panels = [
-        { id: "mdd", name: "MDD (%)", height: 90 },
+        ...(showMdd ? [{ id: "mdd", name: "MDD (%)", height: 90 }] : []),
         { id: "main", name: `${targetTitle} 주가 & AVWAP`, height: isMobile ? 360 : 550 },
         ...(showHp ? [{ id: "hp_dev", name: "HP 이탈도 (%)", height: 90 }] : []),
-        { id: "volume", name: "거래량 & VIX Fix", height: 110 },
+        ...((showVolume || showVixFix)
+          ? [{ id: "volume", name: showVolume && showVixFix ? "거래량 & VIX Fix" : showVolume ? "거래량" : "VIX Fix", height: 110 }]
+          : []),
         ...(showAmount
           ? [{ id: "amount", name: `거래대금 (${amountUnitLabel}) & SMA50`, height: 180 }]
           : []),
@@ -1899,7 +1956,9 @@ export function AvwapChart() {
 
                 if (pt.ma) {
                   Object.entries(pt.ma).forEach(([maName, val]) => {
-                    candidates.push({ id: maName, val });
+                    if (!showLinesRef.current.hiddenMas.has(maName)) {
+                      candidates.push({ id: maName, val });
+                    }
                   });
                 }
 
@@ -2492,7 +2551,9 @@ export function AvwapChart() {
           if (samplePt?.ma) {
             Object.keys(samplePt.ma).forEach((maName) => {
               if (mainSeriesList[seriesIdx]) {
-                mainSeriesList[seriesIdx].setData(linePoints((p) => p.ma[maName]));
+                mainSeriesList[seriesIdx].setData(
+                  hiddenMaKeys.has(maName) ? [] : linePoints((p) => p.ma[maName])
+                );
                 seriesIdx++;
               }
             });
@@ -2674,10 +2735,10 @@ export function AvwapChart() {
               };
             })
             .filter((v): v is NonNullable<typeof v> => v !== null);
-          volS.setData(volData);
+          volS.setData(showVolume ? volData : []);
 
-          volMaS.setData(linePoints((p) => p.vol_ma));
-          vixS.setData(linePoints((p) => p.vix_fix));
+          volMaS.setData(showVolume ? linePoints((p) => p.vol_ma) : []);
+          vixS.setData(showVixFix ? linePoints((p) => p.vix_fix) : []);
         }
 
         // 4. Amount (거래대금) & Amount SMA50
@@ -2752,7 +2813,7 @@ export function AvwapChart() {
     return () => {
       cleanup();
     };
-  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showAmount, showMacd, macdResult, showStoc, stochResult, showAtrM, atrMResult]);
+  }, [chartData, interval, market, symbol, isEokUnit, isMobile, showMdd, showVolume, showVixFix, showAmount, showMacd, macdResult, showStoc, stochResult, showAtrM, atrMResult]);
 
   // Update dynamic visibility of optional lines without rebuilding charts
   useEffect(() => {
@@ -2773,7 +2834,17 @@ export function AvwapChart() {
     const mainSeriesList = seriesRef.current.get("main") || [];
     if (mainSeriesList.length > 0) {
       const samplePt = chartData.points[chartData.points.length - 1];
-      const maCount = samplePt?.ma ? Object.keys(samplePt.ma).length : 0;
+      const maKeys = samplePt?.ma ? Object.keys(samplePt.ma) : [];
+      const maCount = maKeys.length;
+
+      // Update MAs (mainSeriesList indices 1 .. maCount)
+      maKeys.forEach((maName, i) => {
+        const maSeries = mainSeriesList[1 + i];
+        if (maSeries) {
+          maSeries.setData(hiddenMaKeys.has(maName) ? [] : linePoints((p) => p.ma[maName]));
+        }
+      });
+
       const bbIdx = 1 + maCount;
       const vwapIdx = bbIdx + 1;
       const hvwapIdx = bbIdx + 2;
@@ -2886,8 +2957,33 @@ export function AvwapChart() {
           }
         }
       });
+      // Volume Panel: Volume Bars, Vol MA, VIX Fix Line
+      const volSeriesList = seriesRef.current.get("volume") || [];
+      if (volSeriesList.length >= 3) {
+        if (volSeriesList[0]) {
+          const volData = chartData.points
+            .map((p, i) => {
+              const time = toChartTime(p.date);
+              if (!time) return null;
+              const isUp = i === 0 || p.close >= chartData.points[i - 1].close;
+              return {
+                time,
+                value: p.volume,
+                color: isUp ? "rgba(239, 68, 68, 0.6)" : "rgba(59, 130, 246, 0.6)",
+              };
+            })
+            .filter((v): v is NonNullable<typeof v> => v !== null);
+          volSeriesList[0].setData(showVolume ? volData : []);
+        }
+        if (volSeriesList[1]) {
+          volSeriesList[1].setData(showVolume ? linePoints((p) => p.vol_ma) : []);
+        }
+        if (volSeriesList[2]) {
+          volSeriesList[2].setData(showVixFix ? linePoints((p) => p.vix_fix) : []);
+        }
+      }
     }
-  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, showDdFtd, interval, enabledAnchors, chartData, hpResult, supertrendSeries, isKospi, showKhkLine, khkLineData]);
+  }, [showVwap, showHvwap, showLvwap, showBbUpper, showHp, showSupertrend, supertrendConfig, showDdFtd, showVolume, showVixFix, interval, enabledAnchors, hiddenMaKeys, chartData, hpResult, supertrendSeries, isKospi, showKhkLine, khkLineData]);
 
   // Update Drawdown (MDD / 52W / 3Y) series dynamically when ddPeriod changes
   useEffect(() => {
@@ -3734,7 +3830,47 @@ export function AvwapChart() {
                       ({activeDisplay.ohlc.changePct >= 0 ? `+${activeDisplay.ohlc.changePct}` : activeDisplay.ohlc.changePct}%)
                     </span>
                   )}
-                  <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVolume((prev) => {
+                        const next = !prev;
+                        try {
+                          localStorage.setItem("mtt_volume_enabled", JSON.stringify(next));
+                        } catch {}
+                        return next;
+                      });
+                    }}
+                    title={`클릭하여 거래량 패널 ${showVolume ? "숨김" : "표시"}`}
+                    className={`inline-flex items-center gap-1 cursor-pointer transition-opacity rounded px-0.5 hover:bg-slate-800/60 ${
+                      !showVolume ? "opacity-35 line-through" : "hover:opacity-80"
+                    }`}
+                  >
+                    <span>Vol:</span> <span className={showVolume ? "text-gray-200" : "text-gray-500"}>{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span>
+                  </button>
+                  {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVixFix((prev) => {
+                          const next = !prev;
+                          try {
+                            localStorage.setItem("mtt_vix_fix_enabled", JSON.stringify(next));
+                          } catch {}
+                          return next;
+                        });
+                      }}
+                      title={`클릭하여 VIX Fix 선 ${showVixFix ? "숨김" : "표시"}`}
+                      className={`inline-flex items-center gap-1 cursor-pointer transition-opacity rounded px-0.5 hover:bg-slate-800/60 ${
+                        !showVixFix ? "opacity-35 line-through" : "hover:opacity-80"
+                      }`}
+                    >
+                      <span className={showVixFix ? "text-emerald-400 font-semibold" : "text-gray-500 font-semibold"}>VIX Fix:</span>
+                      <span className={showVixFix ? "text-emerald-400 font-bold" : "text-gray-500 font-bold"}>
+                        {activeDisplay.vixFix.toFixed(1)}%
+                      </span>
+                    </button>
+                  )}
                 </span>
               ) : (
                 <span className="flex items-center gap-1.5 sm:gap-2 shrink-0">
@@ -3746,23 +3882,79 @@ export function AvwapChart() {
                       ({activeDisplay.ohlc.changePct >= 0 ? `+${activeDisplay.ohlc.changePct}` : activeDisplay.ohlc.changePct}%)
                     </span>
                   )}
-                  <span>Vol: <span className="text-gray-200">{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span></span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVolume((prev) => {
+                        const next = !prev;
+                        try {
+                          localStorage.setItem("mtt_volume_enabled", JSON.stringify(next));
+                        } catch {}
+                        return next;
+                      });
+                    }}
+                    title={`클릭하여 거래량 패널 ${showVolume ? "숨김" : "표시"}`}
+                    className={`inline-flex items-center gap-1 cursor-pointer transition-opacity rounded px-0.5 hover:bg-slate-800/60 ${
+                      !showVolume ? "opacity-35 line-through" : "hover:opacity-80"
+                    }`}
+                  >
+                    <span>Vol:</span> <span className={showVolume ? "text-gray-200" : "text-gray-500"}>{(activeDisplay.ohlc.volume / 1e4).toFixed(0)}만</span>
+                  </button>
+                  {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVixFix((prev) => {
+                          const next = !prev;
+                          try {
+                            localStorage.setItem("mtt_vix_fix_enabled", JSON.stringify(next));
+                          } catch {}
+                          return next;
+                        });
+                      }}
+                      title={`클릭하여 VIX Fix 선 ${showVixFix ? "숨김" : "표시"}`}
+                      className={`inline-flex items-center gap-1 cursor-pointer transition-opacity rounded px-0.5 hover:bg-slate-800/60 ${
+                        !showVixFix ? "opacity-35 line-through" : "hover:opacity-80"
+                      }`}
+                    >
+                      <span className={showVixFix ? "text-emerald-400 font-semibold" : "text-gray-500 font-semibold"}>VIX Fix:</span>
+                      <span className={showVixFix ? "text-emerald-400 font-bold" : "text-gray-500 font-bold"}>
+                        {activeDisplay.vixFix.toFixed(1)}%
+                      </span>
+                    </button>
+                  )}
                 </span>
               )
             )}
             {/* DD & FTD Status Badges */}
-            {interval === "1D" && showDdFtd && (
-              <span className="flex items-center gap-1.5 shrink-0">
+            {interval === "1D" && (activeDisplay.ddCount !== null && activeDisplay.ddCount !== undefined || activeDisplay.isFtd) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDdFtd((prev) => {
+                    const next = !prev;
+                    try {
+                      localStorage.setItem("mtt_dd_ftd_enabled", JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                title={`클릭하여 DD/FTD 신호 마커 ${showDdFtd ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1.5 shrink-0 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showDdFtd ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
                 {activeDisplay.ddCount !== null && activeDisplay.ddCount !== undefined && (
                   <span
                     className={`px-1.5 py-0.5 rounded font-bold text-[10px] sm:text-[11px] border ${
-                      activeDisplay.ddLevel === "danger"
+                      !showDdFtd
+                        ? "bg-gray-800/80 text-gray-400 border-gray-600"
+                        : activeDisplay.ddLevel === "danger"
                         ? "bg-rose-950/80 text-rose-300 border-rose-600 animate-pulse"
                         : activeDisplay.ddLevel === "caution"
                         ? "bg-amber-950/80 text-amber-300 border-amber-600"
                         : "bg-emerald-950/80 text-emerald-300 border-emerald-600"
                     }`}
-                    title="최근 25거래일 누적 분산일 수 (1~2회: 정상, 3~4회: 경계, 5회 이상: 위험)"
                   >
                     DD {activeDisplay.ddCount}일
                     {activeDisplay.isDd ? " (당일⚠️)" : ""}
@@ -3776,24 +3968,39 @@ export function AvwapChart() {
                 {activeDisplay.isFtd && (
                   <span
                     className={`px-1.5 py-0.5 rounded font-bold text-[10px] sm:text-[11px] border ${
-                      activeDisplay.ftdStatus === "failed"
+                      !showDdFtd || activeDisplay.ftdStatus === "failed"
                         ? "bg-gray-800 text-gray-400 border-gray-600 line-through"
                         : "bg-emerald-900/90 text-emerald-200 border-emerald-500 shadow-sm"
                     }`}
-                    title={
-                      activeDisplay.ftdStatus === "failed"
-                        ? "FTD 발생 후 5일 이내 Day 1 저점 이탈로 실패한 신호"
-                        : "팔로스루 데이(FTD) 발생 (Day 4~7 강력 반등 확인)"
-                    }
                   >
                     ⚡ FTD {activeDisplay.ftdStatus === "failed" ? "(실패)" : "(확인)"}
                   </span>
                 )}
-              </span>
+              </button>
             )}
-            {showAmount && activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
-              <span>거래대금: <span className="text-amber-400 font-bold">{formatAmountValue(activeDisplay.amount)}</span> {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? <span className="text-gray-400 text-[11px]">(SMA: {formatAmountValue(activeDisplay.amountSma50)})</span> : null}</span>
+
+            {/* Trading Amount (거래대금) */}
+            {activeDisplay.amount !== null && activeDisplay.amount !== undefined && (
+              <button
+                type="button"
+                onClick={() => setShowAmount((prev) => !prev)}
+                title={`클릭하여 거래대금 패널 ${showAmount ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showAmount ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showAmount ? "text-amber-400 font-bold" : "text-gray-500 font-semibold"}>거래대금:</span>
+                <span className={showAmount ? "text-amber-400 font-bold" : "text-gray-500"}>
+                  {formatAmountValue(activeDisplay.amount)}
+                </span>
+                {activeDisplay.amountSma50 !== null && activeDisplay.amountSma50 !== undefined ? (
+                  <span className={showAmount ? "text-gray-400 text-[11px]" : "text-gray-600 text-[11px]"}>
+                    (SMA: {formatAmountValue(activeDisplay.amountSma50)})
+                  </span>
+                ) : null}
+              </button>
             )}
+
             {/* Drawdown Header Badge */}
             {(() => {
               const curDd = ddPeriod === "52w"
@@ -3803,11 +4010,30 @@ export function AvwapChart() {
                 : activeDisplay.mdd;
               if (curDd === null || curDd === undefined) return null;
               return (
-                <span>
-                  낙폭({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"}):{" "}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowMdd((prev) => {
+                      const next = !prev;
+                      try {
+                        localStorage.setItem("mtt_mdd_enabled", JSON.stringify(next));
+                      } catch {}
+                      return next;
+                    });
+                  }}
+                  title={`클릭하여 낙폭(MDD) 패널 ${showMdd ? "숨김" : "표시"}`}
+                  className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                    !showMdd ? "opacity-35 line-through" : "hover:opacity-80"
+                  }`}
+                >
+                  <span className={showMdd ? "text-gray-300" : "text-gray-500"}>
+                    낙폭({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"}):
+                  </span>
                   <span
                     className={`font-bold ${
-                      curDd === 0
+                      !showMdd
+                        ? "text-gray-500"
+                        : curDd === 0
                         ? "text-emerald-400"
                         : curDd <= -20
                         ? "text-rose-400"
@@ -3817,119 +4043,267 @@ export function AvwapChart() {
                     {curDd.toFixed(1)}%
                   </span>
                   {ddPeriod !== "all" && activeDisplay.mdd !== null && activeDisplay.mdd !== undefined && (
-                    <span className="text-gray-400 font-normal text-[11px] ml-1">
+                    <span className={`${showMdd ? "text-gray-400" : "text-gray-600"} font-normal text-[11px] ml-1`}>
                       (전체: {activeDisplay.mdd.toFixed(1)}%)
                     </span>
                   )}
-                </span>
+                </button>
               );
             })()}
-            {activeDisplay.vixFix !== null && activeDisplay.vixFix !== undefined && (
-              <span>VIX Fix: <span className="text-emerald-400 font-bold">{activeDisplay.vixFix.toFixed(1)}%</span></span>
-            )}
+
+
+            {/* Moving Averages */}
             {activeDisplay.ma &&
               Object.entries(activeDisplay.ma).map(([maName, val]) => {
                 if (val === null || val === undefined || !Number.isFinite(val)) return null;
+                const isHidden = hiddenMaKeys.has(maName);
                 const color = MA_COLORS[maName] || "#94a3b8";
                 return (
-                  <span key={maName}>
-                    <span style={{ color }} className="font-semibold">
+                  <button
+                    key={maName}
+                    type="button"
+                    onClick={() => toggleMa(maName)}
+                    title={`클릭하여 ${maName.replace("_", "")} ${isHidden ? "표시" : "숨김"}`}
+                    className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                      isHidden ? "opacity-35 line-through" : "hover:opacity-80"
+                    }`}
+                  >
+                    <span style={{ color: isHidden ? "#64748b" : color }} className="font-semibold">
                       {maName.replace("_", "")}:
-                    </span>{" "}
-                    <span className="text-gray-200">
+                    </span>
+                    <span className={isHidden ? "text-gray-500" : "text-gray-200"}>
                       {val.toLocaleString(undefined, {
                         maximumFractionDigits: val < 10 ? 2 : 1,
                       })}
                     </span>
-                  </span>
+                  </button>
                 );
               })}
+
+            {/* Base VWAP */}
             {activeDisplay.vwap !== null && activeDisplay.vwap !== undefined && (
-              <span>VWAP: <span className="text-slate-200">{activeDisplay.vwap.toLocaleString()}</span></span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVwap((prev) => {
+                    const next = !prev;
+                    if (!next && selectedLineId === "vwap") setSelectedLineId(null);
+                    return next;
+                  });
+                }}
+                title={`클릭하여 VWAP 선 ${showVwap ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showVwap ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showVwap ? "text-slate-200 font-semibold" : "text-gray-500 font-semibold"}>VWAP:</span>
+                <span className={showVwap ? "text-slate-200" : "text-gray-500"}>
+                  {activeDisplay.vwap.toLocaleString()}
+                </span>
+              </button>
             )}
-            {showHp && activeDisplay.hpTrend !== null && activeDisplay.hpTrend !== undefined && (
-              <span>
-                HP추세: <span className="text-pink-400 font-bold">{activeDisplay.hpTrend.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>
-              </span>
+
+            {/* HP Trend */}
+            {activeDisplay.hpTrend !== null && activeDisplay.hpTrend !== undefined && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHp((prev) => {
+                    const next = !prev;
+                    if (!next && selectedLineId === "hp_trend") setSelectedLineId(null);
+                    return next;
+                  });
+                }}
+                title={`클릭하여 HP추세 및 이탈도 ${showHp ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showHp ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showHp ? "text-pink-400 font-semibold" : "text-gray-500 font-semibold"}>HP추세:</span>
+                <span className={showHp ? "text-pink-400 font-bold" : "text-gray-500 font-bold"}>
+                  {activeDisplay.hpTrend.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                </span>
+              </button>
             )}
-            {showHp && activeDisplay.hpDev !== null && activeDisplay.hpDev !== undefined && (
-              <span>
-                HP이탈:{" "}
+
+            {/* HP Deviation */}
+            {activeDisplay.hpDev !== null && activeDisplay.hpDev !== undefined && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowHp((prev) => {
+                    const next = !prev;
+                    if (!next && selectedLineId === "hp_trend") setSelectedLineId(null);
+                    return next;
+                  });
+                }}
+                title={`클릭하여 HP추세 및 이탈도 ${showHp ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showHp ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showHp ? "text-gray-300 font-semibold" : "text-gray-500 font-semibold"}>HP이탈:</span>
                 <span
                   className={`font-bold ${
-                    activeDisplay.hpDev >= 100 ? "text-pink-400" : "text-sky-400"
+                    !showHp
+                      ? "text-gray-500"
+                      : activeDisplay.hpDev >= 100
+                      ? "text-pink-400"
+                      : "text-sky-400"
                   }`}
                 >
                   {activeDisplay.hpDev.toFixed(1)}
                 </span>
-              </span>
+              </button>
             )}
-            {showSupertrend && activeDisplay.supertrend?.value !== null && activeDisplay.supertrend?.value !== undefined && (
-              <span>
-                Supertrend({supertrendConfig.atrPeriod}, {supertrendConfig.multiplier}):{" "}
+
+            {/* Supertrend */}
+            {activeDisplay.supertrend?.value !== null && activeDisplay.supertrend?.value !== undefined && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowSupertrend((prev) => {
+                    const next = !prev;
+                    if (!next && (selectedLineId === "supertrend_up" || selectedLineId === "supertrend_dn")) {
+                      setSelectedLineId(null);
+                    }
+                    try {
+                      localStorage.setItem("mtt_supertrend_enabled", JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                title={`클릭하여 Supertrend ${showSupertrend ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showSupertrend ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showSupertrend ? "text-gray-300 font-semibold" : "text-gray-500 font-semibold"}>
+                  Supertrend({supertrendConfig.atrPeriod}, {supertrendConfig.multiplier}):
+                </span>
                 <span
                   className={`font-bold ${
-                    activeDisplay.supertrend.trend === 1 ? "text-emerald-400" : "text-rose-400"
+                    !showSupertrend
+                      ? "text-gray-500"
+                      : activeDisplay.supertrend.trend === 1
+                      ? "text-emerald-400"
+                      : "text-rose-400"
                   }`}
                 >
                   {activeDisplay.supertrend.value.toLocaleString(undefined, {
                     maximumFractionDigits: activeDisplay.supertrend.value < 10 ? 2 : 1,
                   })}
                 </span>
-              </span>
+              </button>
             )}
-            {isKospi && showKhkLine && activeDisplay.khkLine != null && (
-              <span>
-                강환국선:{" "}
-                <span className="text-blue-400 font-bold">
+
+            {/* 강환국선 */}
+            {isKospi && activeDisplay.khkLine != null && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowKhkLine((prev) => {
+                    const next = !prev;
+                    if (!next && selectedLineId === "khk_line") {
+                      setSelectedLineId(null);
+                    }
+                    try {
+                      localStorage.setItem("mtt_khk_line_enabled", JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                title={`클릭하여 강환국선 ${showKhkLine ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showKhkLine ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showKhkLine ? "text-blue-400 font-semibold" : "text-gray-500 font-semibold"}>강환국선:</span>
+                <span className={showKhkLine ? "text-blue-400 font-bold" : "text-gray-500 font-bold"}>
                   {activeDisplay.khkLine.toLocaleString(undefined, { maximumFractionDigits: 1 })}
                 </span>
                 {activeDisplay.ohlc && (
-                  <span className="text-gray-400 text-[10px] ml-0.5">
+                  <span className={`${showKhkLine ? "text-gray-400" : "text-gray-600"} text-[10px] ml-0.5`}>
                     ({(((activeDisplay.ohlc.close - activeDisplay.khkLine) / activeDisplay.khkLine) * 100).toFixed(1)}%)
                   </span>
                 )}
-              </span>
+              </button>
             )}
-            {showMacd && activeDisplay.macd && (
-              <span>
-                MACD: <span className="text-blue-400 font-bold">{activeDisplay.macd.macd.toFixed(2)}</span>{" "}
-                <span className="text-orange-400 font-semibold">(Sig: {activeDisplay.macd.signal.toFixed(2)})</span>{" "}
+
+            {/* MACD */}
+            {activeDisplay.macd && (
+              <button
+                type="button"
+                onClick={() => setShowMacd((prev) => !prev)}
+                title={`클릭하여 MACD 패널 ${showMacd ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showMacd ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showMacd ? "text-blue-400 font-bold" : "text-gray-500 font-bold"}>MACD:</span>
+                <span className={showMacd ? "text-blue-400 font-bold" : "text-gray-500 font-bold"}>
+                  {activeDisplay.macd.macd.toFixed(2)}
+                </span>
+                <span className={showMacd ? "text-orange-400 font-semibold" : "text-gray-500 font-semibold"}>
+                  (Sig: {activeDisplay.macd.signal.toFixed(2)})
+                </span>
                 <span
                   className="font-bold"
-                  style={{ color: activeDisplay.macd.color }}
+                  style={{ color: showMacd ? activeDisplay.macd.color : "#6b7280" }}
                 >
                   Hist: {activeDisplay.macd.histogram >= 0 ? `+${activeDisplay.macd.histogram.toFixed(2)}` : activeDisplay.macd.histogram.toFixed(2)}
                 </span>
-              </span>
+              </button>
             )}
-            {showStoc && activeDisplay.stoch && (
-              <span>
-                Stoc:{" "}
-                <span className="text-sky-400 font-bold">
+
+            {/* Stochastic Slow */}
+            {activeDisplay.stoch && (
+              <button
+                type="button"
+                onClick={() => setShowStoc((prev) => !prev)}
+                title={`클릭하여 Stochastic 패널 ${showStoc ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showStoc ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className={showStoc ? "text-sky-400 font-bold" : "text-gray-500 font-bold"}>Stoc:</span>
+                <span className={showStoc ? "text-sky-400 font-bold" : "text-gray-500 font-bold"}>
                   단기 {activeDisplay.stoch.short.toFixed(1)}
-                </span>{" "}
-                <span className="text-orange-400 font-semibold">
+                </span>
+                <span className={showStoc ? "text-orange-400 font-semibold" : "text-gray-500 font-semibold"}>
                   (중기 {activeDisplay.stoch.mid.toFixed(1)})
-                </span>{" "}
-                <span className="text-rose-400 font-semibold">
+                </span>
+                <span className={showStoc ? "text-rose-400 font-semibold" : "text-gray-500 font-semibold"}>
                   (장기 {activeDisplay.stoch.long.toFixed(1)})
                 </span>
-              </span>
+              </button>
             )}
-            {showAtrM && activeDisplay.atrM && (
-              <span>
-                ATR_M:{" "}
-                <span
-                  className="font-bold"
-                  style={{ color: activeDisplay.atrM.color }}
-                >
-                  {activeDisplay.atrM.value.toFixed(2)}배
+
+            {/* ATR_M */}
+            {activeDisplay.atrM && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAtrM((prev) => {
+                    const next = !prev;
+                    try {
+                      localStorage.setItem("mtt_atr_m_enabled", JSON.stringify(next));
+                    } catch {}
+                    return next;
+                  });
+                }}
+                title={`클릭하여 ATR_M 패널 ${showAtrM ? "숨김" : "표시"}`}
+                className={`inline-flex items-center gap-1 transition-opacity cursor-pointer rounded px-0.5 hover:bg-slate-800/60 ${
+                  !showAtrM ? "opacity-35 line-through" : "hover:opacity-80"
+                }`}
+              >
+                <span className="font-bold" style={{ color: showAtrM ? activeDisplay.atrM.color : "#6b7280" }}>
+                  ATR_M: {activeDisplay.atrM.value.toFixed(2)}배
                 </span>
-                <span className="text-gray-400 text-[10px] ml-0.5">
+                <span className={`${showAtrM ? "text-gray-400" : "text-gray-600"} text-[10px] ml-0.5`}>
                   ({activeDisplay.atrM.label})
                 </span>
-              </span>
+              </button>
             )}
           </>
         )}
@@ -3971,49 +4345,51 @@ export function AvwapChart() {
           />
 
           {/* Panel 1: Drawdown / MDD */}
-          <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
-            <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 bg-gray-900/80 px-2 py-0.5 rounded border border-gray-800 backdrop-blur-sm shadow-sm">
-              <span className="text-[11px] font-bold text-gray-300">
-                낙폭 ({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"})
-              </span>
-              <div className="flex items-center gap-0.5 ml-1 bg-gray-950 p-0.5 rounded border border-gray-800">
-                <button
-                  type="button"
-                  onClick={() => setDdPeriod("52w")}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-                    ddPeriod === "52w"
-                      ? "bg-sky-600 text-white font-bold shadow-sm"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  52주 (기본)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDdPeriod("3y")}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-                    ddPeriod === "3y"
-                      ? "bg-sky-600 text-white font-bold shadow-sm"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  3년
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDdPeriod("all")}
-                  className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
-                    ddPeriod === "all"
-                      ? "bg-sky-600 text-white font-bold shadow-sm"
-                      : "text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  전기간
-                </button>
+          {showMdd && (
+            <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 bg-gray-900/80 px-2 py-0.5 rounded border border-gray-800 backdrop-blur-sm shadow-sm">
+                <span className="text-[11px] font-bold text-gray-300">
+                  낙폭 ({ddPeriod === "52w" ? "52주" : ddPeriod === "3y" ? "3년" : "전기간"})
+                </span>
+                <div className="flex items-center gap-0.5 ml-1 bg-gray-950 p-0.5 rounded border border-gray-800">
+                  <button
+                    type="button"
+                    onClick={() => setDdPeriod("52w")}
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                      ddPeriod === "52w"
+                        ? "bg-sky-600 text-white font-bold shadow-sm"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    52주 (기본)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDdPeriod("3y")}
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                      ddPeriod === "3y"
+                        ? "bg-sky-600 text-white font-bold shadow-sm"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    3년
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDdPeriod("all")}
+                    className={`px-1.5 py-0.5 text-[10px] font-medium rounded transition-colors ${
+                      ddPeriod === "all"
+                        ? "bg-sky-600 text-white font-bold shadow-sm"
+                        : "text-gray-400 hover:text-gray-200"
+                    }`}
+                  >
+                    전기간
+                  </button>
+                </div>
               </div>
+              <div data-chart-id="mdd" className="w-full" />
             </div>
-            <div data-chart-id="mdd" className="w-full" />
-          </div>
+          )}
 
           {/* Panel 2: Main Candlestick & AVWAP */}
           <div className="w-full relative border-b border-gray-800 bg-[#090d16]">
@@ -4089,17 +4465,25 @@ export function AvwapChart() {
           )}
 
           {/* Panel 3: Volume & VIX Fix */}
-          <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd || showStoc || showAtrM ? "border-b border-gray-800" : ""}`}>
-            <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
-              <span>거래량 (막대) & VIX Fix (초록 점선)</span>
-              {market.toLowerCase() === "sox" && !symbol && (
-                <span className="text-[10px] font-normal text-sky-300 bg-sky-950/70 px-1.5 py-0.5 rounded border border-sky-800/60 font-mono">
-                  [프록시: SOXX ETF 거래량]
+          {(showVolume || showVixFix) && (
+            <div className={`w-full relative bg-[#090d16] ${showAmount || showMacd || showStoc || showAtrM ? "border-b border-gray-800" : ""}`}>
+              <div className="absolute top-1.5 left-3 z-10 flex items-center gap-1.5 text-[11px] font-bold text-gray-400 bg-gray-900/60 px-2 py-0.5 rounded border border-gray-800">
+                <span>
+                  {showVolume && showVixFix
+                    ? "거래량 (막대) & VIX Fix (초록 점선)"
+                    : showVolume
+                    ? "거래량 (막대)"
+                    : "VIX Fix (초록 점선)"}
                 </span>
-              )}
+                {market.toLowerCase() === "sox" && !symbol && showVolume && (
+                  <span className="text-[10px] font-normal text-sky-300 bg-sky-950/70 px-1.5 py-0.5 rounded border border-sky-800/60 font-mono">
+                    [프록시: SOXX ETF 거래량]
+                  </span>
+                )}
+              </div>
+              <div data-chart-id="volume" className="w-full" />
             </div>
-            <div data-chart-id="volume" className="w-full" />
-          </div>
+          )}
 
           {/* Panel 4: Trading Amount (거래대금) & SMA50 */}
           {showAmount && (

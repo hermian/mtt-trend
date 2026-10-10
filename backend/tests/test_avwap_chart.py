@@ -57,6 +57,7 @@ def test_avwap_kospi_1w():
     assert data["interval"] == "1W"
     assert len(data["points"]) > 0
     last_pt = data["points"][-1]
+    assert "SMA_5" in last_pt["ma"]
     assert "SMA_10" in last_pt["ma"]
     assert "SMA_20" in last_pt["ma"]
     assert "SMA_30" in last_pt["ma"]
@@ -81,9 +82,9 @@ def test_avwap_kospi_1y():
     assert data["interval"] == "1Y"
     assert len(data["points"]) > 0
     last_pt = data["points"][-1]
-    assert "SMA_3" in last_pt["ma"]
-    assert "SMA_5" in last_pt["ma"]
     assert "SMA_10" in last_pt["ma"]
+    assert "SMA_3" not in last_pt["ma"]
+    assert "SMA_5" not in last_pt["ma"]
 
 
 def test_avwap_kosdaq():

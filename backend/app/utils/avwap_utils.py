@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # Interval configuration matching kospi_avwap_plot.py
 INTERVAL_CONFIGS: Dict[str, Dict[str, Any]] = {
     "1D": {
-        "ta_indicators": [("EMA_10", 10, "ema"), ("EMA_21", 21, "ema"), ("SMA_50", 50, "sma"), ("SMA_150", 150, "sma"), ("SMA_200", 200, "sma")],
+        "ta_indicators": [("EMA_5", 5, "ema"), ("EMA_10", 10, "ema"), ("EMA_21", 21, "ema"), ("SMA_50", 50, "sma"), ("SMA_150", 150, "sma"), ("SMA_200", 200, "sma")],
         "vol_ma_length": 50,
         "bb_length": 75,
         "vwap_lookback": 252,

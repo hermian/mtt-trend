@@ -32,6 +32,7 @@ def test_avwap_kospi_1d():
     assert "close" in first_pt
     assert "volume" in first_pt
     assert "ma" in last_pt
+    assert "EMA_5" in last_pt["ma"]
     assert "EMA_10" in last_pt["ma"]
     assert "SMA_50" in last_pt["ma"]
     assert "vwap" in last_pt

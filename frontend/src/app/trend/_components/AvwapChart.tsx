@@ -53,6 +53,7 @@ import { syncTrendStockUrl } from "@/app/_lib/trendTabHref";
 const HOVER_PREFETCH_DELAY_MS = 200;
 
 const MA_COLORS: Record<string, string> = {
+  EMA_5: "#a855f7", // Violet / Purple (점선)
   EMA_10: "#c084fc", // Purple
   EMA_21: "#f97316", // Orange
   SMA_50: "#ef4444", // Red
@@ -375,7 +376,7 @@ export function AvwapChart() {
   // Click-to-Highlight Line Selection
   const [selectedLineId, setSelectedLineId] = useState<string | null>(null);
   const selectedLineIdRef = useRef<string | null>(null);
-  const mainLinesMapRef = useRef<Map<string, { id: string; name: string; series: ISeriesApi<any>; color: string; defaultWidth: number }>>(new Map());
+  const mainLinesMapRef = useRef<Map<string, { id: string; name: string; series: ISeriesApi<any>; color: string; defaultWidth: number; defaultLineStyle?: LineStyle }>>(new Map());
   const supertrendBandPrimitiveRef = useRef<SupertrendBandPrimitive | null>(null);
   const supertrendUpMarkersRef = useRef<any>(null);
   const supertrendDnMarkersRef = useRef<any>(null);
@@ -462,16 +463,19 @@ export function AvwapChart() {
           info.series.applyOptions({
             lineWidth: info.defaultWidth as any,
             color: info.color,
+            lineStyle: info.defaultLineStyle ?? LineStyle.Solid,
           });
         } else if (isSelected) {
           info.series.applyOptions({
             lineWidth: 4,
             color: info.color,
+            lineStyle: LineStyle.Solid,
           });
         } else {
           info.series.applyOptions({
             lineWidth: 1,
             color: toDimColor(info.color, 0.5),
+            lineStyle: info.defaultLineStyle ?? LineStyle.Solid,
           });
         }
       } catch (err) {
@@ -1634,10 +1638,19 @@ export function AvwapChart() {
           if (samplePt?.ma) {
             Object.keys(samplePt.ma).forEach((maName) => {
               const color = MA_COLORS[maName] || "#94a3b8";
-              const width = maName === "EMA_10" || maName === "SMA_10" || maName === "SMA_3" ? 2 : 1;
+              const width =
+                maName === "EMA_5" ||
+                maName === "SMA_5" ||
+                maName === "EMA_10" ||
+                maName === "SMA_10" ||
+                maName === "SMA_3"
+                  ? 2
+                  : 1;
+              const lineStyle = maName === "EMA_5" || maName === "SMA_5" ? LineStyle.Dashed : LineStyle.Solid;
               const s = chart.addSeries(LineSeries, {
                 color,
                 lineWidth: width,
+                lineStyle,
                 priceLineVisible: false,
                 lastValueVisible: false,
               });
@@ -1648,6 +1661,7 @@ export function AvwapChart() {
                 series: s,
                 color,
                 defaultWidth: width,
+                defaultLineStyle: lineStyle,
               });
 
               const maHoverLine = s.createPriceLine({
@@ -1678,6 +1692,7 @@ export function AvwapChart() {
             series: bbSeries,
             color: "#06b6d4",
             defaultWidth: 1,
+            defaultLineStyle: LineStyle.Dotted,
           });
           const bbHoverLine = bbSeries.createPriceLine({
             price: 0,
@@ -1786,6 +1801,7 @@ export function AvwapChart() {
             series: hpTrendSeries,
             color: "#f472b6",
             defaultWidth: 2,
+            defaultLineStyle: LineStyle.Dashed,
           });
           const hpTrendHoverLine = hpTrendSeries.createPriceLine({
             price: 0,

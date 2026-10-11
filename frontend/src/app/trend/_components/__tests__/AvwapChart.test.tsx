@@ -96,7 +96,7 @@ describe("AvwapChart Component", () => {
         close: 2610.0,
         volume: 50000000,
         change_pct: 0.5,
-        ma: { EMA_10: 2590.0, SMA_50: 2550.0 },
+        ma: { EMA_5: 2600.0, EMA_10: 2590.0, SMA_50: 2550.0 },
         vol_ma: 48000000,
         amount: 15.4,
         amount_sma50: 12.1,
@@ -1013,6 +1013,10 @@ describe("AvwapChart Component", () => {
     } as any);
 
     renderWithClient(<AvwapChart />);
+
+    const ema5Btn = screen.getByRole("button", { name: /EMA5:/ });
+    expect(ema5Btn).toBeInTheDocument();
+    expect(ema5Btn).not.toHaveClass("line-through");
 
     const ema10Btn = screen.getByRole("button", { name: /EMA10:/ });
     expect(ema10Btn).toBeInTheDocument();
